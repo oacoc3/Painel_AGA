@@ -1,3 +1,15 @@
+-- =========================================================
+-- 01_schema_and_policies.sql (versão ajustada)
+-- Ajustes:
+--  - Habilita extensões necessárias no topo (moddatetime, pgcrypto)
+--  - Usa "execute function extensions.moddatetime(updated_at)"
+--    nos triggers de updated_at
+-- =========================================================
+
+-- Extensões necessárias (execute antes dos triggers)
+create extension if not exists moddatetime with schema extensions;
+create extension if not exists pgcrypto with schema extensions;
+
 -- Tipos (ENUM)
 create type user_role as enum ('Administrador','Analista OACO','Analista OAGA','CH OACO','CH OAGA','CH AGA','Visitante');
 
@@ -39,7 +51,7 @@ create table profiles (
   updated_at timestamptz not null default now()
 );
 create trigger trg_profiles_updated_at before update on profiles
-for each row execute procedure moddatetime(updated_at);
+for each row execute function extensions.moddatetime(updated_at);
 
 -- Processos
 create table processes (
@@ -58,7 +70,7 @@ create table processes (
 );
 comment on column processes.do_aga_start_date is 'Data base para o prazo de 60 dias DO-AGA. Inicia em first_entry_date e reinicia quando sair de status SOB-*';
 create trigger trg_processes_updated_at before update on processes
-for each row execute procedure moddatetime(updated_at);
+for each row execute function extensions.moddatetime(updated_at);
 
 -- Pareceres internos
 create table internal_opinions (
@@ -73,7 +85,7 @@ create table internal_opinions (
   updated_at timestamptz not null default now()
 );
 create trigger trg_internal_opinions_updated_at before update on internal_opinions
-for each row execute procedure moddatetime(updated_at);
+for each row execute function extensions.moddatetime(updated_at);
 
 -- Único por (processo,tipo) quando status SOLICITADO
 create unique index uidx_opinion_pending on internal_opinions(process_id,type)
@@ -92,7 +104,8 @@ create table notifications (
   updated_at timestamptz not null default now()
 );
 create trigger trg_notifications_updated_at before update on notifications
-for each row execute procedure moddatetime(updated_at);
+for each row execute function extensions.moddatetime(updated_at);
+
 create unique index uidx_notification_pending on notifications(process_id,type)
 where status = 'SOLICITADA';
 
@@ -112,7 +125,7 @@ create table sigadaer (
   updated_at timestamptz not null default now()
 );
 create trigger trg_sigadaer_updated_at before update on sigadaer
-for each row execute procedure moddatetime(updated_at);
+for each row execute function extensions.moddatetime(updated_at);
 
 -- Modelos de texto (Modelos)
 create table models (
@@ -125,7 +138,7 @@ create table models (
   updated_at timestamptz not null default now()
 );
 create trigger trg_models_updated_at before update on models
-for each row execute procedure moddatetime(updated_at);
+for each row execute function extensions.moddatetime(updated_at);
 
 -- Checklists (templates e respostas)
 create table checklist_templates (
@@ -416,7 +429,3 @@ create policy "ck responses read" on checklist_responses
 for select using (auth.role() = 'authenticated');
 create policy "ck responses write" on checklist_responses
 for insert with check (has_write_role(current_user_id()));
-
--- audit (somente leitura por Admin)
-create policy "audit read admin" on audit_log
-for select using ((select role from profiles where id=current_user_id()) = 'Administrador');
