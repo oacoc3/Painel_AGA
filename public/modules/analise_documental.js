@@ -1,4 +1,3 @@
-<script>
 window.Modules = window.Modules || {};
 window.Modules.analise = (() => {
   let currentTemplate = null;
@@ -183,4 +182,3 @@ window.Modules.analise = (() => {
 
   return { init, load };
 })();
-</script>
