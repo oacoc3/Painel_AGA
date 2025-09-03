@@ -1,4 +1,3 @@
-<script>
 window.Modules = window.Modules || {};
 window.Modules.prazos = (() => {
   async function loadATM() {
@@ -75,4 +74,3 @@ window.Modules.prazos = (() => {
   }
   return { init, load };
 })();
-</script>
