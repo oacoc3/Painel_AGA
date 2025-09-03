@@ -1,4 +1,3 @@
-<script>
 window.Modules = window.Modules || {};
 window.Modules.admin = (() => {
   async function loadUsers() {
@@ -41,9 +40,7 @@ window.Modules.admin = (() => {
     });
   }
 
-  function init() {
-    // nada por enquanto
-  }
+  function init() { /* nada por enquanto */ }
 
   async function load() {
     // Só deixa abrir se perfil for Admin
@@ -57,4 +54,3 @@ window.Modules.admin = (() => {
 
   return { init, load };
 })();
-</script>
