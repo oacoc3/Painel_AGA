@@ -1,0 +1,32 @@
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+  node_version = "20"
+
+# SPA: fallback para index.html (mantemos também public/_redirects por segurança)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers de segurança (equivalentes ao bloco que você mostrou)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "interest-cohort=()"
+
+# Mapeia funções (os endpoints já seguem o padrão /.netlify/functions/<nome>)
+# Certifique-se de nomear os arquivos:
+# netlify/functions/build-info.js  e  netlify/functions/create-user.js
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = []
+
+# Variáveis de ambiente (definir no painel do Netlify)
+#  - SUPABASE_URL
+#  - SUPABASE_SERVICE_ROLE
+# As demais (COMMIT_REF, BRANCH, CONTEXT, SITE_NAME) são fornecidas pelo Netlify.
