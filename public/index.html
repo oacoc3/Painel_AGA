@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Painel DO-AGA</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <!-- jsPDF para exportar PDF (Análise Documental) -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
+  <!-- Supabase client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <!-- App -->
+  <script src="./config.js" defer></script>
+  <script src="./supabaseClient.js" defer></script>
+  <script src="./utils.js" defer></script>
+  <script src="./app.js" defer></script>
+  <!-- Módulos -->
+  <script src="./modules/auth.js" defer></script>
+  <script src="./modules/admin.js" defer></script>
+  <script src="./modules/processos.js" defer></script>
+  <script src="./modules/prazos.js" defer></script>
+  <script src="./modules/modelos.js" defer></script>
+  <script src="./modules/analise_documental.js" defer></script>
+</head>
+<body>
+  <div id="app" class="vh">
+    <!-- Header -->
+    <header class="bar">
+      <div class="brand">
+        <span class="logo">■</span>
+        <strong>Painel DO-AGA</strong>
+        <small class="build" id="buildInfo">build: carregando…</small>
+      </div>
+      <nav id="topNav" class="nav hidden">
+        <button data-route="dashboard">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise">Análise Documental</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+      </nav>
+      <div id="userBox" class="user hidden">
+        <span id="userIdentity"></span>
+        <button id="btnLogout" class="danger">Sair</button>
+      </div>
+    </header>
+
+    <!-- Conteúdo -->
+    <main class="main">
+      <!-- Tela de Login -->
+      <section id="viewLogin" class="view centered">
+        <div class="panel">
+          <h1>Login</h1>
+          <label>E-mail <input id="loginEmail" type="email" required></label>
+          <label>Senha <input id="loginPassword" type="password" required></label>
+          <div class="row">
+            <button id="btnDoLogin">Entrar</button>
+            <button id="btnForgot">Esqueci a senha</button>
+          </div>
+          <div id="loginMsg" class="msg"></div>
+        </div>
+      </section>
+
+      <!-- Tela de troca obrigatória de senha -->
+      <section id="viewMustChange" class="view centered hidden">
+        <div class="panel">
+          <h1>Trocar senha</h1>
+          <p>Você precisa definir uma nova senha antes de continuar.</p>
+          <label>Nova senha <input id="newPass1" type="password" required></label>
+          <label>Confirmar senha <input id="newPass2" type="password" required></label>
+          <button id="btnSetNewPass">Salvar nova senha</button>
+          <div id="mustChangeMsg" class="msg"></div>
+        </div>
+      </section>
+
+      <!-- Dashboard (Início) -->
+      <section id="viewDashboard" class="view hidden">
+        <div class="grid">
+          <div class="card">
+            <h2>Visão Geral</h2>
+            <div id="rings" class="rings"></div>
+            <div class="filters">
+              <label>Intervalo (1ª entrada): 
+                <input type="date" id="dashFrom"> —
+                <input type="date" id="dashTo">
+                <button id="btnDashFilter">Aplicar</button>
+              </label>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Velocidade média (dias/processo)</h2>
+            <div id="speedTable" class="table scrolly"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Processos -->
+      <section id="viewProcessos" class="view hidden">
+        <div class="split">
+          <div class="card">
+            <h2>Cadastro / Atualização</h2>
+            <div class="tabs">
+              <button data-tab="proc">Processo</button>
+              <button data-tab="opiniao">Parecer Interno</button>
+              <button data-tab="notif">Notificação</button>
+              <button data-tab="sig">SIGADAER</button>
+            </div>
+            <div id="tabProc" class="tab">
+              <form id="formProc">
+                <label>NUP (#####.######/####-##)
+                  <input id="procNUP" required pattern="^[0-9]{5}\.[0-9]{6}/[0-9]{4}-[0-9]{2}$">
+                </label>
+                <label>Tipo
+                  <select id="procTipo">
+                    <option>PDIR</option>
+                    <option>Inscrição</option>
+                    <option>Alteração</option>
+                    <option>Exploração</option>
+                    <option>OPEA</option>
+                  </select>
+                </label>
+                <label>Status
+                  <select id="procStatus">
+                    <option>ANADOC</option><option>ANATEC-PRE</option><option>ANATEC</option>
+                    <option>ANAICA</option><option>SOB-DOC</option><option>SOB-TEC</option>
+                    <option>SOB-PDIR</option><option>SOB-EXPL</option><option>ARQ</option>
+                  </select>
+                </label>
+                <label>Data 1ª entrada na DO-AGA <input type="date" id="procEntrada" required></label>
+                <label>Data término de obra <input type="date" id="procObraTermino"></label>
+                <label><input type="checkbox" id="procObraConcluida"> Obra concluída</label>
+                <button id="btnSalvarProc" disabled>Salvar</button>
+                <div id="procMsg" class="msg"></div>
+              </form>
+            </div>
+            <div id="tabOpiniao" class="tab hidden">
+              <form id="formOpiniao">
+                <label>NUP <input id="opNUP" required></label>
+                <label>Tipo
+                  <select id="opTipo"><option>ATM</option><option>DT</option><option>CGNA</option></select>
+                </label>
+                <label>Solicitado em <input type="datetime-local" id="opSolic"></label>
+                <button id="btnCadOpiniao">Cadastrar</button>
+                <hr/>
+                <label>Marcar recebimento: ID Parecer <input id="opIDRec"></label>
+                <label>Recebido em <input type="datetime-local" id="opRec"></label>
+                <button id="btnRecOpiniao">Registrar recebimento</button>
+                <div id="opMsg" class="msg"></div>
+              </form>
+            </div>
+            <div id="tabNotif" class="tab hidden">
+              <form id="formNotif">
+                <label>NUP <input id="ntNUP" required></label>
+                <label>Tipo
+                  <select id="ntTipo">
+                    <option>FAV</option><option>FAV-TERM</option><option>TERM-ATRA</option>
+                    <option>DESF-NAO_INI</option><option>DESF_JJAER</option><option>DESF-REM_REB</option>
+                    <option>NCD</option><option>NCT</option>
+                  </select>
+                </label>
+                <label>Solicitada em <input type="datetime-local" id="ntSolic"></label>
+                <button id="btnCadNotif">Cadastrar</button>
+                <hr/>
+                <label>Marcar leitura: ID Notificação <input id="ntIDLida"></label>
+                <label>Lida em <input type="datetime-local" id="ntLidaEm"></label>
+                <button id="btnMarcarLida">Registrar leitura</button>
+                <div id="ntMsg" class="msg"></div>
+              </form>
+            </div>
+            <div id="tabSig" class="tab hidden">
+              <form id="formSig">
+                <label>NUP <input id="sgNUP" required></label>
+                <label>Tipo
+                  <select id="sgTipo">
+                    <option>COMAE</option><option>COMPREP</option><option>COMGAP</option>
+                    <option>GABAER</option><option>SAC</option><option>ANAC</option>
+                    <option>OPR_AD</option><option>PREF</option><option>GOV</option><option>OUTRO</option>
+                  </select>
+                </label>
+                <label>Solicitado em <input type="datetime-local" id="sgSolic"></label>
+                <label>Números (6 dígitos, separados por vírgula)
+                  <input id="sgNums" placeholder="123456, 654321">
+                </label>
+                <label>Observação <textarea id="sgObs"></textarea></label>
+                <button id="btnCadSig">Cadastrar</button>
+                <hr/>
+                <label>Expedir: ID SIGADAER <input id="sgIDExp"></label>
+                <label>Expedido em <input type="datetime-local" id="sgExpEm"></label>
+                <button id="btnExpSig">Registrar expedição</button>
+                <hr/>
+                <label>Receber: ID SIGADAER <input id="sgIDRec"></label>
+                <label>Recebido em <input type="datetime-local" id="sgRecEm"></label>
+                <button id="btnRecSig">Registrar recebimento</button>
+                <div id="sgMsg" class="msg"></div>
+              </form>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Lista de Processos</h2>
+            <div id="listaProcessos" class="table scrolly"></div>
+          </div>
+
+          <div class="card">
+            <h2>Histórico (Auditoria)</h2>
+            <div id="histProcesso" class="table scrolly"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Prazos -->
+      <section id="viewPrazos" class="view hidden">
+        <div class="columns">
+          <div class="card">
+            <h2>Pareceres ATM</h2>
+            <div id="prazoATM" class="table scrolly"></div>
+          </div>
+          <div class="card">
+            <h2>Pareceres DT</h2>
+            <div id="prazoDT" class="table scrolly"></div>
+          </div>
+          <div class="card">
+            <h2>Pareceres CGNA</h2>
+            <div id="prazoCGNA" class="table scrolly"></div>
+          </div>
+        </div>
+        <div class="columns">
+          <div class="card">
+            <h2>Pareceres Externos</h2>
+            <div id="prazoExt" class="table scrolly"></div>
+          </div>
+          <div class="card">
+            <h2>Término de Obra</h2>
+            <div id="prazoObra" class="table scrolly"></div>
+          </div>
+          <div class="card">
+            <h2>Monitorar Tramitação</h2>
+            <div id="prazoMonit" class="table scrolly"></div>
+          </div>
+          <div class="card">
+            <h2>Prazo DO-AGA</h2>
+            <div id="prazoDOAGA" class="table scrolly"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Modelos -->
+      <section id="viewModelos" class="view hidden">
+        <div class="split">
+          <div class="card">
+            <h2>Cadastrar / Atualizar Modelo</h2>
+            <form id="formModelo">
+              <input type="hidden" id="mdlId">
+              <label>Categoria <input id="mdlCat" required></label>
+              <label>Título <input id="mdlTit" required></label>
+              <label>Conteúdo <textarea id="mdlTxt" rows="8" required></textarea></label>
+              <div class="row">
+                <button id="btnSalvarModelo">Salvar</button>
+                <button id="btnExcluirModelo" class="danger" type="button">Excluir</button>
+              </div>
+              <div id="mdlMsg" class="msg"></div>
+            </form>
+          </div>
+          <div class="card">
+            <h2>Modelos</h2>
+            <div id="listaModelos" class="table scrolly"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Análise Documental -->
+      <section id="viewAnalise" class="view hidden">
+        <div class="split">
+          <div class="card">
+            <h2>Nova Análise Documental</h2>
+            <form id="formAD">
+              <label>NUP <input id="adNUP" required></label>
+              <label>Tipo do Processo
+                <select id="adTipo">
+                  <option>PDIR</option><option>Inscrição</option><option>Alteração</option><option>Exploração</option><option>OPEA</option>
+                </select>
+              </label>
+              <div id="ckContainer"></div>
+              <button id="btnFinalizarAD">Finalizar e Exportar PDF</button>
+              <div id="adMsg" class="msg"></div>
+            </form>
+          </div>
+          <div class="card">
+            <h2>Checklists concluídas (indicador)</h2>
+            <div id="listaAD" class="table scrolly"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Administração -->
+      <section id="viewAdmin" class="view hidden">
+        <div class="split">
+          <div class="card">
+            <h2>Criar usuário</h2>
+            <form id="formUser">
+              <label>E-mail <input id="adEmail" type="email" required></label>
+              <label>Senha inicial <input id="adPass" type="password" required></label>
+              <label>Identificação <input id="adName" required></label>
+              <label>Perfil
+                <select id="adRole">
+                  <option>Administrador</option>
+                  <option>Analista OACO</option>
+                  <option>Analista OAGA</option>
+                  <option>CH OACO</option>
+                  <option>CH OAGA</option>
+                  <option>CH AGA</option>
+                  <option>Visitante</option>
+                </select>
+              </label>
+              <button id="btnCreateUser">Criar</button>
+              <div id="adminMsg" class="msg"></div>
+            </form>
+          </div>
+          <div class="card">
+            <h2>Usuários</h2>
+            <div id="listaUsers" class="table scrolly"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="bar foot">
+      <span>Retro-UI</span>
+      <span>© DO-AGA</span>
+      <span id="footBuild"></span>
+    </footer>
+  </div>
+</body>
+</html>
