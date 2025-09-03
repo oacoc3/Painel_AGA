@@ -225,9 +225,9 @@ create or replace view vw_prazo_do_aga as
 select p.nup,
        p.status as status_atual,
        case when p.status like 'SOB-%' then p.status
-            else (p.primeira_entrada + interval '60 days') end as prazo_ou_status,
-       case when p.status like 'SOB-%' then null
-            else (p.primeira_entrada + interval '60 days' - current_date) end as restam_dias
+            else to_char(p.primeira_entrada + interval '60 days', 'YYYY-MM-DD') end as prazo_ou_status,
+       case when p.status like 'SOB-%' then null::int
+            else extract(day from (p.primeira_entrada + interval '60 days') - current_date)::int end as restam_dias
 from processes p
 where p.status <> 'ARQ';
 
