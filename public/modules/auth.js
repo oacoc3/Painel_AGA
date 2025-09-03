@@ -1,4 +1,3 @@
-<script>
 window.Modules = window.Modules || {};
 window.Modules.auth = (() => {
   function bindLogin() {
@@ -45,4 +44,3 @@ window.Modules.auth = (() => {
 
   return { init };
 })();
-</script>
