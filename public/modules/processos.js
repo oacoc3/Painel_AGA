@@ -1,4 +1,3 @@
-<script>
 window.Modules = window.Modules || {};
 window.Modules.processos = (() => {
   let currentProcId = null;
@@ -84,7 +83,7 @@ window.Modules.processos = (() => {
       const { error } = await sb.from('internal_opinions').insert({
         process_id: pid, type, requested_at, created_by: u.id
       });
-      if (error) throw error; // triggers do banco validam status do processo e unicidade SOLICITADO
+      if (error) throw error; // triggers validam status do processo e unicidade SOLICITADO
       Utils.setMsg('opMsg', 'Parecer cadastrado (status SOLICITADO).');
       await reloadLists();
     } catch (e) {
@@ -284,7 +283,7 @@ window.Modules.processos = (() => {
     el('procNUP').value = p.nup;
     el('procTipo').value = p.type;
     el('procStatus').value = p.status;
-    el('procEntrada').value = Utils.toDateInputValue(p.first_entry_date);
+    el('procEntrada').value = toDateInputValue(p.first_entry_date);
     // Campos de obra são preenchidos só ao buscar individualmente (opcional)
     el('btnSalvarProc').disabled = true;
     Utils.setMsg('procMsg', `Carregado processo ${p.nup}.`);
@@ -361,4 +360,3 @@ window.Modules.processos = (() => {
 
   return { init, load };
 })();
-</script>
