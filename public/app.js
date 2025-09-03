@@ -1,4 +1,3 @@
-<script>
 // Roteamento e integração geral da SPA
 
 window.App = (() => {
@@ -141,4 +140,3 @@ window.App = (() => {
 })();
 
 document.addEventListener('DOMContentLoaded', App.init);
-</script>
