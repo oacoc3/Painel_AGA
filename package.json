@@ -1,0 +1,15 @@
+{
+  "name": "painel-do-aga",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "build": "echo \"Static build (Netlify)\""
+  },
+  "engines": {
+    "node": "20.x"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4"
+  }
+}
