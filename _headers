@@ -1,5 +1,0 @@
-/*
-  X-Frame-Options: DENY
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: same-origin
-  Content-Security-Policy: default-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.jsdelivr.net/npm/@supabase; img-src 'self' data:; connect-src 'self' https://*.supabase.co; frame-ancestors 'none';
