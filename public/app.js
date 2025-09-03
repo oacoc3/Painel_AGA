@@ -125,7 +125,7 @@ window.App = (() => {
     // Eventos de auth
     sb.auth.onAuthStateChange(async (event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') await refreshSessionUI();
-      if (event === 'PASSWORD_RECOVERY') setRoute('mustchange');
+       if (event === 'PASSWORD_RECOVERY' && location.hash.includes('type=recovery')) setRoute('mustchange');
       if (event === 'SIGNED_OUT') {
         setRoute('login');
         stopClock();
