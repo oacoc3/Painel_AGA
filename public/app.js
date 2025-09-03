@@ -135,8 +135,11 @@ window.App = (() => {
     });
 
     // Fluxo de recuperação
-    if (location.hash.includes('type=recovery')) setRoute('mustchange');
-    else await refreshSessionUI();
+    if (location.hash.includes('type=recovery')) {
+      location.hash = '';
+      await refreshSessionUI();
+      setRoute('mustchange');
+    } else await refreshSessionUI();
 
     // Inicializa módulos
     window.Modules.auth?.init();
