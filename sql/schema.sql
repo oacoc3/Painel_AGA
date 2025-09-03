@@ -175,7 +175,7 @@ from processes p;
 create or replace view vw_prazo_parecer_atm as
 select p.nup,
        i.requested_at + interval '30 days' as prazo,
-       (i.requested_at + interval '30 days' - now())::int as restam_dias
+       extract(day from (i.requested_at + interval '30 days') - now())::int as restam_dias
 from processes p
 join internal_opinions i on i.process_id = p.id
 where i.type = 'ATM' and i.received_at is null;
@@ -183,7 +183,7 @@ where i.type = 'ATM' and i.received_at is null;
 create or replace view vw_prazo_parecer_dt as
 select p.nup,
        i.requested_at + interval '30 days' as prazo,
-       (i.requested_at + interval '30 days' - now())::int as restam_dias
+       extract(day from (i.requested_at + interval '30 days') - now())::int as restam_dias
 from processes p
 join internal_opinions i on i.process_id = p.id
 where i.type = 'DT' and i.received_at is null;
@@ -191,7 +191,7 @@ where i.type = 'DT' and i.received_at is null;
 create or replace view vw_prazo_parecer_cgna as
 select p.nup,
        i.requested_at + interval '30 days' as prazo,
-       (i.requested_at + interval '30 days' - now())::int as restam_dias
+       extract(day from (i.requested_at + interval '30 days') - now())::int as restam_dias
 from processes p
 join internal_opinions i on i.process_id = p.id
 where i.type = 'CGNA' and i.received_at is null;
@@ -200,7 +200,7 @@ where i.type = 'CGNA' and i.received_at is null;
 create or replace view vw_prazo_sigadaer_externos as
 select p.nup,
        s.requested_at + interval '30 days' as prazo,
-       (s.requested_at + interval '30 days' - now())::int as restam_dias
+       extract(day from (s.requested_at + interval '30 days') - now())::int as restam_dias
 from processes p
 join sigadaer s on s.process_id = p.id
 where s.expedition_at is null;
