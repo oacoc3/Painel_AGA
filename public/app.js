@@ -4,6 +4,7 @@ window.App = (() => {
   const state = {
     session: null,
     profile: null,
+    build: null,   // info vinda da função build-info (para fallback de versão)
     route: 'login' // login | mustchange | dashboard | processos | prazos | modelos | analise | admin
   };
 
@@ -18,13 +19,37 @@ window.App = (() => {
     admin: 'viewAdmin'
   };
 
+  // Versão preferencialmente vem de APP_CONFIG.VERSION;
+  // se ausente, usa commit (7 chars) da função build-info; senão "local".
+  function computeVersion() {
+    const cfgVer = window.APP_CONFIG?.VERSION;
+    if (cfgVer && String(cfgVer).trim()) return String(cfgVer).trim();
+    const c = state.build?.commit;
+    if (c && c !== 'local') return String(c).slice(0, 7);
+    return 'local';
+  }
+
+  // Renderiza: "versão X • Nome • Perfil • DD/MM/AAAA HH:MM"
+  function renderVersionStamp() {
+    const ver = computeVersion();
+    const now = Utils.fmtDateTime(new Date());
+    const parts = [`versão ${ver}`];
+
+    if (state.profile?.name && state.profile?.role) {
+      parts.push(state.profile.name, state.profile.role);
+    }
+    parts.push(now);
+
+    const s = parts.join(' • ');
+    Utils.setText('buildInfo', s);
+    Utils.setText('footBuild', s);
+  }
+
   function setRoute(r) {
     state.route = r;
-    // Esconde todas
     Object.values(views).forEach(id => Utils.hide(id));
-    // Mostra atual
     Utils.show(views[r]);
-    // Ajusta navegação topo
+
     const logged = !!state.session;
     const nav = el('topNav');
     const userBox = el('userBox');
@@ -35,7 +60,7 @@ window.App = (() => {
       nav.classList.add('hidden');
       userBox.classList.add('hidden');
     }
-    // Lazy load por rota
+
     switch (r) {
       case 'dashboard': window.Modules.dashboard?.load(); break;
       case 'processos': window.Modules.processos?.load(); break;
@@ -52,13 +77,16 @@ window.App = (() => {
     const { data, error } = await sb.from('profiles').select('*').eq('id', u.id).maybeSingle();
     if (error) { console.error(error); return null; }
     state.profile = data || null;
-    // Header: identidade e papel
+
     if (state.profile) {
       Utils.setText('userIdentity', `${state.profile.name} (${state.profile.role})`);
-      // Mostra botão Administração só para Administrador
       const btnAdmin = el('btnAdmin');
       if (btnAdmin) btnAdmin.classList.toggle('hidden', state.profile.role !== 'Administrador');
     }
+
+    // Atualiza o carimbo sempre que perfil for carregado
+    renderVersionStamp();
+
     return state.profile;
   }
 
@@ -66,10 +94,10 @@ window.App = (() => {
     state.session = await getSession();
     if (!state.session) {
       setRoute('login');
+      renderVersionStamp(); // ainda mostra versão + data/hora mesmo deslogado
       return;
     }
     await loadProfile();
-    // must_change_password?
     if (state.profile?.must_change_password) {
       setRoute('mustchange');
     } else {
@@ -78,23 +106,18 @@ window.App = (() => {
   }
 
   async function init() {
-    // Build info (rodapé e header)
+    // Busca opcional de metadados do deploy (usado só como fallback de versão)
     try {
       const res = await Utils.callFn('build-info');
-      if (res.ok && res.data) {
-        const b = res.data;
-        const s = `commit ${b.commit || 'local'} • ${b.branch || 'local'} • ${b.context || 'dev'} • ${b.site || ''} • ${Utils.fmtDateTime(b.builtAt)}`;
-        Utils.setText('buildInfo', s);
-        Utils.setText('footBuild', s);
-      }
+      if (res.ok && res.data) state.build = res.data;
     } catch { /* silencioso */ }
+
+    // Carimbo inicial (antes mesmo do login)
+    renderVersionStamp();
 
     // Navegação topo
     $$('#topNav button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const r = btn.dataset.route;
-        setRoute(r);
-      });
+      btn.addEventListener('click', () => setRoute(btn.dataset.route));
     });
 
     // Logout
@@ -103,23 +126,22 @@ window.App = (() => {
       state.session = null; state.profile = null;
       Utils.setText('userIdentity', '');
       setRoute('login');
+      renderVersionStamp();
     });
 
-    // Evento de auth (inclui fluxo de recuperação)
+    // Eventos de auth
     sb.auth.onAuthStateChange(async (event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         await refreshSessionUI();
       }
-      if (event === 'PASSWORD_RECOVERY') {
-        // Supabase sinaliza modo de recuperação → força troca
-        setRoute('mustchange');
-      }
+      if (event === 'PASSWORD_RECOVERY') setRoute('mustchange');
       if (event === 'SIGNED_OUT') {
         setRoute('login');
+        renderVersionStamp();
       }
     });
 
-    // Hash de recuperação (#access_token=...&type=recovery)
+    // Fluxo de recuperação
     if (location.hash.includes('type=recovery')) {
       setRoute('mustchange');
     } else {
@@ -136,7 +158,7 @@ window.App = (() => {
     window.Modules.dashboard?.init?.();
   }
 
-  return { init, setRoute, state, loadProfile, refreshSessionUI };
+  return { init, setRoute, state, loadProfile, refreshSessionUI, renderVersionStamp };
 })();
 
 document.addEventListener('DOMContentLoaded', App.init);
