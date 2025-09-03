@@ -14,6 +14,14 @@ export async function initAuth(){
   // Info de build
   fetchBuildInfo();
 
+  if (!window.supabase) {
+    console.error('Cliente Supabase não inicializado. Verifique as variáveis de ambiente.');
+    setNavVisible(false);
+    showRoute('route-login');
+    el('auth-msg').textContent = 'Configuração do Supabase ausente.';
+    return;
+  }
+
   // Captura token de recuperação de senha (Supabase envia para a URL)
   const hash = window.location.hash;
   if (hash.includes('type=recovery') || hash.includes('access_token=')){
