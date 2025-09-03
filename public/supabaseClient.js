@@ -1,4 +1,3 @@
-<script>
 // Inicializa o cliente do Supabase usando as chaves do config.js (ANON é pública por design).
 (() => {
   const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.APP_CONFIG || {};
@@ -15,8 +14,7 @@
     global: { headers: { 'x-application-name': 'Painel DO-AGA' } }
   });
 
-  // Helper para obter sessão/profilo rapidamente
+  // Helper para obter sessão/perfil rapidamente
   window.getSession = async () => (await sb.auth.getSession()).data.session || null;
   window.getUser = async () => (await sb.auth.getUser()).data.user || null;
 })();
-</script>
