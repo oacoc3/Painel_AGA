@@ -111,14 +111,18 @@ function renderTable(containerOrId, columns, rows) {
 async function callFn(name, { method = 'GET', body, headers } = {}) {
   const base = (window.APP_CONFIG && window.APP_CONFIG.NETLIFY_FUNCTIONS_BASE) || '/.netlify/functions';
   const url = `${base}/${name}`;
-  const res = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(headers||{}) },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  const txt = await res.text();
-  try { return { ok: res.ok, status: res.status, data: JSON.parse(txt) }; }
-  catch { return { ok: res.ok, status: res.status, data: txt }; }
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...(headers || {}) },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const txt = await res.text();
+    try { return { ok: res.ok, status: res.status, data: JSON.parse(txt) }; }
+    catch { return { ok: res.ok, status: res.status, data: txt }; }
+  } catch (e) {
+    return { ok: false, status: 0, data: String(e) };
+  }
 }
 
 // Rings do Dashboard
