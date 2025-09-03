@@ -1,4 +1,3 @@
-<script>
 window.Modules = window.Modules || {};
 window.Modules.modelos = (() => {
   let selectedId = null;
@@ -71,4 +70,3 @@ window.Modules.modelos = (() => {
 
   return { init, load };
 })();
-</script>
