@@ -7,10 +7,15 @@ window.SB = {
 if (!SB.url || !SB.anon) {
   console.warn('Defina SUPABASE_URL e SUPABASE_ANON_KEY no ambiente do Netlify.');
 }
-window.supabase = window.supabase || supabase.createClient(SB.url, SB.anon, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true // captura token de reset de senha
-  }
-});
+// Apenas inicializa o cliente caso a biblioteca do Supabase esteja disponível.
+if (typeof supabase !== 'undefined') {
+  window.supabase = window.supabase || supabase.createClient(SB.url, SB.anon, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true // captura token de reset de senha
+    }
+  });
+} else {
+  console.error('Biblioteca Supabase não carregada. Verifique a tag <script> de importação.');
+}
