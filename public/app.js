@@ -4,7 +4,7 @@ window.App = (() => {
   const state = {
     session: null,
     profile: null,
-    build: null,   // info vinda da função build-info (para fallback de versão)
+    build: null,   // info da função build-info (inclui version)
     route: 'login' // login | mustchange | dashboard | processos | prazos | modelos | analise | admin
   };
 
@@ -19,13 +19,13 @@ window.App = (() => {
     admin: 'viewAdmin'
   };
 
-  // Versão preferencialmente vem de APP_CONFIG.VERSION;
-  // se ausente, usa commit (7 chars) da função build-info; senão "local".
+  // Calcula a versão para exibir:
+  // 1) usa state.build.version (Netlify), 2) fallback APP_CONFIG.VERSION (se você quiser forçar),
+  // 3) fallback "local".
   function computeVersion() {
+    if (state.build?.version) return String(state.build.version);
     const cfgVer = window.APP_CONFIG?.VERSION;
     if (cfgVer && String(cfgVer).trim()) return String(cfgVer).trim();
-    const c = state.build?.commit;
-    if (c && c !== 'local') return String(c).slice(0, 7);
     return 'local';
   }
 
@@ -84,9 +84,7 @@ window.App = (() => {
       if (btnAdmin) btnAdmin.classList.toggle('hidden', state.profile.role !== 'Administrador');
     }
 
-    // Atualiza o carimbo sempre que perfil for carregado
-    renderVersionStamp();
-
+    renderVersionStamp(); // atualiza após carregar perfil
     return state.profile;
   }
 
@@ -94,7 +92,7 @@ window.App = (() => {
     state.session = await getSession();
     if (!state.session) {
       setRoute('login');
-      renderVersionStamp(); // ainda mostra versão + data/hora mesmo deslogado
+      renderVersionStamp();
       return;
     }
     await loadProfile();
@@ -106,19 +104,17 @@ window.App = (() => {
   }
 
   async function init() {
-    // Busca opcional de metadados do deploy (usado só como fallback de versão)
+    // Busca metadados do deploy (inclui version automática)
     try {
       const res = await Utils.callFn('build-info');
       if (res.ok && res.data) state.build = res.data;
     } catch { /* silencioso */ }
 
-    // Carimbo inicial (antes mesmo do login)
+    // Carimbo inicial (antes do login, já mostra versão)
     renderVersionStamp();
 
     // Navegação topo
-    $$('#topNav button').forEach(btn => {
-      btn.addEventListener('click', () => setRoute(btn.dataset.route));
-    });
+    $$('#topNav button').forEach(btn => btn.addEventListener('click', () => setRoute(btn.dataset.route)));
 
     // Logout
     el('btnLogout').addEventListener('click', async () => {
