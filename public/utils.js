@@ -1,4 +1,3 @@
-<script>
 // Utilitários simples e genéricos
 
 window.$ = (sel, root = document) => root.querySelector(sel);
@@ -139,4 +138,3 @@ window.Utils = {
   show, hide, setText, setMsg, fmtDate, fmtDateTime, toDateInputValue,
   toDateTimeLocalValue, daysBetween, yesNo, renderTable, callFn, renderRings
 };
-</script>
