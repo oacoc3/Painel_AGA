@@ -1,3 +1,4 @@
+// public/supabaseClient.js
 // Inicializa o cliente do Supabase usando as chaves do config.js (ANON é pública por design).
 (() => {
   const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.APP_CONFIG || {};
