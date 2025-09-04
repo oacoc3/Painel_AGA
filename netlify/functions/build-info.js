@@ -1,3 +1,4 @@
+// netlify/functions/build-info.js
 // Retorna informações de build para exibir no rodapé/cabeçalho.
 // Agora inclui "version", calculada automaticamente:
 // - COMMIT_REF (7 chars) quando o deploy vem do Git
