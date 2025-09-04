@@ -1,3 +1,4 @@
+// public/app.js
 // Roteamento e integração geral da SPA (Single Page Application)
 
 window.App = (() => {
