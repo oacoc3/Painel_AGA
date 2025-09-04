@@ -2,13 +2,13 @@
 window.Modules = window.Modules || {};
 window.Modules.auth = (function () {
   function bindLogin() {
-    var btnDoLogin = document.getElementById('btnDoLogin');
+    var formLogin = document.getElementById('loginForm');
     var btnForgot = document.getElementById('btnForgot');
     var btnSetNewPass = document.getElementById('btnSetNewPass');
 
     // LOGIN
-    if (btnDoLogin) {
-      btnDoLogin.addEventListener('click', async function (ev) {
+    if (formLogin) {
+      formLogin.addEventListener('submit', async function (ev) {
         ev.preventDefault();
         var emailEl = document.getElementById('loginEmail');
         var passEl = document.getElementById('loginPassword');
