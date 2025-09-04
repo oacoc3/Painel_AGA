@@ -53,6 +53,13 @@ window.App = (() => {
     }
   }
 
+   // ----- Eventos globais -----
+  function bindEvents() {
+    el('btnLogout').addEventListener('click', async () => {
+      await sb.auth.signOut();
+    });
+  }
+
   // ----- Navegação/rotas -----
   function setRoute(r) {
     state.route = r;
@@ -129,6 +136,7 @@ window.App = (() => {
   // Inicialização do app
   function init() {
     renderFooterVersion();
+    bindEvents();
     Object.values(window.Modules || {}).forEach(m => m.init?.());
     sb.auth.onAuthStateChange(() => refreshSessionUI());
     refreshSessionUI();
