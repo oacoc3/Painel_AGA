@@ -56,12 +56,14 @@
       <section id="viewLogin" class="view centered">
         <div class="panel">
           <h1>Login</h1>
-          <label>E-mail <input id="loginEmail" type="email" required></label>
-          <label>Senha <input id="loginPassword" type="password" required></label>
-          <div class="row">
-            <button id="btnDoLogin">Entrar</button>
-            <button id="btnForgot">Esqueci a senha</button>
-          </div>
+          <form id="loginForm">
+            <label>E-mail <input id="loginEmail" type="email" required></label>
+            <label>Senha <input id="loginPassword" type="password" required></label>
+            <div class="row">
+              <button id="btnDoLogin" type="submit">Entrar</button>
+              <button id="btnForgot" type="button">Esqueci a senha</button>
+            </div>
+          </form>
           <div id="loginMsg" class="msg"></div>
         </div>
       </section>
