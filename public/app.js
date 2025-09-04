@@ -57,7 +57,7 @@ window.App = (() => {
   function bindEvents() {
     el('btnLogout').addEventListener('click', async () => {
       await sb.auth.signOut();
-      await refreshSessionUI();
+      // Atualização de UI via onAuthStateChange
     });
 
     // Navegação pelo menu superior
