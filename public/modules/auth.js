@@ -24,41 +24,45 @@ window.Modules.auth = (() => {
       Utils.setMsg('loginMsg', 'Verifique seu e-mail para redefinir a senha.');
     });
 
-    el('btnSetNewPass').addEventListener('click', async () => {
-      const p1 = el('newPass1').value;
-      const p2 = el('newPass2').value;
-      if (!p1 || p1 !== p2) return Utils.setMsg('mustChangeMsg', 'As senhas não coincidem.', true);
-      Utils.setMsg('mustChangeMsg', 'Atualizando senha...');
+el('btnSetNewPass').addEventListener('click', async () => {
+  const p1 = el('newPass1').value;
+  const p2 = el('newPass2').value;
+  if (!p1 || p1 !== p2) return Utils.setMsg('mustChangeMsg', 'As senhas não coincidem.', true);
+  Utils.setMsg('mustChangeMsg', 'Atualizando senha...');
 
-      // Atualiza a senha do usuário (sessão de recuperação já presente nesta aba)
-      const { error } = await sb.auth.updateUser({ password: p1 });
-      if (error) return Utils.setMsg('mustChangeMsg', error.message, true);
-
-      // Sincroniza esta aba com a sessão nova
-      await sb.auth.refreshSession();
-
-      // Marca must_change_password = false no perfil
-      const u = await getUser();
-      if (u) {
-        const { error: profErr } = await sb
-          .from('profiles')
-          .update({ must_change_password: false })
-          .eq('id', u.id);
-        if (profErr) return Utils.setMsg('mustChangeMsg', profErr.message, true);
-        if (App.state?.profile) App.state.profile.must_change_password = false;
-      }
-
-      // Limpa o hash (remove #access_token&type=recovery da URL)
-      try {
-        const cleanUrl = location.origin + location.pathname + location.search;
-        history.replaceState({}, document.title, cleanUrl);
-      } catch { /* ignore */ }
-
-      Utils.setMsg('mustChangeMsg', 'Senha atualizada!');
-      await App.refreshSessionUI(undefined, 'USER_UPDATED');
-      App.setRoute('dashboard');
-    });
+  // Garante que a sessão de recuperação existe
+  const s = await getSession();
+  if (!s) {
+    return Utils.setMsg('mustChangeMsg', 'Sessão de recuperação não encontrada. Abra novamente o link do e-mail.', true);
   }
+
+  const { error } = await sb.auth.updateUser({ password: p1 });
+  if (error) return Utils.setMsg('mustChangeMsg', error.message, true);
+
+  await sb.auth.refreshSession();
+
+  const u = await getUser();
+  if (u) {
+    const { error: profErr } = await sb
+      .from('profiles')
+      .update({ must_change_password: false })
+      .eq('id', u.id);
+    if (profErr) return Utils.setMsg('mustChangeMsg', profErr.message, true);
+    if (App.state?.profile) App.state.profile.must_change_password = false;
+  }
+
+  try {
+    const cleanUrl = location.origin + location.pathname + location.search;
+    history.replaceState({}, document.title, cleanUrl);
+  } catch {}
+
+  // Sai do modo "forçado" de recuperação
+  window.__FORCE_RECOVERY = false;
+
+  Utils.setMsg('mustChangeMsg', 'Senha atualizada!');
+  await App.refreshSessionUI(undefined, 'USER_UPDATED');
+  App.setRoute('dashboard');
+});
 
   function init() { bindLogin(); }
   return { init };
