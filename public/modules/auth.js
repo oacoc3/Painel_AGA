@@ -1,3 +1,4 @@
+// public/modules/auth.js
 window.Modules = window.Modules || {};
 window.Modules.auth = (() => {
   function bindLogin() {
@@ -26,13 +27,24 @@ window.Modules.auth = (() => {
       const p2 = el('newPass2').value;
       if (!p1 || p1 !== p2) return Utils.setMsg('mustChangeMsg', 'As senhas não coincidem.', true);
       Utils.setMsg('mustChangeMsg', 'Atualizando senha...');
-      const { data, error } = await sb.auth.updateUser({ password: p1 });
+
+      // Atualiza a senha do usuário
+      const { error } = await sb.auth.updateUser({ password: p1 });
       if (error) return Utils.setMsg('mustChangeMsg', error.message, true);
-      // Marca must_change_password = false
+
+      // Marca must_change_password = false no perfil
       const u = await getUser();
       if (u) {
-        await sb.from('profiles').update({ must_change_password: false }).eq('id', u.id);
+        const { error: profErr } = await sb
+          .from('profiles')
+          .update({ must_change_password: false })
+          .eq('id', u.id);
+        if (profErr) return Utils.setMsg('mustChangeMsg', profErr.message, true);
+
+        // Atualiza cache local, se existir
+        if (App.state?.profile) App.state.profile.must_change_password = false;
       }
+
       Utils.setMsg('mustChangeMsg', 'Senha atualizada!');
       await App.refreshSessionUI();
     });
