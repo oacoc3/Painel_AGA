@@ -59,7 +59,6 @@ window.App = (() => {
       // UI será atualizada via onAuthStateChange
     });
 
-    // Navegação pelo menu superior
     el('topNav').addEventListener('click', (ev) => {
       const btn = ev.target.closest('button[data-route]');
       if (btn) setRoute(btn.dataset.route);
@@ -78,24 +77,12 @@ window.App = (() => {
     el('userBox').classList.toggle('hidden', !showBars);
 
     switch (r) {
-      case 'dashboard':
-        window.Modules.dashboard?.load();
-        break;
-      case 'processos':
-        window.Modules.processos?.load();
-        break;
-      case 'prazos':
-        window.Modules.prazos?.load();
-        break;
-      case 'modelos':
-        window.Modules.modelos?.load();
-        break;
-      case 'analise':
-        window.Modules.analise?.load();
-        break;
-      case 'admin':
-        window.Modules.admin?.load();
-        break;
+      case 'dashboard':  window.Modules.dashboard?.load(); break;
+      case 'processos':  window.Modules.processos?.load(); break;
+      case 'prazos':     window.Modules.prazos?.load(); break;
+      case 'modelos':    window.Modules.modelos?.load(); break;
+      case 'analise':    window.Modules.analise?.load(); break;
+      case 'admin':      window.Modules.admin?.load(); break;
     }
   }
 
@@ -109,12 +96,7 @@ window.App = (() => {
       el('btnAdmin').classList.add('hidden');
       return null;
     }
-    const { data, error } = await sb
-      .from('profiles')
-      .select('*')
-      .eq('id', u.id)
-      .maybeSingle();
-
+    const { data, error } = await sb.from('profiles').select('*').eq('id', u.id).maybeSingle();
     if (error) {
       console.error(error);
       state.profile = null;
@@ -130,6 +112,13 @@ window.App = (() => {
     Utils.setText('userIdentity', identity);
     el('btnAdmin').classList.toggle('hidden', data.role !== 'Administrador');
     return data;
+  }
+
+  function isRecoveryFromUrl() {
+    try {
+      // Supabase anexa #access_token=...&type=recovery
+      return (location.hash || '').includes('type=recovery');
+    } catch { return false; }
   }
 
   // Atualiza sessão e UI conforme estado do auth
@@ -149,13 +138,13 @@ window.App = (() => {
     await loadProfile();
     startClock();
 
-    // Se chegou em modo de recuperação, vá para mustchange apenas enquanto a conta exigir troca.
-    if (event === 'PASSWORD_RECOVERY') {
+    // Se veio via link de recuperação, caia na tela de troca
+    if (event === 'PASSWORD_RECOVERY' || isRecoveryFromUrl()) {
       if (state.profile?.must_change_password !== false) {
         setRoute('mustchange');
         return;
       }
-      // Se já não precisa trocar, caia no fluxo normal
+      // Se já não precisa trocar, segue fluxo normal
     }
 
     if (state.profile?.must_change_password) setRoute('mustchange');
