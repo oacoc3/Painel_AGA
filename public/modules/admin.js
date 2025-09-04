@@ -23,19 +23,18 @@ window.Modules.admin = (() => {
         return Utils.setMsg('adminMsg', 'Apenas Administrador pode criar usuários.', true);
       }
       const email = el('adEmail').value.trim();
-      const password = el('adPass').value;
       const name = el('adName').value.trim();
       const role = el('adRole').value;
-      if (!email || !password || !name || !role) {
+      if (!email || !name || !role) {
         return Utils.setMsg('adminMsg', 'Preencha todos os campos.', true);
       }
       Utils.setMsg('adminMsg', 'Criando usuário...');
       const res = await Utils.callFn('create-user', {
         method: 'POST',
-        body: { email, password, name, role }
+        body: { email, name, role }
       });
       if (!res.ok) return Utils.setMsg('adminMsg', (res.data && res.data.error) || 'Falha ao criar usuário.', true);
-      Utils.setMsg('adminMsg', 'Usuário criado com sucesso. O primeiro acesso exigirá troca de senha.');
+      Utils.setMsg('adminMsg', 'Usuário criado com sucesso.');
       el('formUser').reset();
       await loadUsers();
     });
