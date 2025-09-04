@@ -139,13 +139,11 @@ window.App = (() => {
     await loadProfile();
     startClock();
 
-    // Se veio via link de recuperação, caia na tela de troca
+    // ✅ Sempre levar à tela de troca de senha quando for recuperação,
+    // independentemente de must_change_password no perfil.
     if (event === 'PASSWORD_RECOVERY' || isRecoveryFromUrl()) {
-      if (state.profile?.must_change_password !== false) {
-        setRoute('mustchange');
-        return;
-      }
-      // Se já não precisa trocar, segue fluxo normal
+      setRoute('mustchange');
+      return;
     }
 
     if (state.profile?.must_change_password) setRoute('mustchange');
