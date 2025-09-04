@@ -76,3 +76,4 @@ window.App = (() => {
     if (!u) { state.profile = null; renderHeaderStamp(); return null; }
     const { data, error } = await sb.from('profiles').select('*').eq('id', u.id).maybeSingle();
     if (error) { console.error(error); sta
+               }
