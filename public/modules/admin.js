@@ -1,3 +1,4 @@
+// public/modules/admin.js
 window.Modules = window.Modules || {};
 window.Modules.admin = (() => {
   async function loadUsers() {
