@@ -79,6 +79,13 @@ window.App = (() => {
     state.profile = data || null;
 
     if (state.profile) {
+       // Garante que o JWT contenha "role" e "name" para policies no Supabase
+      const meta = u.user_metadata || {};
+      if (meta.role !== state.profile.role || meta.name !== state.profile.name) {
+        try { await sb.auth.updateUser({ data: { role: state.profile.role, name: state.profile.name } }); }
+        catch (e) { console.error('Falha ao atualizar metadata do usuário', e); }
+      }
+
       Utils.setText('userIdentity', `${state.profile.name} (${state.profile.role})`);
       const btnAdmin = el('btnAdmin');
       if (btnAdmin) btnAdmin.classList.toggle('hidden', state.profile.role !== 'Administrador');
