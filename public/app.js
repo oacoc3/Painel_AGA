@@ -125,7 +125,6 @@ window.App = (() => {
     // Eventos de auth
     sb.auth.onAuthStateChange(async (event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') await refreshSessionUI();
-       if (event === 'PASSWORD_RECOVERY' && location.hash.includes('type=recovery')) setRoute('mustchange');
       if (event === 'SIGNED_OUT') {
         setRoute('login');
         stopClock();
@@ -135,11 +134,14 @@ window.App = (() => {
     });
 
     // Fluxo de recuperação
-    if (location.hash.includes('type=recovery')) {
-      location.hash = '';
-      await refreshSessionUI();
-      setRoute('mustchange');
-    } else await refreshSessionUI();
+    const isRecovery = location.hash.includes('type=recovery');
+    if (isRecovery) {
+      const { error } = await sb.auth.getSessionFromUrl({ storeSession: true });
+      if (error) console.error(error);
+      history.replaceState(null, '', location.pathname);
+    }
+    await refreshSessionUI();
+    if (isRecovery) setRoute('mustchange');
 
     // Inicializa módulos
     window.Modules.auth?.init();
