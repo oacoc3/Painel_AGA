@@ -45,8 +45,12 @@ window.App = (() => {
     renderHeaderStamp();
     clockTimer = setInterval(renderHeaderStamp, 60 * 1000);
   }
+
   function stopClock() {
-    if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+    if (clockTimer) {
+      clearInterval(clockTimer);
+      clockTimer = null;
+    }
   }
 
   // ----- Navegação/rotas -----
@@ -61,22 +65,78 @@ window.App = (() => {
     el('userBox').classList.toggle('hidden', !showBars);
 
     switch (r) {
-      case 'dashboard': window.Modules.dashboard?.load(); break;
-      case 'processos': window.Modules.processos?.load(); break;
-      case 'prazos': window.Modules.prazos?.load(); break;
-      case 'modelos': window.Modules.modelos?.load(); break;
-      case 'analise': window.Modules.analise?.load(); break;
-      case 'admin': window.Modules.admin?.load(); break;
+      case 'dashboard':
+        window.Modules.dashboard?.load();
+        break;
+      case 'processos':
+        window.Modules.processos?.load();
+        break;
+      case 'prazos':
+        window.Modules.prazos?.load();
+        break;
+      case 'modelos':
+        window.Modules.modelos?.load();
+        break;
+      case 'analise':
+        window.Modules.analise?.load();
+        break;
+      case 'admin':
+        window.Modules.admin?.load();
+        break;
     }
   }
 
   // Carrega perfil do usuário e ajusta UI
   async function loadProfile() {
     const u = await getUser();
-    if (!u) { state.profile = null; renderHeaderStamp(); return null; }
-    const { data, error } = await sb.from('profiles').select('*').eq('id', u.id).maybeSingle();
-    if (error) { console.error(error); sta
-               }
+    if (!u) {
+      state.profile = null;
+      renderHeaderStamp();
+      return null;
+    }
+    const { data, error } = await sb
+      .from('profiles')
+      .select('*')
+      .eq('id', u.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error(error);
+      state.profile = null;
+      renderHeaderStamp();
+      return null;
+    }
+
+    state.profile = data;
+    renderHeaderStamp();
+    return data;
   }
-}
-              }}}
+
+  // Atualiza sessão e UI conforme estado do auth
+  async function refreshSessionUI() {
+    state.session = await getSession();
+    if (!state.session) {
+      stopClock();
+      setRoute('login');
+      return;
+    }
+    await loadProfile();
+    startClock();
+    if (state.profile?.must_change_password) setRoute('mustchange');
+    else setRoute('dashboard');
+  }
+
+  // Inicialização do app
+  function init() {
+    renderFooterVersion();
+    Object.values(window.Modules || {}).forEach(m => m.init?.());
+    sb.auth.onAuthStateChange(() => refreshSessionUI());
+    refreshSessionUI();
+  }
+
+  return { state, setRoute, refreshSessionUI, init };
+})();
+
+window.addEventListener('DOMContentLoaded', () => {
+  window.App.init();
+});
