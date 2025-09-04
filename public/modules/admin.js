@@ -40,7 +40,9 @@ window.Modules.admin = (() => {
     });
   }
 
-  function init() { /* nada por enquanto */ }
+  function init() {
+    bindForm();
+  }
 
   async function load() {
     // Só deixa abrir se perfil for Admin
