@@ -17,8 +17,8 @@ window.Modules.auth = (() => {
       if (!email) return Utils.setMsg('loginMsg', 'Informe seu e-mail para recuperar a senha.', true);
       Utils.setMsg('loginMsg', 'Enviando e-mail de recuperação...');
 
-      // Redireciona para uma âncora dedicada; garante que o evento PASSWORD_RECOVERY seja consistente
-      const redirectTo = `${location.origin}/#recovery`;
+      // ⚠️ NÃO use hash (#) aqui — o Supabase precisa anexar #access_token&type=recovery
+      const redirectTo = `${location.origin}/reset-password`;
       const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) return Utils.setMsg('loginMsg', error.message, true);
       Utils.setMsg('loginMsg', 'Verifique seu e-mail para redefinir a senha.');
@@ -30,14 +30,14 @@ window.Modules.auth = (() => {
       if (!p1 || p1 !== p2) return Utils.setMsg('mustChangeMsg', 'As senhas não coincidem.', true);
       Utils.setMsg('mustChangeMsg', 'Atualizando senha...');
 
-      // 1) Atualiza a senha do usuário (sessão de recuperação)
+      // Atualiza a senha do usuário (sessão de recuperação já presente nesta aba)
       const { error } = await sb.auth.updateUser({ password: p1 });
       if (error) return Utils.setMsg('mustChangeMsg', error.message, true);
 
-      // 2) Sincroniza esta aba com a sessão nova
+      // Sincroniza esta aba com a sessão nova
       await sb.auth.refreshSession();
 
-      // 3) Marca must_change_password = false no perfil
+      // Marca must_change_password = false no perfil
       const u = await getUser();
       if (u) {
         const { error: profErr } = await sb
@@ -45,25 +45,21 @@ window.Modules.auth = (() => {
           .update({ must_change_password: false })
           .eq('id', u.id);
         if (profErr) return Utils.setMsg('mustChangeMsg', profErr.message, true);
+        if (App.state?.profile) App.state.profile.must_change_password = false;
       }
 
-      // 4) Limpa o hash de recuperação da URL para não “prender” a app em PASSWORD_RECOVERY
+      // Limpa o hash (remove #access_token&type=recovery da URL)
       try {
         const cleanUrl = location.origin + location.pathname + location.search;
         history.replaceState({}, document.title, cleanUrl);
       } catch { /* ignore */ }
 
-      // 5) Atualiza UI e navega
       Utils.setMsg('mustChangeMsg', 'Senha atualizada!');
-      // Evento simbólico para deixar claro que já saímos do modo de recuperação
       await App.refreshSessionUI(undefined, 'USER_UPDATED');
       App.setRoute('dashboard');
     });
   }
 
-  function init() {
-    bindLogin();
-  }
-
+  function init() { bindLogin(); }
   return { init };
 })();
