@@ -16,8 +16,7 @@ window.Modules.auth = (() => {
       const email = el('loginEmail').value.trim();
       if (!email) return Utils.setMsg('loginMsg', 'Informe seu e-mail para recuperar a senha.', true);
       Utils.setMsg('loginMsg', 'Enviando e-mail de recuperação...');
-      const redirectTo = `${location.origin}/#recovery`;
-      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
       if (error) return Utils.setMsg('loginMsg', error.message, true);
       Utils.setMsg('loginMsg', 'Verifique seu e-mail para redefinir a senha.');
     });
