@@ -1,3 +1,4 @@
+// public/utils.js
 // Utilitários simples e genéricos
 
 window.$ = (sel, root = document) => root.querySelector(sel);
