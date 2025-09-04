@@ -24,7 +24,7 @@ window.Modules.auth = (() => {
       Utils.setMsg('loginMsg', 'Verifique seu e-mail para redefinir a senha.');
     });
 
-el('btnSetNewPass').addEventListener('click', async () => {
+    el('btnSetNewPass').addEventListener('click', async () => {
   const p1 = el('newPass1').value;
   const p2 = el('newPass2').value;
   if (!p1 || p1 !== p2) return Utils.setMsg('mustChangeMsg', 'As senhas não coincidem.', true);
@@ -63,6 +63,7 @@ el('btnSetNewPass').addEventListener('click', async () => {
   await App.refreshSessionUI(undefined, 'USER_UPDATED');
   App.setRoute('dashboard');
 });
+
 
   function init() { bindLogin(); }
   return { init };
