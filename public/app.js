@@ -57,7 +57,7 @@ window.App = (() => {
   function bindEvents() {
     el('btnLogout').addEventListener('click', async () => {
       await sb.auth.signOut();
-      // Atualização de UI via onAuthStateChange
+      // UI será atualizada via onAuthStateChange
     });
 
     // Navegação pelo menu superior
@@ -134,8 +134,8 @@ window.App = (() => {
   }
 
   // Atualiza sessão e UI conforme estado do auth
-  async function refreshSessionUI() {
-    state.session = await getSession();
+  async function refreshSessionUI(session) {
+    state.session = session ?? await getSession();
     if (!state.session) {
       stopClock();
       Utils.setText('userIdentity', '');
@@ -154,7 +154,7 @@ window.App = (() => {
     renderFooterVersion();
     bindEvents();
     Object.values(window.Modules || {}).forEach(m => m.init?.());
-    sb.auth.onAuthStateChange(() => refreshSessionUI());
+    sb.auth.onAuthStateChange((_event, session) => refreshSessionUI(session));
     refreshSessionUI();
   }
 
