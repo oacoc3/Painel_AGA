@@ -5,14 +5,13 @@ window.App = (() => {
   const state = {
     session: null,
     profile: null,
-    route: 'login' // login | mustchange | dashboard | processos | prazos | modelos | analise | admin
+      route: 'login' // login | dashboard | processos | prazos | modelos | analise | admin
   };
 
   let clockTimer = null; // atualiza data/hora do cabeçalho a cada minuto
 
   const views = {
     login: 'viewLogin',
-    mustchange: 'viewMustChange',
     dashboard: 'viewDashboard',
     processos: 'viewProcessos',
     prazos: 'viewPrazos',
@@ -115,36 +114,9 @@ window.App = (() => {
     return data;
   }
 
-  function isRecoveryFromUrl() {
-    try {
-      // Supabase anexa #access_token=...&type=recovery
-      return (location.hash || '').includes('type=recovery');
-    } catch { return false; }
-  }
-
 // Atualiza sessão e UI conforme estado do auth
-async function refreshSessionUI(session, event) {
-  const forcedRecovery =
-    event === 'PASSWORD_RECOVERY' ||
-    isRecoveryFromUrl() ||
-    !!window.__FORCE_RECOVERY;
-
-  // Se estamos em recuperação, aguarde o boot terminar (garante setSession/exchange)
-  if (forcedRecovery && window.__RECOVERY_BOOT && typeof window.__RECOVERY_BOOT.then === 'function') {
-    try { await window.__RECOVERY_BOOT; } catch {}
-  }
-
-  // Recarrega/usa a sessão
+async function refreshSessionUI(session) {
   state.session = (session === undefined) ? await getSession() : session;
-
-  // ⚠️ Fluxo de recuperação: mostre a tela de troca mesmo se a sessão ainda não tiver sido montada.
-  if (forcedRecovery && !state.session) {
-    stopClock();
-    Utils.setText('userIdentity', '');
-    el('btnAdmin').classList.add('hidden');
-    setRoute('mustchange');
-    return;
-  }
 
   if (!state.session) {
     stopClock();
@@ -156,14 +128,7 @@ async function refreshSessionUI(session, event) {
 
   await loadProfile();
   startClock();
-
-  if (forcedRecovery) {
-    setRoute('mustchange');
-    return;
-  }
-
-  if (state.profile?.must_change_password) setRoute('mustchange');
-  else setRoute('dashboard');
+  setRoute('dashboard');
 }
 
   // Inicialização do app
@@ -171,15 +136,8 @@ async function refreshSessionUI(session, event) {
     renderFooterVersion();
     bindEvents();
     Object.values(window.Modules || {}).forEach(m => m.init?.());
-    sb.auth.onAuthStateChange((event, session) => refreshSessionUI(session, event));
-
-    // ⚠️ Aguarde o boot de recuperação, se existir, antes do primeiro refresh
-    const boot = window.__RECOVERY_BOOT;
-    if (boot && typeof boot.then === 'function') {
-      boot.finally(() => refreshSessionUI());
-    } else {
-      refreshSessionUI();
-    }
+    sb.auth.onAuthStateChange((event, session) => refreshSessionUI(session));
+    refreshSessionUI();
   }
 
   return { state, setRoute, refreshSessionUI, init };
