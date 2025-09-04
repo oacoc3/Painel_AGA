@@ -40,7 +40,6 @@ window.App = (() => {
   }
 
   function startClock() {
-    // Atualiza o relógio do cabeçalho a cada minuto
     if (clockTimer) clearInterval(clockTimer);
     renderHeaderStamp();
     clockTimer = setInterval(renderHeaderStamp, 60 * 1000);
@@ -100,7 +99,7 @@ window.App = (() => {
     }
   }
 
-  // Carrega perfil do usuário e ajusta UI (User Interface)
+  // Carrega perfil do usuário e ajusta UI
   async function loadProfile() {
     const u = await getUser();
     if (!u) {
@@ -135,7 +134,7 @@ window.App = (() => {
 
   // Atualiza sessão e UI conforme estado do auth
   async function refreshSessionUI(session, event) {
-    // ⚠️ Importante: preserve explicitamente o null (logout).
+    // ⚠️ Preserve explicitamente o null (logout).
     // Só busque via getSession() quando 'session' NÃO foi passado (undefined).
     state.session = (session === undefined) ? await getSession() : session;
 
@@ -146,10 +145,20 @@ window.App = (() => {
       setRoute('login');
       return;
     }
+
     await loadProfile();
     startClock();
-    if (event === 'PASSWORD_RECOVERY') setRoute('mustchange');
-    else if (state.profile?.must_change_password) setRoute('mustchange');
+
+    // Se chegou em modo de recuperação, vá para mustchange apenas enquanto a conta exigir troca.
+    if (event === 'PASSWORD_RECOVERY') {
+      if (state.profile?.must_change_password !== false) {
+        setRoute('mustchange');
+        return;
+      }
+      // Se já não precisa trocar, caia no fluxo normal
+    }
+
+    if (state.profile?.must_change_password) setRoute('mustchange');
     else setRoute('dashboard');
   }
 
