@@ -135,7 +135,10 @@ window.App = (() => {
 
   // Atualiza sessão e UI conforme estado do auth
   async function refreshSessionUI(session, event) {
-    state.session = session ?? await getSession();
+    // ⚠️ Importante: preserve explicitamente o null (logout).
+    // Só busque via getSession() quando 'session' NÃO foi passado (undefined).
+    state.session = (session === undefined) ? await getSession() : session;
+
     if (!state.session) {
       stopClock();
       Utils.setText('userIdentity', '');
