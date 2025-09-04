@@ -1,3 +1,4 @@
+-- sql/00_reset_all.sql
 -- ⚠️ Executar apenas em ambiente de desenvolvimento/teste.
 -- Remove objetos se existirem (ordem cuidadosa).
 drop table if exists checklist_responses cascade;
