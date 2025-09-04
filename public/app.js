@@ -78,3 +78,4 @@ window.App = (() => {
     if (error) { console.error(error); sta
                }
   }
+}
