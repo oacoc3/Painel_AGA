@@ -77,3 +77,4 @@ window.App = (() => {
     const { data, error } = await sb.from('profiles').select('*').eq('id', u.id).maybeSingle();
     if (error) { console.error(error); sta
                }
+  }
