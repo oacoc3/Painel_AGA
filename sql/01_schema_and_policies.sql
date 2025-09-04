@@ -1,3 +1,4 @@
+-- sql/01_schema_and_policies.sql
 -- =========================================================
 -- 01_schema_and_policies.sql  (versão ajustada sem recursão)
 -- =========================================================
