@@ -14,9 +14,6 @@
   <script src="./config.js" defer></script>
   <script src="./supabaseClient.js" defer></script>
 
-  <!-- ⚠️ NOVO: bootstrap do fluxo de recuperação (deve vir ANTES do app.js) -->
-  <script src="./recovery-boot.js" defer></script>
-
   <script src="./utils.js" defer></script>
   <script src="./app.js" defer></script>
   <!-- Módulos -->
@@ -58,25 +55,9 @@
           <h1>Login</h1>
           <form id="loginForm">
             <label>E-mail <input id="loginEmail" type="email" required></label>
-            <label>Senha <input id="loginPassword" type="password" required></label>
-            <div class="row">
-              <button id="btnDoLogin" type="submit">Entrar</button>
-              <button id="btnForgot" type="button">Esqueci a senha</button>
-            </div>
+            <button id="btnDoLogin" type="submit">Enviar link de acesso</button>
           </form>
           <div id="loginMsg" class="msg"></div>
-        </div>
-      </section>
-
-      <!-- Tela de troca obrigatória de senha -->
-      <section id="viewMustChange" class="view centered hidden">
-        <div class="panel">
-          <h1>Trocar senha</h1>
-          <p>Você precisa definir uma nova senha antes de continuar.</p>
-          <label>Nova senha <input id="newPass1" type="password" required></label>
-          <label>Confirmar senha <input id="newPass2" type="password" required></label>
-          <button id="btnSetNewPass">Salvar nova senha</button>
-          <div id="mustChangeMsg" class="msg"></div>
         </div>
       </section>
 
@@ -306,7 +287,6 @@
             <h2>Criar usuário</h2>
             <form id="formUser">
               <label>E-mail <input id="adEmail" type="email" required></label>
-              <label>Senha inicial <input id="adPass" type="password" required></label>
               <label>Identificação <input id="adName" required></label>
               <label>Perfil
                 <select id="adRole">
