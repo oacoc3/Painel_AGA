@@ -46,6 +46,8 @@ window.Modules.auth = (() => {
 
       Utils.setMsg('mustChangeMsg', 'Senha atualizada!');
       await App.refreshSessionUI();
+       // Garante navegação para a tela inicial após atualizar a senha
+      App.setRoute('dashboard');
     });
   }
 
