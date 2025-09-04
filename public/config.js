@@ -1,3 +1,4 @@
+// public/config.js
 // Preencha com as chaves do seu projeto. A anon key é pública por design no Supabase.
 window.APP_CONFIG = {
   SUPABASE_URL: "https://opogdkwawklotmnhbhtj.supabase.co",
