@@ -1,4 +1,4 @@
-// Roteamento e integração geral da SPA
+// Roteamento e integração geral da SPA (Single Page Application)
 
 window.App = (() => {
   const state = {
@@ -53,11 +53,17 @@ window.App = (() => {
     }
   }
 
-   // ----- Eventos globais -----
+  // ----- Eventos globais -----
   function bindEvents() {
     el('btnLogout').addEventListener('click', async () => {
       await sb.auth.signOut();
-       await refreshSessionUI();
+      await refreshSessionUI();
+    });
+
+    // Navegação pelo menu superior
+    el('topNav').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('button[data-route]');
+      if (btn) setRoute(btn.dataset.route);
     });
   }
 
@@ -94,12 +100,14 @@ window.App = (() => {
     }
   }
 
-  // Carrega perfil do usuário e ajusta UI
+  // Carrega perfil do usuário e ajusta UI (User Interface)
   async function loadProfile() {
     const u = await getUser();
     if (!u) {
       state.profile = null;
       renderHeaderStamp();
+      Utils.setText('userIdentity', '');
+      el('btnAdmin').classList.add('hidden');
       return null;
     }
     const { data, error } = await sb
@@ -112,11 +120,16 @@ window.App = (() => {
       console.error(error);
       state.profile = null;
       renderHeaderStamp();
+      Utils.setText('userIdentity', '');
+      el('btnAdmin').classList.add('hidden');
       return null;
     }
 
     state.profile = data;
     renderHeaderStamp();
+    const identity = data?.name ? `${data.name} (${data.email})` : (data?.email || '');
+    Utils.setText('userIdentity', identity);
+    el('btnAdmin').classList.toggle('hidden', data.role !== 'Administrador');
     return data;
   }
 
@@ -125,6 +138,8 @@ window.App = (() => {
     state.session = await getSession();
     if (!state.session) {
       stopClock();
+      Utils.setText('userIdentity', '');
+      el('btnAdmin').classList.add('hidden');
       setRoute('login');
       return;
     }
