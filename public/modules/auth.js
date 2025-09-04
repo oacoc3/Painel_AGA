@@ -15,9 +15,13 @@ window.Modules.auth = (function () {
         var email = emailEl ? (emailEl.value || '').trim() : '';
         var password = passEl ? passEl.value : '';
         Utils.setMsg('loginMsg', 'Entrando...');
-        var out = await sb.auth.signInWithPassword({ email: email, password: password });
-        if (out.error) Utils.setMsg('loginMsg', out.error.message, true);
-        else Utils.setMsg('loginMsg', '');
+        try {
+          var out = await sb.auth.signInWithPassword({ email: email, password: password });
+          if (out.error) Utils.setMsg('loginMsg', out.error.message, true);
+          else Utils.setMsg('loginMsg', '');
+        } catch (e) {
+          Utils.setMsg('loginMsg', (e && e.message) ? e.message : String(e), true);
+        }
       });
     }
 
