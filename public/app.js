@@ -124,8 +124,7 @@ window.App = (() => {
 
   // Atualiza sessão e UI conforme estado do auth
   async function refreshSessionUI(session, event) {
-    // ⚠️ Preserve explicitamente o null (logout).
-    // Só busque via getSession() quando 'session' NÃO foi passado (undefined).
+    // Preserve explicitamente o null (logout).
     state.session = (session === undefined) ? await getSession() : session;
 
     if (!state.session) {
@@ -139,9 +138,9 @@ window.App = (() => {
     await loadProfile();
     startClock();
 
-    // ✅ Sempre levar à tela de troca de senha quando for recuperação,
-    // independentemente de must_change_password no perfil.
-    if (event === 'PASSWORD_RECOVERY' || isRecoveryFromUrl()) {
+    // Se for recuperação (evento, URL ou flag do boot), sempre mostrar troca de senha
+    const forcedRecovery = !!window.__FORCE_RECOVERY;
+    if (event === 'PASSWORD_RECOVERY' || isRecoveryFromUrl() || forcedRecovery) {
       setRoute('mustchange');
       return;
     }
@@ -156,7 +155,14 @@ window.App = (() => {
     bindEvents();
     Object.values(window.Modules || {}).forEach(m => m.init?.());
     sb.auth.onAuthStateChange((event, session) => refreshSessionUI(session, event));
-    refreshSessionUI();
+
+    // ⚠️ Aguarde o boot de recuperação, se existir, antes do primeiro refresh
+    const boot = window.__RECOVERY_BOOT;
+    if (boot && typeof boot.then === 'function') {
+      boot.finally(() => refreshSessionUI());
+    } else {
+      refreshSessionUI();
+    }
   }
 
   return { state, setRoute, refreshSessionUI, init };
