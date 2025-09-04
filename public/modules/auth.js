@@ -16,7 +16,10 @@ window.Modules.auth = (() => {
       const email = el('loginEmail').value.trim();
       if (!email) return Utils.setMsg('loginMsg', 'Informe seu e-mail para recuperar a senha.', true);
       Utils.setMsg('loginMsg', 'Enviando e-mail de recuperação...');
-      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
+
+      // Redireciona para uma âncora dedicada; garante que o evento PASSWORD_RECOVERY seja consistente
+      const redirectTo = `${location.origin}/#recovery`;
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) return Utils.setMsg('loginMsg', error.message, true);
       Utils.setMsg('loginMsg', 'Verifique seu e-mail para redefinir a senha.');
     });
@@ -27,11 +30,14 @@ window.Modules.auth = (() => {
       if (!p1 || p1 !== p2) return Utils.setMsg('mustChangeMsg', 'As senhas não coincidem.', true);
       Utils.setMsg('mustChangeMsg', 'Atualizando senha...');
 
-      // Atualiza a senha do usuário
+      // 1) Atualiza a senha do usuário (sessão de recuperação)
       const { error } = await sb.auth.updateUser({ password: p1 });
       if (error) return Utils.setMsg('mustChangeMsg', error.message, true);
 
-      // Marca must_change_password = false no perfil
+      // 2) Sincroniza esta aba com a sessão nova
+      await sb.auth.refreshSession();
+
+      // 3) Marca must_change_password = false no perfil
       const u = await getUser();
       if (u) {
         const { error: profErr } = await sb
@@ -39,14 +45,18 @@ window.Modules.auth = (() => {
           .update({ must_change_password: false })
           .eq('id', u.id);
         if (profErr) return Utils.setMsg('mustChangeMsg', profErr.message, true);
-
-        // Atualiza cache local, se existir
-        if (App.state?.profile) App.state.profile.must_change_password = false;
       }
 
+      // 4) Limpa o hash de recuperação da URL para não “prender” a app em PASSWORD_RECOVERY
+      try {
+        const cleanUrl = location.origin + location.pathname + location.search;
+        history.replaceState({}, document.title, cleanUrl);
+      } catch { /* ignore */ }
+
+      // 5) Atualiza UI e navega
       Utils.setMsg('mustChangeMsg', 'Senha atualizada!');
-      await App.refreshSessionUI();
-       // Garante navegação para a tela inicial após atualizar a senha
+      // Evento simbólico para deixar claro que já saímos do modo de recuperação
+      await App.refreshSessionUI(undefined, 'USER_UPDATED');
       App.setRoute('dashboard');
     });
   }
