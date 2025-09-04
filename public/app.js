@@ -57,6 +57,7 @@ window.App = (() => {
   function bindEvents() {
     el('btnLogout').addEventListener('click', async () => {
       await sb.auth.signOut();
+       await refreshSessionUI();
     });
   }
 
