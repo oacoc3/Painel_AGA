@@ -1,40 +1,64 @@
 // public/recovery-boot.js
-// Garante sessão quando a página é aberta por link "Reset Password" (type=recovery).
+// Processa de forma determinística o retorno do Supabase:
+//  - HASH:  #access_token=...&refresh_token=...&type=recovery
+//  - QUERY: ?code=...  (PKCE/exchange)
+// Em ambos os casos: cria sessão, marca flag de recuperação e limpa a URL.
 
 (function () {
+  function cleanUrl() {
+    try {
+      const clean = location.origin + location.pathname; // remove ? e #
+      history.replaceState({}, document.title, clean);
+    } catch { /* ignore */ }
+  }
+
+  function markRecovery() {
+    window.__FORCE_RECOVERY = true;
+  }
+
   try {
     const hash = location.hash || '';
-    if (!hash.includes('type=recovery')) return;
+    const query = location.search || '';
 
-    // Ex.: #access_token=...&refresh_token=...&type=recovery
-    const params = new URLSearchParams(hash.replace(/^#/, ''));
-    const access_token = params.get('access_token') || '';
-    const refresh_token = params.get('refresh_token') || '';
-
-    // Flag global para o app saber que entrou via recuperação
-    window.__FORCE_RECOVERY = true;
-
-    // Se vieram tokens, já cria a sessão local de forma determinística
-    if (access_token && refresh_token) {
-      // sb é definido em public/supabaseClient.js
+    // Caso 1: fluxo clássico com fragmento #…type=recovery
+    if (/#/.test(hash) && /(^|&|\?)type=recovery/i.test(hash)) {
+      markRecovery();
+      const params = new URLSearchParams(hash.replace(/^#/, ''));
+      const access_token = params.get('access_token') || '';
+      const refresh_token = params.get('refresh_token') || '';
       window.__RECOVERY_BOOT = (async () => {
         try {
-          await sb.auth.setSession({ access_token, refresh_token });
-          // Limpa o fragmento da URL imediatamente (evita reprocessar/compartilhar token)
-          try {
-            const clean = location.origin + location.pathname + location.search;
-            history.replaceState({}, document.title, clean);
-          } catch { /* ignore */ }
+          if (access_token && refresh_token) {
+            await sb.auth.setSession({ access_token, refresh_token });
+          }
         } catch (e) {
-          // Mesmo se falhar, a flag __FORCE_RECOVERY ainda levará à tela de troca
-          console.error('Recovery boot setSession error:', e);
+          console.error('Recovery boot (hash) setSession error:', e);
+        } finally {
+          cleanUrl();
         }
       })();
-    } else {
-      // Sem tokens (caso raro), ainda assim marcar a intenção de recuperação
-      window.__RECOVERY_BOOT = Promise.resolve();
+      return; // já configurou o boot
     }
+
+    // Caso 2: fluxo por código (?code=...) — cobre variações de retorno
+    if (/[?&]code=/.test(query)) {
+      markRecovery();
+      window.__RECOVERY_BOOT = (async () => {
+        try {
+          await sb.auth.exchangeCodeForSession(window.location.href);
+        } catch (e) {
+          console.error('Recovery boot (code) exchange error:', e);
+        } finally {
+          cleanUrl();
+        }
+      })();
+      return;
+    }
+
+    // Caso nenhum: nada a fazer (mas deixa a variável padrão)
+    window.__RECOVERY_BOOT = Promise.resolve();
   } catch (e) {
     console.error('Recovery boot error:', e);
+    window.__RECOVERY_BOOT = Promise.resolve();
   }
 })();
