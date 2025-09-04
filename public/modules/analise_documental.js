@@ -4,7 +4,8 @@ window.Modules.analise = (() => {
 
   async function loadTemplatesFor(tipo) {
     // Convenção: category = tipo de processo (PDIR/Inscrição/Alteração/Exploração/OPEA)
-    const { data, error } = await sb.from('checklist_templates')
+    const { data, error } = await sb
+      .from('checklist_templates')
       .select('id,name,category,items')
       .eq('category', tipo)
       .not('approved_by', 'is', null)
@@ -17,7 +18,10 @@ window.Modules.analise = (() => {
     currentTemplate = template || null;
     const box = el('ckContainer');
     box.innerHTML = '';
-    if (!template) { box.innerHTML = '<div class="msg">Nenhuma checklist aprovada encontrada para este tipo.</div>'; return; }
+    if (!template) {
+      box.innerHTML = '<div class="msg">Nenhuma checklist aprovada encontrada para este tipo.</div>';
+      return;
+    }
 
     // items: [{code,text,options?}, ...]
     const frag = document.createDocumentFragment();
@@ -30,7 +34,10 @@ window.Modules.analise = (() => {
         const sel = document.createElement('select');
         sel.name = item.code || item.text;
         item.options.forEach(op => {
-          const o = document.createElement('option'); o.value = op; o.textContent = op; sel.appendChild(o);
+          const o = document.createElement('option');
+          o.value = op;
+          o.textContent = op;
+          sel.appendChild(o);
         });
         wrap.appendChild(label);
         wrap.appendChild(sel);
@@ -39,9 +46,17 @@ window.Modules.analise = (() => {
         wrap.appendChild(label);
         const sel = document.createElement('select');
         sel.name = (item.code || item.text) + '::val';
-        ['Conforme','Não conforme','N/A'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
-        const obs = document.createElement('input'); obs.placeholder = 'Observação (opcional)'; obs.name = (item.code || item.text) + '::obs';
-        wrap.appendChild(sel); wrap.appendChild(obs);
+        ['Conforme', 'Não conforme', 'N/A'].forEach(v => {
+          const o = document.createElement('option');
+          o.value = v;
+          o.textContent = v;
+          sel.appendChild(o);
+        });
+        const obs = document.createElement('input');
+        obs.placeholder = 'Observação (opcional)';
+        obs.name = (item.code || item.text) + '::obs';
+        wrap.appendChild(sel);
+        wrap.appendChild(obs);
       }
       frag.appendChild(wrap);
     });
@@ -72,7 +87,7 @@ window.Modules.analise = (() => {
     const answers = [];
     $$('#ckContainer select').forEach(sel => {
       if (sel.name.endsWith('::val')) {
-        const base = sel.name.replace('::val','');
+        const base = sel.name.replace('::val', '');
         const obs = $(`#ckContainer input[name="${base}::obs"]`)?.value || null;
         answers.push({ code: base, value: sel.value, obs });
       } else {
@@ -82,12 +97,16 @@ window.Modules.analise = (() => {
 
     const u = await getUser();
     Utils.setMsg('adMsg', 'Gravando e gerando PDF...');
-    const { data, error } = await sb.from('checklist_responses').insert({
-      process_id: pid,
-      template_id: currentTemplate.id,
-      answers,
-      filled_by: u.id
-    }).select('id,filled_at').single();
+    const { data, error } = await sb
+      .from('checklist_responses')
+      .insert({
+        process_id: pid,
+        template_id: currentTemplate.id,
+        answers,
+        filled_by: u.id
+      })
+      .select('id,filled_at')
+      .single();
     if (error) return Utils.setMsg('adMsg', error.message, true);
 
     // Gera PDF (jsPDF já está carregado)
@@ -99,7 +118,7 @@ window.Modules.analise = (() => {
   function generatePDF(nup, tipo, template, answers, filledAt) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    doc.setFont('helvetica','');
+    doc.setFont('helvetica', '');
     doc.setFontSize(14);
     doc.text('Análise Documental', 14, 16);
     doc.setFontSize(10);
@@ -110,21 +129,26 @@ window.Modules.analise = (() => {
 
     let y = 52;
     answers.forEach((a, idx) => {
-      const line = `${idx+1}. ${a.code}: ${a.value}${a.obs ? ' — Obs: ' + a.obs : ''}`;
+      const line = `${idx + 1}. ${a.code}: ${a.value}${a.obs ? ' — Obs: ' + a.obs : ''}`;
       doc.text(line, 14, y);
       y += 6;
-      if (y > 280) { doc.addPage(); y = 16; }
+      if (y > 280) {
+        doc.addPage();
+        y = 16;
+      }
     });
 
-    const fname = `AD_${nup.replace(/[^\d]/g,'')}_${new Date().toISOString().slice(0,10)}.pdf`;
+    const fname = `AD_${nup.replace(/[^\d]/g, '')}_${new Date().toISOString().slice(0, 10)}.pdf`;
     doc.save(fname);
   }
 
   async function loadIndicador() {
-    const { data } = await sb.from('checklist_responses')
+    const { data } = await sb
+      .from('checklist_responses')
       .select('filled_at,process_id,processes(nup),template_id,checklist_templates(name)')
-      .order('filled_at',{ ascending:false }).limit(50);
-    const rows = (data||[]).map(r => ({
+      .order('filled_at', { ascending: false })
+      .limit(50);
+    const rows = (data || []).map(r => ({
       nup: r.processes?.nup || '',
       checklist: r.checklist_templates?.name || '',
       filled_at: Utils.fmtDateTime(r.filled_at)
@@ -138,7 +162,7 @@ window.Modules.analise = (() => {
 
   function bind() {
     el('adTipo').addEventListener('change', refreshTemplate);
-    el('btnFinalizarAD').addEventListener('click', (ev) => { ev.preventDefault(); finalizarExportar(); });
+    el('btnFinalizarAD').addEventListener('click', ev => { ev.preventDefault(); finalizarExportar(); });
   }
 
   function init() { bind(); }
@@ -146,10 +170,10 @@ window.Modules.analise = (() => {
 
   // Dashboard rings / speed (módulo rápido aqui)
   window.Modules.dashboard = {
-    init(){ 
+    init() {
       el('btnDashFilter').addEventListener('click', this.load.bind(this));
     },
-    async load(){
+    async load() {
       // Filtro por intervalo na 1ª entrada
       const from = el('dashFrom').value || null;
       const to = el('dashTo').value || null;
@@ -159,19 +183,21 @@ window.Modules.analise = (() => {
       const { data } = await q;
       // Rings: contagem por status
       const counts = {};
-      (data||[]).forEach(p => { counts[p.status] = (counts[p.status]||0)+1; });
+      (data || []).forEach(p => { counts[p.status] = (counts[p.status] || 0) + 1; });
       const items = Object.keys(counts).map(k => ({ label: k, count: counts[k] }));
       Utils.renderRings('rings', items);
 
       // Velocidade média "dias/processo" = média de (hoje - first_entry_date) por status
       const agg = {};
-      (data||[]).forEach(p => {
+      (data || []).forEach(p => {
         const d = Utils.daysBetween(p.first_entry_date);
-        agg[p.status] = agg[p.status] || { sum:0, n:0 };
-        agg[p.status].sum += d; agg[p.status].n += 1;
+        agg[p.status] = agg[p.status] || { sum: 0, n: 0 };
+        agg[p.status].sum += d;
+        agg[p.status].n += 1;
       });
       const rows = Object.keys(agg).map(s => ({
-        status: s, avg: (agg[s].sum / agg[s].n).toFixed(1)
+        status: s,
+        avg: (agg[s].sum / agg[s].n).toFixed(1)
       }));
       Utils.renderTable('speedTable', [
         { key: 'status', label: 'Status' },
