@@ -12,6 +12,10 @@
   <!-- App -->
   <script src="./config.js" defer></script>
   <script src="./supabaseClient.js" defer></script>
+
+  <!-- ⚠️ NOVO: bootstrap do fluxo de recuperação (deve vir ANTES do app.js) -->
+  <script src="./recovery-boot.js" defer></script>
+
   <script src="./utils.js" defer></script>
   <script src="./app.js" defer></script>
   <!-- Módulos -->
@@ -312,7 +316,7 @@
                   <option>Visitante</option>
                 </select>
               </label>
-                 <button id="btnCreateUser" type="button">Criar</button>
+              <button id="btnCreateUser" type="button">Criar</button>
               <div id="adminMsg" class="msg"></div>
             </form>
           </div>
