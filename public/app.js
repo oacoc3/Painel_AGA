@@ -134,7 +134,7 @@ window.App = (() => {
   }
 
   // Atualiza sessão e UI conforme estado do auth
-  async function refreshSessionUI(session) {
+  async function refreshSessionUI(session, event) {
     state.session = session ?? await getSession();
     if (!state.session) {
       stopClock();
@@ -145,7 +145,8 @@ window.App = (() => {
     }
     await loadProfile();
     startClock();
-    if (state.profile?.must_change_password) setRoute('mustchange');
+    if (event === 'PASSWORD_RECOVERY') setRoute('mustchange');
+    else if (state.profile?.must_change_password) setRoute('mustchange');
     else setRoute('dashboard');
   }
 
@@ -154,7 +155,7 @@ window.App = (() => {
     renderFooterVersion();
     bindEvents();
     Object.values(window.Modules || {}).forEach(m => m.init?.());
-    sb.auth.onAuthStateChange((_event, session) => refreshSessionUI(session));
+    sb.auth.onAuthStateChange((event, session) => refreshSessionUI(session, event));
     refreshSessionUI();
   }
 
