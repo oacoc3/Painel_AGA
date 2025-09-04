@@ -1,3 +1,4 @@
+// public/modules/analise_documental.js
 window.Modules = window.Modules || {};
 window.Modules.analise = (() => {
   let currentTemplate = null;
