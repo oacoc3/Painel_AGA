@@ -1,3 +1,4 @@
+// netlify/functions/create-user.js
 // Serverless Function (Netlify) para criar usuários sem expor Service Role no frontend.
 // Fluxo: Admin logado no app chama esta função com {email, password, name, role}.
 // Cria auth user, cria profile (must_change_password = true).
