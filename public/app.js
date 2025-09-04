@@ -122,32 +122,49 @@ window.App = (() => {
     } catch { return false; }
   }
 
-  // Atualiza sessão e UI conforme estado do auth
-  async function refreshSessionUI(session, event) {
-    // Preserve explicitamente o null (logout).
-    state.session = (session === undefined) ? await getSession() : session;
+// Atualiza sessão e UI conforme estado do auth
+async function refreshSessionUI(session, event) {
+  const forcedRecovery =
+    event === 'PASSWORD_RECOVERY' ||
+    isRecoveryFromUrl() ||
+    !!window.__FORCE_RECOVERY;
 
-    if (!state.session) {
-      stopClock();
-      Utils.setText('userIdentity', '');
-      el('btnAdmin').classList.add('hidden');
-      setRoute('login');
-      return;
-    }
-
-    await loadProfile();
-    startClock();
-
-    // Se for recuperação (evento, URL ou flag do boot), sempre mostrar troca de senha
-    const forcedRecovery = !!window.__FORCE_RECOVERY;
-    if (event === 'PASSWORD_RECOVERY' || isRecoveryFromUrl() || forcedRecovery) {
-      setRoute('mustchange');
-      return;
-    }
-
-    if (state.profile?.must_change_password) setRoute('mustchange');
-    else setRoute('dashboard');
+  // Se estamos em recuperação, aguarde o boot terminar (garante setSession/exchange)
+  if (forcedRecovery && window.__RECOVERY_BOOT && typeof window.__RECOVERY_BOOT.then === 'function') {
+    try { await window.__RECOVERY_BOOT; } catch {}
   }
+
+  // Recarrega/usa a sessão
+  state.session = (session === undefined) ? await getSession() : session;
+
+  // ⚠️ Fluxo de recuperação: mostre a tela de troca mesmo se a sessão ainda não tiver sido montada.
+  if (forcedRecovery && !state.session) {
+    stopClock();
+    Utils.setText('userIdentity', '');
+    el('btnAdmin').classList.add('hidden');
+    setRoute('mustchange');
+    return;
+  }
+
+  if (!state.session) {
+    stopClock();
+    Utils.setText('userIdentity', '');
+    el('btnAdmin').classList.add('hidden');
+    setRoute('login');
+    return;
+  }
+
+  await loadProfile();
+  startClock();
+
+  if (forcedRecovery) {
+    setRoute('mustchange');
+    return;
+  }
+
+  if (state.profile?.must_change_password) setRoute('mustchange');
+  else setRoute('dashboard');
+}
 
   // Inicialização do app
   function init() {
