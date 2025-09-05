@@ -309,7 +309,8 @@ create trigger audit_checklists    after insert or update on checklist_responses
 -- Pareceres internos (ATM/DT 10d; CGNA 30d) a partir do dia seguinte
 create or replace view v_prazo_pareceres as
 select io.process_id, p.nup, io.type,
-       date(timezone('America/Sao_Paulo', io.requested_at))
+       date(timezone('America/Sao_Paulo', io.requested_at)) as requested_at,
+  date(timezone('America/Sao_Paulo', io.requested_at))
          + case when io.type in ('ATM','DT') then 10 else 30 end as due_date,
        date(timezone('America/Sao_Paulo', io.requested_at)) + 1 as start_count,
        date(timezone('America/Sao_Paulo', io.requested_at))
@@ -321,7 +322,8 @@ where io.status = 'SOLICITADO';
 -- Pareceres externos (SIGADAER)
 create or replace view v_prazo_pareceres_externos as
 select s.process_id, p.nup, s.type,
-       date(timezone('America/Sao_Paulo', s.requested_at))
+       date(timezone('America/Sao_Paulo', s.requested_at)) as requested_at,
+  date(timezone('America/Sao_Paulo', s.requested_at))
          + case when s.type='COMGAP' then 90 else 30 end as due_date,
        date(timezone('America/Sao_Paulo', s.requested_at)) + 1 as start_count,
        date(timezone('America/Sao_Paulo', s.requested_at))
@@ -344,7 +346,9 @@ fav_term as (
   where n.type='FAV-TERM'
 )
 select p.id as process_id, p.nup,
-       case when ta.read_at is not null then (date(ta.read_at) + 30)
+       case when ta.read_at is not null then date(ta.read_at)
+            else p.obra_termino_date end as requested_at,
+  case when ta.read_at is not null then (date(ta.read_at) + 30)
             else p.obra_termino_date end as due_date,
        case when ta.read_at is not null then (date(ta.read_at) + 1) end as start_count,
        case when ta.read_at is not null then (date(ta.read_at) + 30) - current_date
@@ -365,7 +369,8 @@ where s.status = 'SOLICITADO';
 -- Prazo DO-AGA (60 dias; pausa em SOB-*)
 create or replace view v_prazo_do_aga as
 select p.id as process_id, p.nup, p.status,
-       case when p.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')
+       p.do_aga_start_date as requested_at,
+  case when p.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')
             then null
             else (p.do_aga_start_date + 60) end as due_date,
        case when p.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')
