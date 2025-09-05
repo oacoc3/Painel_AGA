@@ -22,7 +22,7 @@ html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); 
 .build { color: var(--ink-soft); font-size: 12px; margin-left: 8px; }
 
 .nav { display: flex; gap: 6px; }
-.nav button { width: 20%; }
+.nav button { width: 20%; font-size: inherit; }
 .user { display: flex; gap: 8px; align-items: center; }
 
 .main { flex: 1; display: flex; overflow: hidden; }
