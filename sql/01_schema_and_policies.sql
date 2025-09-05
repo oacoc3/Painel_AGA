@@ -193,6 +193,7 @@ create table checklist_responses (
   process_id uuid not null references processes(id) on delete cascade,
   template_id uuid not null references checklist_templates(id),
   answers jsonb not null, -- [{code,value,obs?},...]
+  extra_obs text,
   filled_by uuid not null references profiles(id),
   filled_at timestamptz not null default now()
 );
