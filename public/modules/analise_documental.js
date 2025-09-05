@@ -2,9 +2,9 @@
 window.Modules = window.Modules || {};
 window.Modules.analise = (() => {
   let currentTemplate = null;
+  let currentProcessId = null;
 
   async function loadTemplatesFor(tipo) {
-    // Convenção: category = tipo de processo (PDIR/Inscrição/Alteração/Exploração/OPEA)
     const { data, error } = await sb
       .from('checklist_templates')
       .select('id,name,category,version,items')
@@ -21,6 +21,32 @@ window.Modules.analise = (() => {
     return uniq;
   }
 
+  function updateSaveState() {
+    const items = $$('#ckContainer [data-code]');
+    let ok = items.length > 0;
+    items.forEach(wrap => {
+      const val = wrap.dataset.value;
+      if (!val) { ok = false; return; }
+      if (val !== 'Não aplicável') {
+        const obs = wrap.querySelector('input').value.trim();
+        if (!obs) ok = false;
+      }
+    });
+    const btnSalvar = el('btnSalvarChecklist');
+    const btnLimpar = el('btnLimparChecklist');
+    if (btnSalvar) btnSalvar.disabled = !ok;
+    if (btnLimpar) btnLimpar.disabled = !currentTemplate;
+  }
+
+  function clearChecklist() {
+    if (currentTemplate) {
+      renderChecklist(currentTemplate);
+    } else {
+      el('ckContainer').innerHTML = '';
+    }
+    updateSaveState();
+  }
+
   function renderChecklist(template) {
     currentTemplate = template || null;
     const box = el('ckContainer');
@@ -30,7 +56,6 @@ window.Modules.analise = (() => {
       return;
     }
 
-    // items: [{categoria, itens:[{code,requisito,texto_sugerido}]}]
     const frag = document.createDocumentFragment();
     (template.items || []).forEach(cat => {
       const catDiv = document.createElement('div');
@@ -41,117 +66,135 @@ window.Modules.analise = (() => {
       (cat.itens || []).forEach(item => {
         const wrap = document.createElement('div');
         wrap.style.margin = '6px 0';
+        wrap.dataset.code = item.code;
 
         const label = document.createElement('label');
         label.innerHTML = `${item.code ? `<strong>${item.code}</strong> — ` : ''}${item.requisito || ''}`;
         wrap.appendChild(label);
 
-        const sel = document.createElement('select');
-        sel.name = item.code;
-        ['Conforme', 'Não conforme', 'N/A'].forEach(v => {
-          const o = document.createElement('option');
-          o.value = v;
-          o.textContent = v;
-          sel.appendChild(o);
+        const btns = document.createElement('div');
+        btns.className = 'ck-choice';
+        ['Conforme', 'Não conforme', 'Não aplicável'].forEach(v => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = v;
+          b.dataset.value = v;
+          b.addEventListener('click', () => {
+            btns.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+            b.classList.add('active');
+            wrap.dataset.value = v;
+            hint.style.display = (v === 'Não conforme' && item.texto_sugerido) ? 'block' : 'none';
+            updateSaveState();
+          });
+          btns.appendChild(b);
         });
+        wrap.appendChild(btns);
 
         const obs = document.createElement('input');
-        obs.placeholder = 'Observação (opcional)';
-        obs.name = item.code + '::obs';
+        obs.placeholder = 'Observação';
+        obs.addEventListener('input', updateSaveState);
+        wrap.appendChild(obs);
 
         const hint = document.createElement('div');
         hint.className = 'hint';
-        hint.textContent = item.texto_sugerido || '';
         hint.style.display = 'none';
-
-        sel.addEventListener('change', () => {
-          hint.style.display = sel.value === 'Não conforme' && item.texto_sugerido ? 'block' : 'none';
-        });
-
-        wrap.appendChild(sel);
-        wrap.appendChild(obs);
+        if (item.texto_sugerido) {
+          const span = document.createElement('span');
+          span.textContent = item.texto_sugerido;
+          const use = document.createElement('button');
+          use.type = 'button';
+          use.textContent = 'Utilizar';
+          use.addEventListener('click', () => { obs.value = item.texto_sugerido; updateSaveState(); });
+          hint.appendChild(span);
+          hint.appendChild(use);
+        }
         wrap.appendChild(hint);
+
         catDiv.appendChild(wrap);
       });
 
       frag.appendChild(catDiv);
     });
+
+    const other = document.createElement('label');
+    other.textContent = 'Outras observações do analista';
+    const otherInput = document.createElement('textarea');
+    otherInput.id = 'adOutrasObs';
+    other.appendChild(otherInput);
+    frag.appendChild(other);
+
     box.appendChild(frag);
+    updateSaveState();
   }
 
-  async function refreshTemplate() {
-    const tipo = el('adTipo').value;
-    const list = await loadTemplatesFor(tipo);
-    // Critério simples: usa a primeira (ou única)
-    renderChecklist(list[0]);
-  }
-
-  async function finalizarExportar() {
+  async function iniciarChecklist() {
     const nup = el('adNUP').value.trim();
     const tipo = el('adTipo').value;
     if (!nup) return Utils.setMsg('adMsg', 'Informe um NUP.', true);
-    if (!currentTemplate) return Utils.setMsg('adMsg', 'Nenhuma checklist aprovada para este tipo.', true);
 
-    // resolve processo
-    const pid = await (async () => {
-      const { data } = await sb.from('processes').select('id').eq('nup', nup).maybeSingle();
-      return data?.id || null;
-    })();
-    if (!pid) return Utils.setMsg('adMsg', 'Processo não encontrado para o NUP informado.', true);
+    const { data: proc } = await sb.from('processes').select('id,type').eq('nup', nup).maybeSingle();
+    if (proc) {
+      if (proc.type !== tipo) {
+        alert('Já existe processo com este NUP e tipo diferente. Verifique as informações.');
+        return;
+      }
+      currentProcessId = proc.id;
+    } else {
+      const { data, error } = await sb.from('processes').insert({ nup, type: tipo }).select('id').single();
+      if (error) return Utils.setMsg('adMsg', error.message, true);
+      currentProcessId = data.id;
+      if (window.Modules.processos?.reloadLists) {
+        await window.Modules.processos.reloadLists();
+      }
+    }
 
-    // Coleta respostas
+    const list = await loadTemplatesFor(tipo);
+    renderChecklist(list[0]);
+    Utils.setMsg('adMsg', '');
+  }
+
+  async function salvarChecklist() {
+    if (!currentProcessId || !currentTemplate) return;
     const answers = [];
-    $$('#ckContainer select').forEach(sel => {
-      const code = sel.name;
-      const obs = $(`#ckContainer input[name="${code}::obs"]`)?.value || null;
-      answers.push({ code, value: sel.value, obs });
+    $$('#ckContainer [data-code]').forEach(wrap => {
+      const code = wrap.dataset.code;
+      const value = wrap.dataset.value;
+      const obs = wrap.querySelector('input').value.trim();
+      answers.push({ code, value, obs: obs || null });
     });
-
+    const extra = el('adOutrasObs')?.value.trim() || null;
     const u = await getUser();
-    Utils.setMsg('adMsg', 'Gravando e gerando PDF...');
-    const { data, error } = await sb
-      .from('checklist_responses')
-      .insert({
-        process_id: pid,
-        template_id: currentTemplate.id,
-        answers,
-        filled_by: u.id
-      })
+    Utils.setMsg('adMsg', 'Salvando checklist...');
+    const { data, error } = await sb.from('checklist_responses')
+      .insert({ process_id: currentProcessId, template_id: currentTemplate.id, answers, extra_obs: extra, filled_by: u.id })
       .select('id,filled_at')
       .single();
     if (error) return Utils.setMsg('adMsg', error.message, true);
 
-    // Gera PDF (jsPDF já está carregado)
-    generatePDF(nup, tipo, currentTemplate, answers, data.filled_at);
-    Utils.setMsg('adMsg', 'Checklist concluída. PDF gerado para download.');
-    await loadIndicador();
-  }
-
-  function generatePDF(nup, tipo, template, answers, filledAt) {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    doc.setFont('helvetica', '');
-    doc.setFontSize(14);
-    doc.text('Análise Documental', 14, 16);
-    doc.setFontSize(10);
-    doc.text(`NUP: ${nup}`, 14, 24);
-    doc.text(`Tipo do Processo: ${tipo}`, 14, 30);
-    doc.text(`Checklist: ${template.name}`, 14, 36);
-    doc.text(`Data/hora conclusão: ${Utils.fmtDateTime(filledAt)}`, 14, 42);
-
-    let y = 52;
-    answers.forEach((a, idx) => {
-      const line = `${idx + 1}. ${a.code}: ${a.value}${a.obs ? ' — Obs: ' + a.obs : ''}`;
-      doc.text(line, 14, y);
-      y += 6;
-      if (y > 280) {
-        doc.addPage();
-        y = 16;
-      }
+    await sb.from('audit_log').insert({
+      user_id: u.id,
+      user_email: u.email,
+      action: 'INSERT',
+      entity_type: 'checklist_responses',
+      entity_id: data.id,
+      details: { process_id: currentProcessId, checklist_name: currentTemplate.name, filled_at: data.filled_at }
     });
 
-    const fname = `AD_${nup.replace(/[^\d]/g, '')}_${new Date().toISOString().slice(0, 10)}.pdf`;
-    doc.save(fname);
+    Utils.setMsg('adMsg', 'Checklist salva.');
+    await loadIndicador();
+    if (window.Modules.processos?.reloadLists) {
+      await window.Modules.processos.reloadLists();
+    }
+    clearChecklist();
+  }
+
+  function clearForm() {
+    el('adNUP').value = '';
+    el('adTipo').value = 'PDIR';
+    Utils.setMsg('adMsg', '');
+    currentProcessId = null;
+    currentTemplate = null;
+    clearChecklist();
   }
 
   async function loadIndicador() {
@@ -173,12 +216,19 @@ window.Modules.analise = (() => {
   }
 
   function bind() {
-    el('adTipo').addEventListener('change', refreshTemplate);
-    el('btnFinalizarAD').addEventListener('click', ev => { ev.preventDefault(); finalizarExportar(); });
+    const btnIniciar = el('btnIniciarAD');
+    const btnLimparAD = el('btnLimparAD');
+    const btnLimparChecklist = el('btnLimparChecklist');
+    const btnSalvarChecklist = el('btnSalvarChecklist');
+
+    if (btnIniciar) btnIniciar.addEventListener('click', ev => { ev.preventDefault(); iniciarChecklist(); });
+    if (btnLimparAD) btnLimparAD.addEventListener('click', ev => { ev.preventDefault(); clearForm(); });
+    if (btnLimparChecklist) btnLimparChecklist.addEventListener('click', ev => { ev.preventDefault(); clearChecklist(); });
+    if (btnSalvarChecklist) btnSalvarChecklist.addEventListener('click', ev => { ev.preventDefault(); salvarChecklist(); });
   }
 
   function init() { bind(); }
-  async function load() { await refreshTemplate(); await loadIndicador(); }
+  async function load() { clearChecklist(); await loadIndicador(); }
 
   // Dashboard velocímetros / velocidade (módulo rápido aqui)
   const DASHBOARD_STATUSES = ['CONFEC','REV-OACO','APROV','ICA-PUB','EDICAO','AGD-LEIT','ANADOC','ANATEC-PRE','ANATEC','ANAICA','SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL','ARQ'];
