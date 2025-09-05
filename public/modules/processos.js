@@ -590,21 +590,22 @@ window.Modules.processos = (() => {
       case 'sigadaer': {
         const nums = Array.isArray(d.numbers) ? d.numbers.join(',') : '';
         const label = nums ? `SIGADAER ${nums}` : 'SIGADAER';
+        const type = d.type ? ` (${d.type})` : '';
         if (r.action === 'INSERT') {
           const dt = d.requested_at ? ` em ${Utils.fmtDateTime(d.requested_at)}` : '';
-          return `${label} solicitado${dt}`;
+          return `${label}${type} solicitado${dt}`;
         }
         if (prev && d.status !== prev.status) {
           if (d.status === 'EXPEDIDO') {
             const dt = d.expedit_at ? ` em ${Utils.fmtDateTime(d.expedit_at)}` : '';
-            return `${label} expedido${dt}`;
+           return `${label}${type} expedido${dt}`;
           }
           if (d.status === 'RECEBIDO') {
             const dt = d.received_at ? ` em ${Utils.fmtDateTime(d.received_at)}` : '';
-            return `${label} recebido${dt}`;
+            return `${label}${type} recebido${dt}`;
           }
         }
-        return `${label} atualizado`;
+        return `${label}${type} atualizado`;
       }
       case 'process_notes': {
         return d.note ? `Observação: ${d.note}` : 'Observação';
