@@ -8,7 +8,7 @@ window.App = (() => {
       route: 'login' // login | dashboard | processos | prazos | modelos | analise | admin
   };
 
-  let clockTimer = null; // atualiza data/hora do cabeçalho a cada minuto
+  let clockTimer = null; // atualiza data do cabeçalho a cada minuto
 
   const views = {
     login: 'viewLogin',
@@ -22,10 +22,10 @@ window.App = (() => {
 
   // ----- Renderizações pedidas -----
 
-  // Cabeçalho: "<Nome> • <Perfil> • <data e hora>"
+  // Cabeçalho: "<Nome> • <Perfil> • <data>"
   function renderHeaderStamp() {
     if (state.profile?.name && state.profile?.role) {
-      const s = [state.profile.name, state.profile.role, Utils.fmtDateTime(new Date())].join(' • ');
+      const s = [state.profile.name, state.profile.role, Utils.fmtDate(new Date())].join(' • ');
       Utils.setText('buildInfo', s);
     } else {
       // Sem usuário logado, não exibe nada no local do cabeçalho
