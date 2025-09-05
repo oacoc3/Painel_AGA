@@ -2,17 +2,16 @@
 window.Modules = window.Modules || {};
 window.Modules.modelos = (() => {
   let selectedId = null;
-
-  async function loadModelos() {
-    const { data, error } = await sb.from('models')
-      .select('id,category,title,content,updated_at')
-      .order('updated_at', { ascending: false });
-    if (error) { Utils.setMsg('mdlMsg', error.message, true); return; }
+  let modelos = [];
+  function renderModelos() {
+    const cat = el('mdlFiltroCat')?.value || '';
+    let rows = modelos;
+    if (cat) rows = rows.filter(m => m.category === cat);
     const { tbody } = Utils.renderTable('listaModelos', [
       { key: 'category', label: 'Categoria' },
       { key: 'title', label: 'Título' },
       { key: 'updated_at', label: 'Atualizado em', value: r => Utils.fmtDateTime(r.updated_at) }
-    ], data);
+    ], rows);
 
     tbody?.addEventListener('click', ev => {
       const tr = ev.target.closest('tr'); if (!tr) return;
@@ -24,6 +23,23 @@ window.Modules.modelos = (() => {
       el('mdlTxt').value = row.content;
       Utils.setMsg('mdlMsg', `Carregado: ${row.title}`);
     });
+  }
+
+  function renderCategorias() {
+    const sel = el('mdlFiltroCat');
+    if (!sel) return;
+    const cats = Array.from(new Set(modelos.map(m => m.category).filter(Boolean))).sort();
+    sel.innerHTML = '<option value="">Todas</option>' + cats.map(c => `<option>${c}</option>`).join('');
+  }
+
+  async function loadModelos() {
+    const { data, error } = await sb.from('models')
+      .select('id,category,title,content,updated_at')
+      .order('updated_at', { ascending: false });
+    if (error) { Utils.setMsg('mdlMsg', error.message, true); return; }
+    modelos = data || [];
+    renderCategorias();
+    renderModelos();
   }
 
   function bindForm() {
@@ -78,7 +94,7 @@ window.Modules.modelos = (() => {
     });
   }
 
-  function init() { bindForm(); }
+  function init() { bindForm(); el('mdlFiltroCat')?.addEventListener('change', renderModelos); }
   async function load() { await loadModelos(); }
 
   return { init, load };
