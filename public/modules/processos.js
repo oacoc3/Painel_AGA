@@ -73,7 +73,8 @@ window.Modules.processos = (() => {
           entity_id: currentProcId,
           details: { process_id: currentProcId, note }
         });
-        el
+        el('procObs').value = '';
+      }
       Utils.setMsg('procMsg', 'Salvo com sucesso.');
       el('btnSalvarProc').disabled = true;
       await reloadLists();
