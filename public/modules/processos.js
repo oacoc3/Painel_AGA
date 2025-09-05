@@ -388,6 +388,8 @@ window.Modules.processos = (() => {
 
   function bindForms() {
     el('btnSalvarProc').addEventListener('click', (ev) => { ev.preventDefault(); upsertProcess(); });
+    el('btnExcluirProc').addEventListener('click', (ev) => { ev.preventDefault(); deleteProcess(); });
+    el('btnLimparProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); });
     // Opiniao
     el('btnCadOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarOpiniao(); });
     el('btnRecOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); receberOpiniao(); });
