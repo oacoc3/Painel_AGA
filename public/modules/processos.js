@@ -3,6 +3,7 @@ window.Modules = window.Modules || {};
 window.Modules.processos = (() => {
   let currentProcId = null;
   let currentNUP = '';
+  let currentOpiniaoRecId = null;
   function bindTabs() {
     // Abas do cartão esquerdo
     $$('.tabs button').forEach(btn => {
@@ -99,7 +100,10 @@ window.Modules.processos = (() => {
     el('btnSalvarProc').disabled = true;
     Utils.setMsg('procMsg', '');
     el('histProcesso').innerHTML = '<div class="msg">Selecione um processo para ver o histórico.</div>';
-  }
+    el('opLista').innerHTML = '<div class="msg">Selecione um processo para ver os pareceres.</div>';
+    Utils.hide('opRecForm');
+    Utils.show('opLista');
+    }
 
   async function deleteProcess() {
     if (!currentProcId) return Utils.setMsg('procMsg', 'Nenhum processo carregado para exclusão.', true);
@@ -148,10 +152,24 @@ window.Modules.processos = (() => {
     }
   }
 
+  function showRecOpiniaoForm(id) {
+    currentOpiniaoRecId = id;
+    el('opRecInput').value = Utils.toDateTimeLocalValue(new Date());
+    Utils.hide('opLista');
+    Utils.show('opRecForm');
+  }
+
+  function cancelarRecOpiniao() {
+    currentOpiniaoRecId = null;
+    el('opRecInput').value = '';
+    Utils.hide('opRecForm');
+    Utils.show('opLista');
+  }
+
   async function receberOpiniao() {
-    const id = el('opIDRec').value.trim();
-    const t = el('opRec').value;
-    if (!id || !t) return Utils.setMsg('opMsg', 'Informe ID do parecer e data/hora de recebimento.', true);
+    const id = currentOpiniaoRecId;
+    const t = el('opRecInput').value;
+    if (!id || !t) return Utils.setMsg('opMsg', 'Informe data/hora de recebimento.', true);
     Utils.setMsg('opMsg', 'Registrando recebimento…');
     try {
       const { error } = await sb.from('internal_opinions').update({
@@ -160,10 +178,41 @@ window.Modules.processos = (() => {
       }).eq('id', id);
       if (error) throw error;
       Utils.setMsg('opMsg', 'Parecer marcado como RECEBIDO.');
+      cancelarRecOpiniao();
       await reloadLists();
     } catch (e) {
       Utils.setMsg('opMsg', e.message || String(e), true);
     }
+  }
+
+  async function loadOpiniaoList(processId) {
+    const box = el('opLista');
+    if (!box) return;
+    if (!processId) {
+      box.innerHTML = '<div class="msg">Selecione um processo para ver os pareceres.</div>';
+      return;
+    }
+    const { data: ops, error } = await sb.from('internal_opinions')
+      .select('id,type,requested_at')
+      .eq('process_id', processId)
+      .eq('status', 'SOLICITADO')
+      .order('requested_at', { ascending: false });
+    if (error) { box.innerHTML = '<div class="msg error">' + error.message + '</div>'; return; }
+    const { tbody } = Utils.renderTable(box, [
+      { key: 'id', label: 'ID' },
+      { key: 'type', label: 'Tipo' },
+      { key: 'requested_at', label: 'Solicitado em', value: r => Utils.fmtDateTime(r.requested_at) },
+      { key: 'btn', label: '' }
+    ], ops);
+    tbody?.querySelectorAll('tr').forEach(tr => {
+      const row = JSON.parse(tr.dataset.row);
+      const td = tr.lastElementChild;
+      td.textContent = '';
+      const btn = document.createElement('button');
+      btn.textContent = 'Registrar Recebimento';
+      btn.addEventListener('click', () => showRecOpiniaoForm(row.id));
+      td.appendChild(btn);
+    });
   }
 
   // —— Notificação ——
@@ -332,6 +381,7 @@ window.Modules.processos = (() => {
       const row = JSON.parse(tr.dataset.row);
       fillProcessForm(row);
       loadHistory(row.id);
+      loadOpiniaoList(row.id);
     });
   }
 
@@ -392,6 +442,7 @@ window.Modules.processos = (() => {
   async function reloadLists() {
     await loadProcessList();
     await loadHistory(currentProcId || '');
+    await loadOpiniaoList(currentProcId || '');
   }
 
   function bindForms() {
@@ -405,7 +456,8 @@ window.Modules.processos = (() => {
     el('btnLimparProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); });
     // Opiniao
     el('btnCadOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarOpiniao(); });
-    el('btnRecOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); receberOpiniao(); });
+    el('btnSalvarOpRec').addEventListener('click', (ev) => { ev.preventDefault(); receberOpiniao(); });
+    el('btnVoltarOpRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelarRecOpiniao(); });
     // Notificação
     el('btnCadNotif').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarNotif(); });
     el('btnMarcarLida').addEventListener('click', (ev) => { ev.preventDefault(); marcarNotifLida(); });
@@ -424,6 +476,7 @@ window.Modules.processos = (() => {
         if (data) {
           fillProcessForm(data);
           await loadHistory(data.id);
+          await loadOpiniaoList(data.id);
         } else {
           currentProcId = null;
           el('procTipo').value = '';
@@ -457,6 +510,7 @@ window.Modules.processos = (() => {
   async function load() {
     await loadProcessList();
     el('histProcesso').innerHTML = '<div class="msg">Selecione um processo para ver o histórico.</div>';
+    el('opLista').innerHTML = '<div class="msg">Selecione um processo para ver os pareceres.</div>';
   }
 
   return { init, load };
