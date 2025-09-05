@@ -23,6 +23,8 @@ html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); 
 
 .nav { display: flex; gap: 6px; }
 .nav button { width: 20%; }
+.nav button.active,
+.tabs button.active { background: var(--brand); color: #fff; }
 .user { display: flex; gap: 8px; align-items: center; }
 
 .main { flex: 1; display: flex; overflow: hidden; }
@@ -50,7 +52,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .row > * { margin: 8px 0; }
 .row label { flex: 1; margin: 0; }
 .row button { width: auto; }
+#tabProc .actions { align-items: stretch; }
 .actions button { flex: 1; width: auto; }
+#tabProc .actions button { flex: 1; width: 100%; }
 #btnObraConcluida.active { background: var(--brand); color: #fff; }
 .hidden { display: none !important; }
 
@@ -64,11 +68,21 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .tabs { display: flex; gap: 6px; margin-bottom: 8px; }
 .tab { }
 
+#tabProc label, #tabProc button,
+#tabOpiniao label, #tabOpiniao button,
+#tabNotif label, #tabNotif button,
+#tabSig label, #tabSig button { font-size: 12px; }
+
+.row.stretch { align-items: stretch; }
+.row.stretch > button { height: 100%; }
+
+#btnCadSig { margin-top: 8px; }
+
 .table { border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
 .table table { width: 100%; border-collapse: collapse; }
 .table th, .table td { border-bottom: 1px solid #eee; padding: 6px 8px; text-align: left; }
 .table th { background: #fafafa; font-family: var(--mono); }
-
+#listaProcessos th, #listaProcessos td { text-align: center; }
 #histProcesso th:nth-child(1),
 #histProcesso th:nth-child(2),
 #histProcesso td:nth-child(1),
