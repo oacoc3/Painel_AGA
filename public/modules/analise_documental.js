@@ -140,7 +140,10 @@ window.Modules.analise = (() => {
       }
       currentProcessId = proc.id;
     } else {
-      const { data, error } = await sb.from('processes').insert({ nup, type: tipo }).select('id').single();
+      const hoje = new Date().toISOString().slice(0, 10);
+      const { data, error } = await sb.from('processes')
+        .insert({ nup, type: tipo, first_entry_date: hoje })
+        .select('id').single();
       if (error) return Utils.setMsg('adMsg', error.message, true);
       currentProcessId = data.id;
       if (window.Modules.processos?.reloadLists) {
@@ -200,10 +203,11 @@ window.Modules.analise = (() => {
   async function loadIndicador() {
     const { data } = await sb
       .from('checklist_responses')
-      .select('filled_at,process_id,processes(nup),template_id,checklist_templates(name)')
+      .select('id,filled_at,process_id,processes(nup),template_id,checklist_templates(name)')
       .order('filled_at', { ascending: false })
       .limit(50);
     const rows = (data || []).map(r => ({
+      id: r.id,
       nup: r.processes?.nup || '',
       checklist: r.checklist_templates?.name || '',
       filled_at: Utils.fmtDateTime(r.filled_at)
@@ -211,8 +215,66 @@ window.Modules.analise = (() => {
     Utils.renderTable('listaAD', [
       { key: 'nup', label: 'NUP' },
       { key: 'checklist', label: 'Checklist' },
-      { key: 'filled_at', label: 'Concluída em' }
+      { key: 'filled_at', label: 'Concluída em' },
+      {
+        label: 'PDF',
+        align: 'center',
+        width: '60px',
+        render: r => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = 'PDF';
+          b.addEventListener('click', () => abrirChecklistPDF(r.id));
+          return b;
+        }
+      }
     ], rows);
+  }
+
+  async function abrirChecklistPDF(id) {
+    const { data, error } = await sb
+      .from('checklist_responses')
+      .select('answers,extra_obs,filled_at,processes(nup),checklist_templates(name,items)')
+      .eq('id', id)
+      .single();
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    const doc = new window.jspdf.jsPDF();
+    let y = 10;
+    doc.setFontSize(12);
+    doc.text(`Checklist: ${data.checklist_templates?.name || ''}`, 10, y); y += 6;
+    doc.text(`NUP: ${data.processes?.nup || ''}`, 10, y); y += 6;
+    doc.text(`Preenchida em: ${Utils.fmtDateTime(data.filled_at)}`, 10, y); y += 10;
+
+    const answers = data.answers || [];
+    const cats = data.checklist_templates?.items || [];
+    cats.forEach(cat => {
+      if (y > 270) { doc.addPage(); y = 10; }
+      doc.setFont(undefined, 'bold');
+      doc.text(cat.categoria || '', 10, y); y += 6;
+      (cat.itens || []).forEach(item => {
+        const ans = answers.find(a => a.code === item.code) || {};
+        if (y > 270) { doc.addPage(); y = 10; }
+        doc.setFont(undefined, 'normal');
+        doc.text(`${item.code || ''} - ${item.requisito || ''}`, 10, y); y += 6;
+        doc.text(`Resultado: ${ans.value || ''}`, 10, y); y += 6;
+        if (ans.obs) { doc.text(`Obs: ${ans.obs}`, 10, y); y += 6; }
+        y += 4;
+      });
+    });
+
+    if (data.extra_obs) {
+      if (y > 270) { doc.addPage(); y = 10; }
+      doc.setFont(undefined, 'bold');
+      doc.text('Outras observações:', 10, y); y += 6;
+      doc.setFont(undefined, 'normal');
+      doc.text(String(data.extra_obs), 10, y); y += 6;
+    }
+
+    const url = doc.output('bloburl');
+    window.open(url, '_blank');
   }
 
   function bind() {
