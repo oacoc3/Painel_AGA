@@ -130,6 +130,7 @@ async function refreshSessionUI(session) {
   function init() {
     renderFooterVersion();
     bindEvents();
+    ['procNUP','opNUP','ntNUP','sgNUP','adNUP'].forEach(Utils.bindNUPMask);
     Object.values(window.Modules || {}).forEach(m => m.init?.());
     sb.auth.onAuthStateChange((event, session) => refreshSessionUI(session));
     refreshSessionUI();
