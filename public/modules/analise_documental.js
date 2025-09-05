@@ -170,6 +170,8 @@ window.Modules.analise = (() => {
   async function load() { await refreshTemplate(); await loadIndicador(); }
 
   // Dashboard rings / speed (módulo rápido aqui)
+  const DASHBOARD_STATUSES = ['ANADOC','ANATEC-PRE','ANATEC','ANAICA','SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL','ARQ'];
+
   window.Modules.dashboard = {
     init() {
       el('btnDashFilter').addEventListener('click', this.load.bind(this));
@@ -178,24 +180,54 @@ window.Modules.analise = (() => {
       // Filtro por intervalo na 1ª entrada
       const from = el('dashFrom').value || null;
       const to = el('dashTo').value || null;
-      let q = sb.from('processes').select('status,first_entry_date');
+      let q = sb.from('processes').select('id,status,first_entry_date');
       if (from) q = q.gte('first_entry_date', from);
       if (to) q = q.lte('first_entry_date', to);
-      const { data } = await q;
-      // Rings: contagem por status
-      const counts = {};
-      (data || []).forEach(p => { counts[p.status] = (counts[p.status] || 0) + 1; });
-      const items = Object.keys(counts).map(k => ({ label: k, count: counts[k] }));
+      const { data: procs } = await q;
+
+      // Rings: contagem por status (sempre mostra todos)
+      const countMap = {};
+      DASHBOARD_STATUSES.forEach(s => { countMap[s] = 0; });
+      (procs || []).forEach(p => { countMap[p.status] = (countMap[p.status] || 0) + 1; });
+      const items = DASHBOARD_STATUSES.map(s => ({ label: s, count: countMap[s] }));
       Utils.renderRings('rings', items);
 
-      // Velocidade média "dias/processo" = média de (hoje - first_entry_date) por status
-      const agg = {};
-      (data || []).forEach(p => {
-        const d = Utils.daysBetween(p.first_entry_date);
-        agg[p.status] = agg[p.status] || { sum: 0, n: 0 };
-        agg[p.status].sum += d;
-        agg[p.status].n += 1;
+      // Velocidade média considerando todas as passagens por status
+      const ids = (procs || []).map(p => p.id);
+      let logs = [];
+      if (ids.length) {
+        const { data: logData } = await sb.from('audit_log')
+          .select('entity_id,occurred_at,details')
+          .eq('entity_type','processes')
+          .in('entity_id', ids)
+          .order('occurred_at');
+        logs = logData || [];
+      }
+      const byProc = {};
+      logs.forEach(l => {
+        const det = l.details || {};
+        if (!det.status || !det.status_since) return;
+        const pid = l.entity_id;
+        byProc[pid] = byProc[pid] || [];
+        byProc[pid].push({ status: det.status, start: det.status_since });
       });
+
+      const agg = {};
+      const now = new Date();
+      Object.values(byProc).forEach(list => {
+        list.sort((a,b) => new Date(a.start) - new Date(b.start));
+        for (let i = 0; i < list.length; i++) {
+          const cur = list[i];
+          const next = list[i+1];
+          if (i > 0 && cur.start === list[i-1].start && cur.status === list[i-1].status) continue;
+          const end = next ? new Date(next.start) : now;
+          const days = Utils.daysBetween(cur.start, end);
+          agg[cur.status] = agg[cur.status] || { sum: 0, n: 0 };
+          agg[cur.status].sum += days;
+          agg[cur.status].n += 1;
+        }
+      });
+
       const rows = Object.keys(agg).map(s => ({
         status: s,
         avg: (agg[s].sum / agg[s].n).toFixed(1)
