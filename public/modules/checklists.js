@@ -87,7 +87,7 @@ window.Modules.checklists = (() => {
   function bindForm() {
     el('btnAddCat').addEventListener('click', () => addCategory());
 
-    el('btnSalvarChecklist').addEventListener('click', async ev => {
+    el('adminBtnSalvarChecklist').addEventListener('click', async ev => {
       ev.preventDefault();
       const name = el('ckName').value.trim();
       const category = el('ckCat').value.trim();
