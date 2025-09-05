@@ -15,6 +15,7 @@ create type user_role as enum ('Administrador','Analista OACO','Analista OAGA','
 create type process_type as enum ('PDIR','Inscrição','Alteração','Exploração','OPEA');
 
 create type process_status as enum (
+  'CONFEC','REV-OACO','APROV','ICA-PUB','EDICAO','AGD-LEIT',
   'ANADOC','ANATEC-PRE','ANATEC','ANAICA',
   'SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL',
   'ARQ'
@@ -176,13 +177,15 @@ for each row execute function extensions.moddatetime(updated_at);
 -- Checklists
 create table checklist_templates (
   id uuid primary key default gen_random_uuid(),
-  name text unique not null,
+  name text not null,
   category text not null,
+  version int not null default 1,
   items jsonb not null, -- [{code,text,options?},...]
   approved_by uuid references profiles(id),
   approved_at timestamptz,
   created_by uuid not null references profiles(id),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  unique (name, version)
 );
 create table checklist_responses (
   id uuid primary key default gen_random_uuid(),
