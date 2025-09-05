@@ -175,7 +175,7 @@ window.Modules.analise = (() => {
   function init() { bind(); }
   async function load() { await refreshTemplate(); await loadIndicador(); }
 
-  // Dashboard rings / speed (módulo rápido aqui)
+  // Dashboard velocímetros / velocidade (módulo rápido aqui)
   const DASHBOARD_STATUSES = ['CONFEC','REV-OACO','APROV','ICA-PUB','EDICAO','AGD-LEIT','ANADOC','ANATEC-PRE','ANATEC','ANAICA','SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL','ARQ'];
 
   window.Modules.dashboard = {
@@ -191,12 +191,12 @@ window.Modules.analise = (() => {
       if (to) q = q.lte('first_entry_date', to);
       const { data: procs } = await q;
 
-      // Rings: contagem por status (sempre mostra todos)
+      // Velocímetros: contagem por status (sempre mostra todos)
       const countMap = {};
       DASHBOARD_STATUSES.forEach(s => { countMap[s] = 0; });
       (procs || []).forEach(p => { countMap[p.status] = (countMap[p.status] || 0) + 1; });
       const items = DASHBOARD_STATUSES.map(s => ({ label: s, count: countMap[s] }));
-      Utils.renderRings('rings', items);
+      Utils.renderVelocimetros('velocimetros', items);
 
       // Velocidade média considerando todas as passagens por status
       const ids = (procs || []).map(p => p.id);
