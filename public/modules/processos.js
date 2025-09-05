@@ -71,6 +71,15 @@ window.Modules.processos = (() => {
     return data?.id || null;
   }
 
+  async function fetchProcessByNUP(nup) {
+    const { data, error } = await sb.from('processes')
+      .select('id,nup,type,status,first_entry_date,obra_termino_date,obra_concluida')
+      .eq('nup', nup)
+      .maybeSingle();
+    if (error) throw error;
+    return data || null;
+  }
+
   function syncNUP() {
     ['opNUP', 'ntNUP', 'sgNUP'].forEach(id => {
       const input = el(id);
@@ -357,10 +366,35 @@ window.Modules.processos = (() => {
     el('btnExpSig').addEventListener('click', (ev) => { ev.preventDefault(); expedirSig(); });
     el('btnRecSig').addEventListener('click', (ev) => { ev.preventDefault(); receberSig(); });
 
-    el('procNUP').addEventListener('input', (ev) => {
-      currentNUP = ev.target.value.trim();
+    const procNUP = el('procNUP');
+    const handleNUP = async () => {
+      currentNUP = procNUP.value.trim();
       syncNUP();
+      if (!currentNUP) return;
+      try {
+        const data = await fetchProcessByNUP(currentNUP);
+        if (data) {
+          fillProcessForm(data);
+          await loadHistory(data.id);
+        } else {
+          currentProcId = null;
+          el('procTipo').value = '';
+          el('procStatus').value = '';
+          el('procEntrada').value = '';
+          el('procObraTermino').value = '';
+          el('procObraConcluida').checked = false;
+          Utils.setMsg('procMsg', 'Processo não encontrado.');
+        }
+      } catch (e) {
+        Utils.setMsg('procMsg', e.message || String(e), true);
+      }
+    };
+    procNUP.addEventListener('input', () => {
+      currentNUP = procNUP.value.trim();
+      syncNUP();
+      if (currentNUP.length === 20) handleNUP();
     });
+    procNUP.addEventListener('blur', handleNUP);
   }
 
   function init() {
