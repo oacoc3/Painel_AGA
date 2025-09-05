@@ -74,7 +74,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 #tabSig label, #tabSig button { font-size: 12px; }
 
 .row.stretch { align-items: stretch; }
-.row.stretch > button { height: 100%; }
+.row.stretch > label { flex: 1 1 50%; }
+.row.stretch > button { flex: 1 1 50%; width: 100%; height: 100%; }
 
 #btnCadSig { margin-top: 8px; }
 
