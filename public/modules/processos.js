@@ -30,7 +30,7 @@ window.Modules.processos = (() => {
     const statusSinceInput = el('procStatusDate').value;
     const firstEntry = el('procEntrada').value;
     const obraTerm = el('procObraTermino').value || null;
-    const obraConcl = el('procObraConcluida').checked;
+   const obraConcl = el('btnObraConcluida').classList.contains('active');
 
     if (!nup || !firstEntry) return Utils.setMsg('procMsg', 'Preencha NUP e Data 1ª entrada.', true);
     Utils.setMsg('procMsg', currentProcId ? 'Atualizando...' : 'Cadastrando...');
@@ -92,7 +92,7 @@ window.Modules.processos = (() => {
     el('procStatusDate').value = '';
       el('procEntrada').value = '';
     el('procObraTermino').value = '';
-    el('procObraConcluida').checked = false;
+    el('btnObraConcluida').classList.remove('active');
     currentProcId = null;
     currentNUP = '';
     syncNUP();
@@ -342,7 +342,8 @@ window.Modules.processos = (() => {
     el('procStatus').value = p.status;
     el('procStatusDate').value = Utils.toDateTimeLocalValue(p.status_since);
     el('procEntrada').value = toDateInputValue(p.first_entry_date);
-    // Campos de obra são preenchidos só ao buscar individualmente (opcional)
+    if ('obra_termino_date' in p) el('procObraTermino').value = toDateInputValue(p.obra_termino_date);
+    if ('obra_concluida' in p) el('btnObraConcluida').classList.toggle('active', !!p.obra_concluida);
     el('btnSalvarProc').disabled = true;
     currentNUP = p.nup;
     syncNUP();
@@ -394,6 +395,11 @@ window.Modules.processos = (() => {
   }
 
   function bindForms() {
+    el('btnObraConcluida').addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.target.classList.toggle('active');
+      el('btnSalvarProc').disabled = false;
+    });
     el('btnSalvarProc').addEventListener('click', (ev) => { ev.preventDefault(); upsertProcess(); });
     el('btnExcluirProc').addEventListener('click', (ev) => { ev.preventDefault(); deleteProcess(); });
     el('btnLimparProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); });
@@ -425,7 +431,7 @@ window.Modules.processos = (() => {
           el('procStatusDate').value = '';
           el('procEntrada').value = '';
           el('procObraTermino').value = '';
-          el('procObraConcluida').checked = false;
+          el('btnObraConcluida').classList.remove('active');
           Utils.setMsg('procMsg', 'Processo não encontrado.');
         }
       } catch (e) {
