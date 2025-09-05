@@ -169,6 +169,21 @@ function renderVelocimetros(containerId, items) {
   });
 }
 
+function renderProcessRings(containerId, items) {
+  const box = el(containerId);
+  if (!box) return;
+  box.innerHTML = '';
+  items.forEach(it => {
+    window.Components?.ProcessRing?.create(box, {
+      nup: it.status,
+      status: `${it.count} proc.`,
+      speed: it.avg,
+      min: 0,
+      max: 30
+    });
+  });
+}
+
 function fmtNUP(v) {
   const d = String(v || '').replace(/\D/g, '').slice(0, 17);
   const p1 = d.slice(0, 5);
@@ -194,6 +209,6 @@ function bindNUPMask(id) {
 
 window.Utils = {
   show, hide, setText, setMsg, fmtDate, fmtDateTime, toDateInputValue,
-  toDateTimeLocalValue, daysBetween, yesNo, renderTable, callFn, renderVelocimetros,
+  toDateTimeLocalValue, daysBetween, yesNo, renderTable, callFn, renderVelocimetros, renderProcessRings,
   fmtNUP, bindNUPMask
 };
