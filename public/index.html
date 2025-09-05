@@ -142,9 +142,14 @@
                 <label>Solicitado em <input type="datetime-local" id="opSolic"></label>
                 <button id="btnCadOpiniao">Cadastrar</button>
                 <hr/>
-                <label>Marcar recebimento: ID Parecer <input id="opIDRec"></label>
-                <label>Recebido em <input type="datetime-local" id="opRec"></label>
-                <button id="btnRecOpiniao">Registrar recebimento</button>
+                <div id="opLista" class="table scrolly"></div>
+                <div id="opRecForm" class="hidden">
+                  <label>Recebido em <input type="datetime-local" id="opRecInput"></label>
+                  <div class="row actions">
+                    <button id="btnSalvarOpRec">Salvar</button>
+                    <button id="btnVoltarOpRec" type="button">Voltar</button>
+                  </div>
+                </div>
                 <div id="opMsg" class="msg"></div>
               </form>
             </div>
