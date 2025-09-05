@@ -497,7 +497,7 @@ window.Modules.processos = (() => {
 
     const rows = procs.map(p => ({
       ...p,
-      tempo: `${Utils.daysBetween(p.first_entry_date)} d`,
+      tempo: p.first_entry_date ? `${Utils.daysBetween(p.first_entry_date)} d` : '',
       op: Utils.yesNo(pendingOp[p.id]),
       nt: Utils.yesNo(pendingNt[p.id]),
       sg: Utils.yesNo(expSig[p.id]),
