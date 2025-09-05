@@ -8,8 +8,8 @@
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      // ⚠️ Importante: nós mesmos processamos o link de recuperação
-      detectSessionInUrl: false
+      // Habilita processamento automático do token enviado no magic link
+      detectSessionInUrl: true
     },
     global: { headers: { 'x-application-name': 'Painel DO-AGA' } }
   });
