@@ -323,16 +323,11 @@ window.Modules.processos = (() => {
   }
 
   // —— SIGADAER ——
-  function parseSixDigitsList(s) {
+  function parseSigNumber(s) {
     if (!s) return null;
-    const arr = s.split(',').map(x => x.trim()).filter(Boolean);
-    if (!arr.length) return null;
-    const nums = [];
-    for (const a of arr) {
-      if (!/^\d{6}$/.test(a)) throw new Error(`Número inválido: ${a} (use 6 dígitos)`);
-      nums.push(Number(a));
-    }
-    return nums;
+    const v = s.trim();
+    if (!/^\d{6}$/.test(v)) throw new Error('Informe um número de 6 dígitos.');
+    return Number(v);
   }
 
   async function cadastrarSig() {
@@ -340,17 +335,23 @@ window.Modules.processos = (() => {
     const type = el('sgTipo').value;
     const t = el('sgSolic').value;
     const requested_at = t ? new Date(t).toISOString() : new Date().toISOString();
-    const numbers = el('sgNums').value;
+    const numberInput = el('sgNum').value;
     Utils.setMsg('sgMsg', 'Cadastrando SIGADAER…');
     try {
       const pid = await findProcessByNUP(nup);
       if (!pid) throw new Error('Processo não encontrado para o NUP informado.');
       const u = await getUser();
+      const num = parseSigNumber(numberInput);
+      if (num !== null) {
+        const { data: exists, error: errChk } = await sb.from('sigadaer')
+          .select('id').contains('numbers', [num]).maybeSingle();
+        if (errChk) throw errChk;
+        if (exists) throw new Error('Nº SIGADAER já cadastrado.');
+      }
       const payload = {
-        process_id: pid, type, requested_at, created_by: u.id
+        process_id: pid, type, requested_at, created_by: u.id,
+        numbers: num !== null ? [num] : null
       };
-      const nums = parseSixDigitsList(numbers);
-      if (nums) payload.numbers = nums;
       const { error } = await sb.from('sigadaer').insert(payload);
       if (error) throw error;
       Utils.setMsg('sgMsg', 'SIGADAER cadastrado (status SOLICITADO).');
@@ -541,7 +542,10 @@ window.Modules.processos = (() => {
       case 'processes': {
         if (r.action === 'INSERT') return 'Processo criado';
         const changes = [];
-        if (prev && d.status !== prev.status) changes.push(`status ${prev.status || ''}→${d.status}`);
+        if (prev && d.status !== prev.status) {
+          const dt = d.status_since ? ` em ${Utils.fmtDateTime(d.status_since)}` : '';
+          changes.push(`status ${prev.status || ''}→${d.status}${dt}`);
+        }
         if (prev && d.type !== prev.type) changes.push(`tipo ${prev.type || ''}→${d.type}`);
         if (prev && d.nup !== prev.nup) changes.push(`NUP ${prev.nup || ''}→${d.nup}`);
         if (prev && d.obra_concluida !== prev.obra_concluida)
