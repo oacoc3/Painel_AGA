@@ -315,28 +315,37 @@
 
       <!-- Análise Documental -->
       <section id="viewAnalise" class="view hidden">
-        <div class="split">
-          <div class="card">
-            <h2>Nova Análise Documental</h2>
-            <form id="formAD">
-              <div class="row">
+        <div class="analysis-grid">
+          <div class="analysis-col">
+            <div class="card">
+              <h2>Nova Análise Documental</h2>
+              <form id="formAD">
                 <label>NUP <input id="adNUP" required></label>
                 <label>Tipo do Processo
                   <select id="adTipo">
                     <option>PDIR</option><option>Inscrição</option><option>Alteração</option><option>Exploração</option><option>OPEA</option>
                   </select>
                 </label>
-              </div>
-              <div id="ckContainer"></div>
-              <button id="btnFinalizarAD">Finalizar e Exportar PDF</button>
-              <div id="adMsg" class="msg"></div>
-            </form>
+                <div class="row actions">
+                  <button id="btnLimparAD">Limpar</button>
+                  <button id="btnIniciarAD">Iniciar Preenchimento de Checklist</button>
+                </div>
+                <div id="adMsg" class="msg"></div>
+              </form>
+            </div>
+            <div class="card">
+              <h2>Checklists concluídas</h2>
+              <div id="listaAD" class="table scrolly"></div>
+            </div>
           </div>
-          <div class="card">
-            <h2>Checklists concluídas (indicador)</h2>
-            <div id="listaAD" class="table scrolly"></div>
+          <div class="card" id="adChecklistCard">
+            <h2>Checklist</h2>
+            <div id="ckContainer"></div>
+            <div class="row actions" id="adActions">
+              <button id="btnLimparChecklist" disabled>Limpar</button>
+              <button id="btnSalvarChecklist" disabled>Salvar</button>
+            </div>
           </div>
-
         </div>
       </section>
 
