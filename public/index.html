@@ -342,48 +342,52 @@
 
       <!-- Administração -->
       <section id="viewAdmin" class="view hidden">
-        <div class="split">
-          <div class="card">
-            <h2>Criar usuário</h2>
-            <form id="formUser">
-              <label>E-mail <input id="adEmail" type="email" required></label>
-              <label>Identificação <input id="adName" required></label>
-              <label>Perfil
-                <select id="adRole">
-                  <option>Administrador</option>
-                  <option>Analista OACO</option>
-                  <option>Analista OAGA</option>
-                  <option>CH OACO</option>
-                  <option>CH OAGA</option>
-                  <option>CH AGA</option>
-                  <option>Visitante</option>
-                </select>
-              </label>
-              <button id="btnCreateUser" type="button">Criar</button>
-              <div id="adminMsg" class="msg"></div>
-            </form>
-          </div>
-          <div class="card">
-            <h2>Usuários</h2>
-            <div id="listaUsers" class="table scrolly"></div>
-          </div>
+        <div class="grid">
+          <div class="admin-col">
             <div class="card">
-            <h2>Gerenciar Checklists</h2>
-            <form id="formChecklist">
-              <input type="hidden" id="ckId">
-              <label>Nome <input id="ckName" required></label>
-              <label>Categoria <input id="ckCat" required></label>
-              <label>Itens (JSON) <textarea id="ckItems" rows="6" required></textarea></label>
-              <div class="row">
-                <button id="btnSalvarChecklist">Salvar</button>
-                <button id="btnExcluirChecklist" class="danger" type="button">Excluir</button>
-              </div>
-              <div id="ckMsg" class="msg"></div>
-            </form>
+              <h2>Criar usuário</h2>
+              <form id="formUser">
+                <label>E-mail <input id="adEmail" type="email" required></label>
+                <label>Identificação <input id="adName" required></label>
+                <label>Perfil
+                  <select id="adRole">
+                    <option>Administrador</option>
+                    <option>Analista OACO</option>
+                    <option>Analista OAGA</option>
+                    <option>CH OACO</option>
+                    <option>CH OAGA</option>
+                    <option>CH AGA</option>
+                    <option>Visitante</option>
+                  </select>
+                </label>
+                <button id="btnCreateUser" type="button">Criar</button>
+                <div id="adminMsg" class="msg"></div>
+              </form>
+            </div>
+            <div class="card">
+              <h2>Usuários</h2>
+              <div id="listaUsers" class="table scrolly"></div>
+            </div>
           </div>
-          <div class="card">
-            <h2>Checklists</h2>
-            <div id="listaCk" class="table scrolly"></div>
+          <div class="admin-col">
+            <div class="card">
+              <h2>Gerenciar Checklists</h2>
+              <form id="formChecklist">
+                <input type="hidden" id="ckId">
+                <label>Nome <input id="ckName" required></label>
+                <label>Categoria <input id="ckCat" required></label>
+                <label>Itens (JSON) <textarea id="ckItems" rows="6" required></textarea></label>
+                <div class="row">
+                  <button id="btnSalvarChecklist">Salvar</button>
+                  <button id="btnExcluirChecklist" class="danger" type="button">Excluir</button>
+                </div>
+                <div id="ckMsg" class="msg"></div>
+              </form>
+            </div>
+            <div class="card">
+              <h2>Checklists</h2>
+              <div id="listaCk" class="table scrolly"></div>
+            </div>
           </div>
         </div>
       </section>
