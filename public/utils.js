@@ -75,6 +75,7 @@ function renderTable(containerOrId, columns, rows) {
     const th = document.createElement('th');
     th.textContent = c.label;
     if (c.width) th.style.width = c.width;
+    if (c.align) th.style.textAlign = c.align;
     trh.appendChild(th);
   });
   thead.appendChild(trh);
@@ -96,8 +97,15 @@ function renderTable(containerOrId, columns, rows) {
       tr.dataset.row = JSON.stringify(r);
       columns.forEach(c => {
         const td = document.createElement('td');
-        const v = typeof c.value === 'function' ? c.value(r) : r[c.key];
-        td.textContent = v ?? '';
+        let v = typeof c.value === 'function' ? c.value(r) : (c.key ? r[c.key] : undefined);
+        if (c.render) {
+          const out = c.render(r);
+          if (out instanceof Node) td.appendChild(out);
+          else if (out != null) td.innerHTML = out;
+        } else {
+          td.textContent = v ?? '';
+        }
+        if (c.align) td.style.textAlign = c.align;
         tr.appendChild(td);
       });
       tbody.appendChild(tr);
