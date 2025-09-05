@@ -10,8 +10,28 @@ window.Modules.admin = (() => {
       { key: 'name', label: 'Identificação' },
       { key: 'email', label: 'E-mail' },
       { key: 'role', label: 'Perfil' },
-      { key: 'created_at', label: 'Criado em', value: r => Utils.fmtDateTime(r.created_at) }
+      { key: 'created_at', label: 'Criado em', value: r => Utils.fmtDateTime(r.created_at) },
+      {
+        label: '',
+        render: r => {
+          const btn = document.createElement('button');
+          btn.textContent = 'Excluir';
+          btn.className = 'danger';
+          btn.addEventListener('click', () => deleteUser(r.id));
+          return btn;
+        }
+      }
     ], data || []);
+  }
+
+  async function deleteUser(id) {
+    if (!id) return;
+    if (!confirm('Excluir usuário?')) return;
+    Utils.setMsg('adminMsg', 'Excluindo usuário...');
+    const res = await Utils.callFn('delete-user', { method: 'POST', body: { id } });
+    if (!res.ok) return Utils.setMsg('adminMsg', (res.data && res.data.error) || 'Falha ao excluir usuário.', true);
+    Utils.setMsg('adminMsg', 'Usuário excluído.');
+    await loadUsers();
   }
 
   function bindForm() {
