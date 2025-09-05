@@ -86,12 +86,12 @@ create table processes (
   id uuid primary key default gen_random_uuid(),
   nup text not null unique,
   type process_type not null,
-  status process_status not null default 'ANADOC',
-  status_since timestamptz not null default now(),
+  status process_status,
+  status_since timestamptz,
   obra_termino_date date,
   obra_concluida boolean not null default false,
-  first_entry_date date not null,
-  do_aga_start_date date not null, -- base para prazo DO-AGA (reinicia quando sair de SOB-*)
+  first_entry_date date,
+  do_aga_start_date date, -- base para prazo DO-AGA (reinicia quando sair de SOB-*)
   created_by uuid not null references profiles(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -219,12 +219,18 @@ create or replace function trg_processes_set_doaga_start()
 returns trigger language plpgsql as $$
 begin
   if tg_op = 'INSERT' then
-    new.do_aga_start_date := new.first_entry_date;
+    if new.first_entry_date is not null then
+      new.do_aga_start_date := new.first_entry_date;
+    end if;
   elsif tg_op = 'UPDATE' then
     if (old.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL'))
        and (new.status not in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')) then
       new.do_aga_start_date := current_date;
-    end if;
+    elsif old.first_entry_date is null
+          and new.first_entry_date is not null
+          and new.do_aga_start_date is null then
+      new.do_aga_start_date := new.first_entry_date;
+end if;
   end if;
   return new;
 end$$;
