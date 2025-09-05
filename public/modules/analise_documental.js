@@ -235,51 +235,53 @@ window.Modules.analise = (() => {
 
   async function abrirChecklistPDF(id) {
     // Abre imediatamente uma aba em branco para evitar bloqueio de pop-up
-    const win = window.open('', '_blank');
-    const { data, error } = await sb
-      .from('checklist_responses')
-      .select('answers,extra_obs,filled_at,processes(nup),checklist_templates(name,items)')
-      .eq('id', id)
-      .single();
-    if (error) {
-      if (win) win.close();
-      alert(error.message);
-      return;
-    }
-    const doc = new window.jspdf.jsPDF();
-    let y = 10;
-    doc.setFontSize(12);
-    doc.text(`Checklist: ${data.checklist_templates?.name || ''}`, 10, y); y += 6;
-    doc.text(`NUP: ${data.processes?.nup || ''}`, 10, y); y += 6;
-    doc.text(`Preenchida em: ${Utils.fmtDateTime(data.filled_at)}`, 10, y); y += 10;
+    const win = window.open('', '_blank', 'noopener');
+    try {
+      const { data, error } = await sb
+        .from('checklist_responses')
+        .select('answers,extra_obs,filled_at,processes(nup),checklist_templates(name,items)')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
 
-    const answers = data.answers || [];
-    const cats = data.checklist_templates?.items || [];
-    cats.forEach(cat => {
-      if (y > 270) { doc.addPage(); y = 10; }
-      doc.setFont(undefined, 'bold');
-      doc.text(cat.categoria || '', 10, y); y += 6;
-      (cat.itens || []).forEach(item => {
-        const ans = answers.find(a => a.code === item.code) || {};
+      const doc = new window.jspdf.jsPDF();
+      let y = 10;
+      doc.setFontSize(12);
+      doc.text(`Checklist: ${data.checklist_templates?.name || ''}`, 10, y); y += 6;
+      doc.text(`NUP: ${data.processes?.nup || ''}`, 10, y); y += 6;
+      doc.text(`Preenchida em: ${Utils.fmtDateTime(data.filled_at)}`, 10, y); y += 10;
+
+      const answers = data.answers || [];
+      const cats = data.checklist_templates?.items || [];
+      cats.forEach(cat => {
         if (y > 270) { doc.addPage(); y = 10; }
-        doc.setFont(undefined, 'normal');
-        doc.text(`${item.code || ''} - ${item.requisito || ''}`, 10, y); y += 6;
-        doc.text(`Resultado: ${ans.value || ''}`, 10, y); y += 6;
-        if (ans.obs) { doc.text(`Obs: ${ans.obs}`, 10, y); y += 6; }
-        y += 4;
+        doc.setFont(undefined, 'bold');
+        doc.text(cat.categoria || '', 10, y); y += 6;
+        (cat.itens || []).forEach(item => {
+          const ans = answers.find(a => a.code === item.code) || {};
+          if (y > 270) { doc.addPage(); y = 10; }
+          doc.setFont(undefined, 'normal');
+          doc.text(`${item.code || ''} - ${item.requisito || ''}`, 10, y); y += 6;
+          doc.text(`Resultado: ${ans.value || ''}`, 10, y); y += 6;
+          if (ans.obs) { doc.text(`Obs: ${ans.obs}`, 10, y); y += 6; }
+          y += 4;
+        });
       });
-    });
 
-    if (data.extra_obs) {
-      if (y > 270) { doc.addPage(); y = 10; }
-      doc.setFont(undefined, 'bold');
-      doc.text('Outras observações:', 10, y); y += 6;
-      doc.setFont(undefined, 'normal');
-      doc.text(String(data.extra_obs), 10, y); y += 6;
+      if (data.extra_obs) {
+        if (y > 270) { doc.addPage(); y = 10; }
+        doc.setFont(undefined, 'bold');
+        doc.text('Outras observações:', 10, y); y += 6;
+        doc.setFont(undefined, 'normal');
+        doc.text(String(data.extra_obs), 10, y); y += 6;
+      }
+
+      const url = doc.output('bloburl');
+      if (win) win.location.href = url;
+    } catch (err) {
+      if (win) win.close();
+      alert(err.message || String(err));
     }
-
-    const url = doc.output('bloburl');
-    if (win) win.location.href = url;
   }
 
   function bind() {
