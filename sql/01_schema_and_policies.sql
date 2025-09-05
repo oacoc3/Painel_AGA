@@ -322,11 +322,11 @@ where io.status = 'SOLICITADO';
 -- Pareceres externos (SIGADAER)
 create or replace view v_prazo_pareceres_externos as
 select s.process_id, p.nup, s.type,
-       date(timezone('America/Sao_Paulo', s.requested_at)) as requested_at,
-  date(timezone('America/Sao_Paulo', s.requested_at))
+       date(timezone('America/Sao_Paulo', s.expedit_at)) as requested_at,
+  date(timezone('America/Sao_Paulo', s.expedit_at))
          + case when s.type='COMGAP' then 90 else 30 end as due_date,
-       date(timezone('America/Sao_Paulo', s.requested_at)) + 1 as start_count,
-       date(timezone('America/Sao_Paulo', s.requested_at))
+       date(timezone('America/Sao_Paulo', s.expedit_at)) + 1 as start_count,
+       date(timezone('America/Sao_Paulo', s.expedit_at))
          + case when s.type='COMGAP' then 90 else 30 end - current_date as days_remaining
 from sigadaer s
 join processes p on p.id = s.process_id
@@ -343,15 +343,15 @@ with term_atra as (
 fav_term as (
   select distinct n.process_id
   from notifications n
-  where n.type='FAV-TERM'
+  where n.type='FAV-TERM' and n.status='LIDA'
 )
 select p.id as process_id, p.nup,
-       case when ta.read_at is not null then date(ta.read_at)
+       case when ta.read_at is not null then date(timezone('America/Sao_Paulo', ta.read_at))
             else p.obra_termino_date end as requested_at,
-  case when ta.read_at is not null then (date(ta.read_at) + 30)
+  case when ta.read_at is not null then (date(timezone('America/Sao_Paulo', ta.read_at)) + 30)
             else p.obra_termino_date end as due_date,
-       case when ta.read_at is not null then (date(ta.read_at) + 1) end as start_count,
-       case when ta.read_at is not null then (date(ta.read_at) + 30) - current_date
+       case when ta.read_at is not null then (date(timezone('America/Sao_Paulo', ta.read_at)) + 1) end as start_count,
+       case when ta.read_at is not null then (date(timezone('America/Sao_Paulo', ta.read_at)) + 30) - current_date
             else (p.obra_termino_date - current_date) end as days_remaining,
        (ta.read_at is not null) as em_atraso
 from processes p
