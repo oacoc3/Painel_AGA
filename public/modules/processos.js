@@ -550,10 +550,18 @@ window.Modules.processos = (() => {
     switch (r.entity_type) {
       case 'processes': {
         if (r.action === 'INSERT') return 'Processo criado';
+        if (prev && d.status === prev.status && d.status_since !== prev.status_since) {
+          const dt = d.status_since ? ` em ${Utils.fmtDateTime(d.status_since)}` : '';
+          return `Data/hora do status${dt}`;
+        }
         const changes = [];
         if (prev && d.status !== prev.status) {
           const dt = d.status_since ? ` em ${Utils.fmtDateTime(d.status_since)}` : '';
           changes.push(`status ${prev.status || ''}→${d.status}${dt}`);
+        }
+         if (prev && d.first_entry_date !== prev.first_entry_date) {
+          const dt = d.first_entry_date ? ` em ${Utils.fmtDate(d.first_entry_date)}` : '';
+          changes.push(`1ª Entrada DO-AGA${dt}`);
         }
         if (prev && d.type !== prev.type) changes.push(`tipo ${prev.type || ''}→${d.type}`);
         if (prev && d.nup !== prev.nup) changes.push(`NUP ${prev.nup || ''}→${d.nup}`);
@@ -561,6 +569,7 @@ window.Modules.processos = (() => {
           changes.push(`obra concluída ${prev.obra_concluida ? 'sim' : 'não'}→${d.obra_concluida ? 'sim' : 'não'}`);
         if (prev && d.obra_termino_date !== prev.obra_termino_date)
           changes.push(`término da obra ${Utils.fmtDate(prev.obra_termino_date)}→${Utils.fmtDate(d.obra_termino_date)}`);
+        if (changes.length === 1 && changes[0].startsWith('1ª Entrada DO-AGA')) return changes[0];
         return changes.length ? 'Processo ' + changes.join(', ') : 'Processo atualizado';
       }
       case 'internal_opinions': {
