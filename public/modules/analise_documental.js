@@ -140,11 +140,10 @@ window.Modules.analise = (() => {
       }
       currentProcessId = proc.id;
     } else {
-      const hoje = new Date().toISOString().slice(0, 10);
        const u = await getUser();
       if (!u) return Utils.setMsg('adMsg', 'Sessão expirada.', true);
       const { data, error } = await sb.from('processes')
-        .insert({ nup, type: tipo, first_entry_date: hoje, created_by: u.id })
+        .insert({ nup, type: tipo, created_by: u.id })
         .select('id')
         .single();
       if (error) return Utils.setMsg('adMsg', error.message, true);
