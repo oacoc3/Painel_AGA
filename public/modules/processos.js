@@ -2,7 +2,7 @@
 window.Modules = window.Modules || {};
 window.Modules.processos = (() => {
   let currentProcId = null;
-
+  let currentNUP = '';
   function bindTabs() {
     // Abas do cartão esquerdo
     $$('.tabs button').forEach(btn => {
@@ -10,6 +10,7 @@ window.Modules.processos = (() => {
         const tab = btn.dataset.tab;
         ['tabProc','tabOpiniao','tabNotif','tabSig'].forEach(id => Utils.hide(id));
         Utils.show('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
+        syncNUP();
       });
     });
   }
@@ -68,6 +69,13 @@ window.Modules.processos = (() => {
     const { data, error } = await sb.from('processes').select('id').eq('nup', nup).maybeSingle();
     if (error) throw error;
     return data?.id || null;
+  }
+
+  function syncNUP() {
+    ['opNUP', 'ntNUP', 'sgNUP'].forEach(id => {
+      const input = el(id);
+      if (input) input.value = currentNUP;
+    });
   }
 
   // —— Parecer interno ——
@@ -287,6 +295,8 @@ window.Modules.processos = (() => {
     el('procEntrada').value = toDateInputValue(p.first_entry_date);
     // Campos de obra são preenchidos só ao buscar individualmente (opcional)
     el('btnSalvarProc').disabled = true;
+    currentNUP = p.nup;
+    syncNUP();
     Utils.setMsg('procMsg', `Carregado processo ${p.nup}.`);
   }
 
@@ -346,12 +356,19 @@ window.Modules.processos = (() => {
     el('btnCadSig').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarSig(); });
     el('btnExpSig').addEventListener('click', (ev) => { ev.preventDefault(); expedirSig(); });
     el('btnRecSig').addEventListener('click', (ev) => { ev.preventDefault(); receberSig(); });
+
+    el('procNUP').addEventListener('input', (ev) => {
+      currentNUP = ev.target.value.trim();
+      syncNUP();
+    });
   }
 
   function init() {
     bindTabs();
     bindForms();
     enableDirtyTracking();
+      currentNUP = el('procNUP').value.trim();
+    syncNUP();
   }
 
   async function load() {
