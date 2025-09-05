@@ -97,8 +97,10 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .scrolly { overflow: auto; height: 100%; min-height: 180px; }
 
 .rings { display: flex; gap: 12px; flex-wrap: wrap; }
-.ring { display: grid; place-items: center; width: 110px; height: 110px; border-radius: 999px; border: 3px solid var(--brand); font-family: var(--mono); }
+.ring { display: grid; place-items: center; width: 110px; height: 110px; border-radius: 999px; border: 3px solid var(--brand); font-family: var(--mono); position: relative; }
+.ring::before { content: ''; position: absolute; inset: -6px; border-radius: inherit; background: repeating-conic-gradient(from 270deg, var(--ink-soft) 0deg 0.5deg, transparent 0.5deg 3deg); mask: conic-gradient(from 270deg, #000 0deg 90deg, transparent 90deg); -webkit-mask: conic-gradient(from 270deg, #000 0deg 90deg, transparent 90deg); }
+.ring.empty { border-color: var(--ink-soft); color: var(--ink-soft); }
 .ring small { color: var(--ink-soft); }
-
+.ring-content { text-align: center; }
 .msg { margin-top: 8px; color: var(--ink-soft); min-height: 1lh; }
 .msg.error { color: var(--warn); }
