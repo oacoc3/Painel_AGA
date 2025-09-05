@@ -9,7 +9,7 @@ window.Modules.prazos = (() => {
     Utils.renderTable('prazoATM', [
       { key: 'nup', label: 'NUP' },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-      { key: 'days_remaining', label: 'Dias rem.' }
+      { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
     ], data);
   }
   async function loadDT() {
@@ -19,7 +19,7 @@ window.Modules.prazos = (() => {
     Utils.renderTable('prazoDT', [
       { key: 'nup', label: 'NUP' },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-      { key: 'days_remaining', label: 'Dias rem.' }
+      { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
     ], data);
   }
   async function loadCGNA() {
@@ -29,7 +29,7 @@ window.Modules.prazos = (() => {
     Utils.renderTable('prazoCGNA', [
       { key: 'nup', label: 'NUP' },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-      { key: 'days_remaining', label: 'Dias rem.' }
+      { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
     ], data);
   }
   async function loadExternos() {
@@ -39,7 +39,7 @@ window.Modules.prazos = (() => {
       { key: 'nup', label: 'NUP' },
       { key: 'type', label: 'Tipo' },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-      { key: 'days_remaining', label: 'Dias rem.' }
+      { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
     ], data);
   }
   async function loadObra() {
@@ -48,7 +48,7 @@ window.Modules.prazos = (() => {
     Utils.renderTable('prazoObra', [
       { key: 'nup', label: 'NUP' },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-      { key: 'days_remaining', label: 'Dias rem.' },
+      { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) },
       { key: 'em_atraso', label: 'Em atraso', value: r => Utils.yesNo(r.em_atraso) }
     ], data);
   }
@@ -65,7 +65,7 @@ window.Modules.prazos = (() => {
     Utils.renderTable('prazoDOAGA', [
       { key: 'nup', label: 'NUP' },
       { key: 'status', label: 'Status/Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : r.status) },
-      { key: 'days_remaining', label: 'Dias rem.', value: r => (r.days_remaining ?? '') }
+      { key: 'days_remaining', label: 'Dias rem.', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
     ], data);
   }
 
