@@ -565,23 +565,44 @@ window.Modules.processos = (() => {
       }
       case 'internal_opinions': {
         const t = d.type || '';
-        if (r.action === 'INSERT') return `${t} solicitado`;
-        if (prev && d.status !== prev.status && d.status === 'RECEBIDO') return `${t} recebido`;
+        if (r.action === 'INSERT') {
+          const dt = d.requested_at ? ` em ${Utils.fmtDateTime(d.requested_at)}` : '';
+          return `${t} solicitado${dt}`;
+        }
+        if (prev && d.status !== prev.status && d.status === 'RECEBIDO') {
+          const dt = d.received_at ? ` em ${Utils.fmtDateTime(d.received_at)}` : '';
+          return `${t} recebido${dt}`;
+        }
         return `${t} atualizado`;
       }
       case 'notifications': {
         const t = d.type || '';
-        if (r.action === 'INSERT') return `${t} solicitada`;
-        if (prev && d.status !== prev.status && d.status === 'LIDA') return `${t} lida`;
+        if (r.action === 'INSERT') {
+          const dt = d.requested_at ? ` em ${Utils.fmtDateTime(d.requested_at)}` : '';
+          return `${t} solicitada${dt}`;
+        }
+        if (prev && d.status !== prev.status && d.status === 'LIDA') {
+          const dt = d.read_at ? ` em ${Utils.fmtDateTime(d.read_at)}` : '';
+          return `${t} lida${dt}`;
+        }
         return `${t} atualizada`;
       }
       case 'sigadaer': {
         const nums = Array.isArray(d.numbers) ? d.numbers.join(',') : '';
         const label = nums ? `SIGADAER ${nums}` : 'SIGADAER';
-        if (r.action === 'INSERT') return `${label} solicitado`;
+        if (r.action === 'INSERT') {
+          const dt = d.requested_at ? ` em ${Utils.fmtDateTime(d.requested_at)}` : '';
+          return `${label} solicitado${dt}`;
+        }
         if (prev && d.status !== prev.status) {
-          if (d.status === 'EXPEDIDO') return `${label} expedido`;
-          if (d.status === 'RECEBIDO') return `${label} recebido`;
+          if (d.status === 'EXPEDIDO') {
+            const dt = d.expedit_at ? ` em ${Utils.fmtDateTime(d.expedit_at)}` : '';
+            return `${label} expedido${dt}`;
+          }
+          if (d.status === 'RECEBIDO') {
+            const dt = d.received_at ? ` em ${Utils.fmtDateTime(d.received_at)}` : '';
+            return `${label} recebido${dt}`;
+          }
         }
         return `${label} atualizado`;
       }
@@ -627,22 +648,6 @@ window.Modules.processos = (() => {
       .eq('entity_type','process_notes')
       .filter('details->>process_id','eq', processId);
     push(a5);
-
-    // Ajusta data/hora conforme informado pelo usuário
-    list.forEach(r => {
-      const d = r.details || {};
-      if (r.entity_type === 'internal_opinions') {
-        if (r.action === 'INSERT' && d.requested_at) r.occurred_at = d.requested_at;
-        else if (r.action === 'UPDATE' && d.status === 'RECEBIDO' && d.received_at) r.occurred_at = d.received_at;
-      } else if (r.entity_type === 'notifications') {
-        if (r.action === 'INSERT' && d.requested_at) r.occurred_at = d.requested_at;
-        else if (r.action === 'UPDATE' && d.status === 'LIDA' && d.read_at) r.occurred_at = d.read_at;
-      } else if (r.entity_type === 'sigadaer') {
-        if (r.action === 'INSERT' && d.requested_at) r.occurred_at = d.requested_at;
-        else if (r.action === 'UPDATE' && d.status === 'EXPEDIDO' && d.expedit_at) r.occurred_at = d.expedit_at;
-        else if (r.action === 'UPDATE' && d.status === 'RECEBIDO' && d.received_at) r.occurred_at = d.received_at;
-      }
-    });
 
     // Descrição das ações e nomes dos usuários
     list.sort((a,b) => new Date(a.occurred_at) - new Date(b.occurred_at));
