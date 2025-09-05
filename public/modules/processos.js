@@ -437,10 +437,12 @@ window.Modules.processos = (() => {
       td.textContent = '';
       const btnExp = document.createElement('button');
       btnExp.textContent = 'Registrar Expedição';
+      btnExp.disabled = row.status !== 'SOLICITADO';
       btnExp.addEventListener('click', () => showSigExpForm(row.id));
       td.appendChild(btnExp);
       const btnRec = document.createElement('button');
       btnRec.textContent = 'Registrar Recebimento';
+      btnRec.disabled = row.status !== 'EXPEDIDO';
       btnRec.addEventListener('click', () => showSigRecForm(row.id));
       td.appendChild(btnRec);
     });
