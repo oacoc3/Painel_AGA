@@ -60,6 +60,11 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 100%; }
 .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.prazo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; height: 100%; }
+.prazo-grid > .card,
+.prazo-grid > .prazo-col { height: 100%; }
+.prazo-col { display: flex; flex-direction: column; gap: 12px; height: 100%; }
+.prazo-col .card { flex: 1; }
 .split { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; height: 100%; }
 
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; min-height: 0; }
