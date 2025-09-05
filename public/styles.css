@@ -60,7 +60,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 100%; }
 .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-.prazo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; height: 100%; }
+.prazo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; height: 100%; }
 .prazo-grid > .card,
 .prazo-grid > .prazo-col { height: 100%; }
 .prazo-col { display: flex; flex-direction: column; gap: 12px; height: 100%; }
