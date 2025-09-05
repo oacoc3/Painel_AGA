@@ -59,7 +59,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .hidden { display: none !important; }
 
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 100%; }
-.columns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .split { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; height: 100%; }
 
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; min-height: 0; }
