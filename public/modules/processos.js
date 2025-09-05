@@ -9,14 +9,17 @@ window.Modules.processos = (() => {
   let currentSigRecId = null;
   function bindTabs() {
     // Abas do cartão esquerdo
-    $$('.tabs button').forEach(btn => {
+    const buttons = $$('.tabs button');
+    buttons.forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.tab;
         ['tabProc','tabOpiniao','tabNotif','tabSig'].forEach(id => Utils.hide(id));
         Utils.show('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
+        buttons.forEach(b => b.classList.toggle('active', b === btn));
         syncNUP();
       });
     });
+    buttons[0]?.classList.add('active');
   }
 
   function enableDirtyTracking() {
