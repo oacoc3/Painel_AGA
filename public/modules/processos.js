@@ -27,6 +27,7 @@ window.Modules.processos = (() => {
     const nup = el('procNUP').value.trim();
     const type = el('procTipo').value;
     const status = el('procStatus').value;
+    const statusSinceInput = el('procStatusDate').value;
     const firstEntry = el('procEntrada').value;
     const obraTerm = el('procObraTermino').value || null;
     const obraConcl = el('procObraConcluida').checked;
@@ -39,22 +40,26 @@ window.Modules.processos = (() => {
     try {
       if (!currentProcId) {
         // Novo
-        const { data, error } = await sb.from('processes').insert({
+        const payload = {
           nup, type, status,
           obra_termino_date: obraTerm,
           obra_concluida: obraConcl,
           first_entry_date: firstEntry,
           created_by: u.id
-        }).select('*').single();
+        };
+        if (statusSinceInput) payload.status_since = new Date(statusSinceInput).toISOString();
+        const { data, error } = await sb.from('processes').insert(payload).select('*').single();
         if (error) throw error;
         currentProcId = data.id;
       } else {
-        const { error } = await sb.from('processes').update({
+        const payload = {
           nup, type, status,
           obra_termino_date: obraTerm,
           obra_concluida: obraConcl,
           first_entry_date: firstEntry
-        }).eq('id', currentProcId);
+        };
+        if (statusSinceInput) payload.status_since = new Date(statusSinceInput).toISOString();
+        const { error } = await sb.from('processes').update(payload).eq('id', currentProcId);
         if (error) throw error;
       }
       Utils.setMsg('procMsg', 'Salvo com sucesso.');
@@ -73,7 +78,7 @@ window.Modules.processos = (() => {
 
   async function fetchProcessByNUP(nup) {
     const { data, error } = await sb.from('processes')
-      .select('id,nup,type,status,first_entry_date,obra_termino_date,obra_concluida')
+      .select('id,nup,type,status,status_since,first_entry_date,obra_termino_date,obra_concluida')
       .eq('nup', nup)
       .maybeSingle();
     if (error) throw error;
@@ -84,7 +89,8 @@ window.Modules.processos = (() => {
     el('procNUP').value = '';
     el('procTipo').value = '';
     el('procStatus').value = '';
-    el('procEntrada').value = '';
+    el('procStatusDate').value = '';
+      el('procEntrada').value = '';
     el('procObraTermino').value = '';
     el('procObraConcluida').checked = false;
     currentProcId = null;
@@ -274,7 +280,7 @@ window.Modules.processos = (() => {
   // —— Listas e histórico ——
   async function loadProcessList() {
     const { data: procs, error } = await sb.from('processes')
-      .select('id,nup,type,status,first_entry_date')
+      .select('id,nup,type,status,status_since,first_entry_date')
       .order('first_entry_date', { ascending: false });
     if (error) { Utils.setMsg('procMsg', error.message, true); return; }
 
@@ -334,6 +340,7 @@ window.Modules.processos = (() => {
     el('procNUP').value = p.nup;
     el('procTipo').value = p.type;
     el('procStatus').value = p.status;
+    el('procStatusDate').value = Utils.toDateTimeLocalValue(p.status_since);
     el('procEntrada').value = toDateInputValue(p.first_entry_date);
     // Campos de obra são preenchidos só ao buscar individualmente (opcional)
     el('btnSalvarProc').disabled = true;
