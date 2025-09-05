@@ -309,9 +309,11 @@ create trigger audit_checklists    after insert or update on checklist_responses
 -- Pareceres internos (ATM/DT 10d; CGNA 30d) a partir do dia seguinte
 create or replace view v_prazo_pareceres as
 select io.process_id, p.nup, io.type,
-       (date(io.requested_at) + case when io.type in ('ATM','DT') then 10 else 30 end) as due_date,
-       (date(io.requested_at) + 1) as start_count,
-       (date(io.requested_at) + case when io.type in ('ATM','DT') then 10 else 30 end) - current_date as days_remaining
+       date(timezone('America/Sao_Paulo', io.requested_at))
+         + case when io.type in ('ATM','DT') then 10 else 30 end as due_date,
+       date(timezone('America/Sao_Paulo', io.requested_at)) + 1 as start_count,
+       date(timezone('America/Sao_Paulo', io.requested_at))
+         + case when io.type in ('ATM','DT') then 10 else 30 end - current_date as days_remaining
 from internal_opinions io
 join processes p on p.id = io.process_id
 where io.status = 'SOLICITADO';
@@ -319,9 +321,11 @@ where io.status = 'SOLICITADO';
 -- Pareceres externos (SIGADAER)
 create or replace view v_prazo_pareceres_externos as
 select s.process_id, p.nup, s.type,
-       (date(s.requested_at) + case when s.type='COMGAP' then 90 else 30 end) as due_date,
-       (date(s.requested_at) + 1) as start_count,
-       (date(s.requested_at) + case when s.type='COMGAP' then 90 else 30 end) - current_date as days_remaining
+       date(timezone('America/Sao_Paulo', s.requested_at))
+         + case when s.type='COMGAP' then 90 else 30 end as due_date,
+       date(timezone('America/Sao_Paulo', s.requested_at)) + 1 as start_count,
+       date(timezone('America/Sao_Paulo', s.requested_at))
+         + case when s.type='COMGAP' then 90 else 30 end - current_date as days_remaining
 from sigadaer s
 join processes p on p.id = s.process_id
 where s.status = 'EXPEDIDO' and s.type in ('COMAE','COMPREP','COMGAP','GABAER');
