@@ -86,8 +86,8 @@ window.App = (() => {
       case 'processos':  window.Modules.processos?.load(); break;
       case 'prazos':     window.Modules.prazos?.load(); break;
       case 'modelos':    window.Modules.modelos?.load(); break;
-      case 'analise':    window.Modules.analise?.load(); window.Modules.checklists?.load(); break;
-      case 'admin':      window.Modules.admin?.load(); break;
+      case 'analise':    window.Modules.analise?.load(); break;
+      case 'admin':      window.Modules.admin?.load(); window.Modules.checklists?.load(); break;
     }
   }
 
