@@ -75,7 +75,12 @@ window.App = (() => {
     const showBars = logged && r !== 'login';
     el('topNav').classList.toggle('hidden', !showBars);
     el('userBox').classList.toggle('hidden', !showBars);
+    // Ilumina botão ativo do cabeçalho
+    $$('#topNav button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.route === r);
+    });
 
+    
     switch (r) {
       case 'dashboard':  window.Modules.dashboard?.load(); break;
       case 'processos':  window.Modules.processos?.load(); break;
