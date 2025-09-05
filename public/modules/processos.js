@@ -522,42 +522,101 @@ window.Modules.processos = (() => {
     Utils.setMsg('procMsg', `Carregado processo ${p.nup}.`);
   }
 
+
+  function describeHistoryAction(r, prev) {
+    const d = r.details || {};
+    switch (r.entity_type) {
+      case 'processes': {
+        if (r.action === 'INSERT') return 'Processo criado';
+        const changes = [];
+        if (prev && d.status !== prev.status) changes.push(`status ${prev.status || ''}→${d.status}`);
+        if (prev && d.type !== prev.type) changes.push(`tipo ${prev.type || ''}→${d.type}`);
+        if (prev && d.nup !== prev.nup) changes.push(`NUP ${prev.nup || ''}→${d.nup}`);
+        if (prev && d.obra_concluida !== prev.obra_concluida)
+          changes.push(`obra concluída ${prev.obra_concluida ? 'sim' : 'não'}→${d.obra_concluida ? 'sim' : 'não'}`);
+        if (prev && d.obra_termino_date !== prev.obra_termino_date)
+          changes.push(`término da obra ${Utils.fmtDate(prev.obra_termino_date)}→${Utils.fmtDate(d.obra_termino_date)}`);
+        return changes.length ? 'Processo ' + changes.join(', ') : 'Processo atualizado';
+      }
+      case 'internal_opinions': {
+        const t = d.type || '';
+        if (r.action === 'INSERT') return `${t} solicitado`;
+        if (prev && d.status !== prev.status && d.status === 'RECEBIDO') return `${t} recebido`;
+        return `${t} atualizado`;
+      }
+      case 'notifications': {
+        const t = d.type || '';
+        if (r.action === 'INSERT') return `${t} solicitada`;
+        if (prev && d.status !== prev.status && d.status === 'LIDA') return `${t} lida`;
+        return `${t} atualizada`;
+      }
+      case 'sigadaer': {
+        const nums = Array.isArray(d.numbers) ? d.numbers.join(',') : '';
+        const label = nums ? `SIGADAER ${nums}` : 'SIGADAER';
+        if (r.action === 'INSERT') return `${label} solicitado`;
+        if (prev && d.status !== prev.status) {
+          if (d.status === 'EXPEDIDO') return `${label} expedido`;
+          if (d.status === 'RECEBIDO') return `${label} recebido`;
+        }
+        return `${label} atualizado`;
+      }
+      default:
+        return `${r.entity_type} ${r.action}`;
+    }
+  }
+
   async function loadHistory(processId) {
     // Junta auditorias de diferentes entidades relacionadas ao processo
     const list = [];
 
     const push = (arr) => arr?.forEach(x => list.push(x));
-
+    const cols = 'occurred_at,user_id,user_email,action,entity_type,entity_id,details';
     const { data: a1 } = await sb.from('audit_log')
-      .select('occurred_at,user_email,action,entity_type,entity_id')
+      .select(cols)
       .eq('entity_type','processes').eq('entity_id', processId);
     push(a1);
 
     const { data: a2 } = await sb.from('audit_log')
-      .select('occurred_at,user_email,action,entity_type,details')
+      .select(cols)
       .eq('entity_type','internal_opinions')
       .filter('details->>process_id','eq', processId);
     push(a2);
 
     const { data: a3 } = await sb.from('audit_log')
-      .select('occurred_at,user_email,action,entity_type,details')
+      .select(cols)
       .eq('entity_type','notifications')
       .filter('details->>process_id','eq', processId);
     push(a3);
 
     const { data: a4 } = await sb.from('audit_log')
-      .select('occurred_at,user_email,action,entity_type,details')
+      .select(cols)
       .eq('entity_type','sigadaer')
       .filter('details->>process_id','eq', processId);
     push(a4);
+
+    // Descrição das ações e nomes dos usuários
+    list.sort((a,b) => new Date(a.occurred_at) - new Date(b.occurred_at));
+    const prevMap = {};
+    list.forEach(r => {
+      const key = `${r.entity_type}:${r.entity_id || ''}`;
+      r.description = describeHistoryAction(r, prevMap[key]);
+      prevMap[key] = r.details;
+    });
+
+    const userIds = Array.from(new Set(list.map(r => r.user_id).filter(Boolean)));
+    const nameMap = {};
+    if (userIds.length) {
+      const { data: names } = await sb.from('profiles').select('id,name').in('id', userIds);
+      names?.forEach(n => { nameMap[n.id] = n.name; });
+    }
+    list.forEach(r => { r.user_name = nameMap[r.user_id] || r.user_email || r.user_id || ''; });
 
     list.sort((a,b) => new Date(b.occurred_at) - new Date(a.occurred_at));
 
     Utils.renderTable('histProcesso', [
       { key: 'occurred_at', label: 'Data/Hora', value: r => Utils.fmtDateTime(r.occurred_at) },
-      { key: 'user_email', label: 'Usuário' },
-      { key: 'entity_type', label: 'Entidade' },
-      { key: 'action', label: 'Ação' }
+      { key: 'user_name', label: 'Usuário' },
+      { key: 'description', label: 'Ação' }
     ], list);
   }
 
