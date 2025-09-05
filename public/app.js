@@ -92,7 +92,6 @@ window.App = (() => {
     if (!u) {
       state.profile = null;
       renderHeaderStamp();
-      Utils.setText('userIdentity', '');
       el('btnAdmin').classList.add('hidden');
       return null;
     }
@@ -101,15 +100,12 @@ window.App = (() => {
       console.error(error);
       state.profile = null;
       renderHeaderStamp();
-      Utils.setText('userIdentity', '');
       el('btnAdmin').classList.add('hidden');
       return null;
     }
 
     state.profile = data;
     renderHeaderStamp();
-    const identity = data?.name ? `${data.name} (${data.email})` : (data?.email || '');
-    Utils.setText('userIdentity', identity);
     el('btnAdmin').classList.toggle('hidden', data.role !== 'Administrador');
     return data;
   }
@@ -120,7 +116,6 @@ async function refreshSessionUI(session) {
 
   if (!state.session) {
     stopClock();
-    Utils.setText('userIdentity', '');
     el('btnAdmin').classList.add('hidden');
     setRoute('login');
     return;
