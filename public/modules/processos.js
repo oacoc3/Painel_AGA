@@ -610,6 +610,11 @@ window.Modules.processos = (() => {
       case 'process_notes': {
         return d.note ? `Observação: ${d.note}` : 'Observação';
       }
+      case 'checklist_responses': {
+        const name = d.checklist_name ? ` ${d.checklist_name}` : '';
+        const dt = d.filled_at ? ` em ${Utils.fmtDateTime(d.filled_at)}` : '';
+        return `Checklist${name} preenchida${dt}`;
+      }
       default:
         return `${r.entity_type} ${r.action}`;
     }
@@ -649,6 +654,12 @@ window.Modules.processos = (() => {
       .eq('entity_type','process_notes')
       .filter('details->>process_id','eq', processId);
     push(a5);
+
+    const { data: a6 } = await sb.from('audit_log')
+      .select(cols)
+      .eq('entity_type','checklist_responses')
+      .filter('details->>process_id','eq', processId);
+    push(a6);
 
     // Descrição das ações e nomes dos usuários
     list.sort((a,b) => new Date(a.occurred_at) - new Date(b.occurred_at));
