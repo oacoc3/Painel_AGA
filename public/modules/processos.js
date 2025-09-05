@@ -35,7 +35,7 @@ window.Modules.processos = (() => {
     const firstEntry = el('procEntrada').value;
     const obraTerm = el('procObraTermino').value || null;
    const obraConcl = el('btnObraConcluida').classList.contains('active');
-
+   const note = el('procObs').value.trim();
     if (!nup || !firstEntry) return Utils.setMsg('procMsg', 'Preencha NUP e Data 1ª entrada.', true);
     Utils.setMsg('procMsg', currentProcId ? 'Atualizando...' : 'Cadastrando...');
     const u = await getUser();
@@ -66,6 +66,14 @@ window.Modules.processos = (() => {
         const { error } = await sb.from('processes').update(payload).eq('id', currentProcId);
         if (error) throw error;
       }
+       if (note) {
+        await sb.from('audit_log').insert({
+          action: 'NOTE',
+          entity_type: 'process_notes',
+          entity_id: currentProcId,
+          details: { process_id: currentProcId, note }
+        });
+        el
       Utils.setMsg('procMsg', 'Salvo com sucesso.');
       el('btnSalvarProc').disabled = true;
       await reloadLists();
@@ -96,7 +104,8 @@ window.Modules.processos = (() => {
     el('procStatusDate').value = '';
       el('procEntrada').value = '';
     el('procObraTermino').value = '';
-    el('btnObraConcluida').classList.remove('active');
+    el('procObs').value = '';
+      el('btnObraConcluida').classList.remove('active');
     currentProcId = null;
     currentNUP = '';
     syncNUP();
@@ -331,14 +340,13 @@ window.Modules.processos = (() => {
     const t = el('sgSolic').value;
     const requested_at = t ? new Date(t).toISOString() : new Date().toISOString();
     const numbers = el('sgNums').value;
-    const notes = el('sgObs').value;
     Utils.setMsg('sgMsg', 'Cadastrando SIGADAER…');
     try {
       const pid = await findProcessByNUP(nup);
       if (!pid) throw new Error('Processo não encontrado para o NUP informado.');
       const u = await getUser();
       const payload = {
-        process_id: pid, type, requested_at, notes, created_by: u.id
+        process_id: pid, type, requested_at, created_by: u.id
       };
       const nums = parseSixDigitsList(numbers);
       if (nums) payload.numbers = nums;
@@ -518,6 +526,7 @@ window.Modules.processos = (() => {
     el('procEntrada').value = toDateInputValue(p.first_entry_date);
     if ('obra_termino_date' in p) el('procObraTermino').value = toDateInputValue(p.obra_termino_date);
     if ('obra_concluida' in p) el('btnObraConcluida').classList.toggle('active', !!p.obra_concluida);
+    el('procObs').value = '';
     el('btnSalvarProc').disabled = true;
     currentNUP = p.nup;
     syncNUP();
@@ -562,6 +571,9 @@ window.Modules.processos = (() => {
         }
         return `${label} atualizado`;
       }
+      case 'process_notes': {
+        return d.note ? `Observação: ${d.note}` : 'Observação';
+      }
       default:
         return `${r.entity_type} ${r.action}`;
     }
@@ -595,6 +607,12 @@ window.Modules.processos = (() => {
       .eq('entity_type','sigadaer')
       .filter('details->>process_id','eq', processId);
     push(a4);
+
+    const { data: a5 } = await sb.from('audit_log')
+      .select(cols)
+      .eq('entity_type','process_notes')
+      .filter('details->>process_id','eq', processId);
+    push(a5);
 
     // Descrição das ações e nomes dos usuários
     list.sort((a,b) => new Date(a.occurred_at) - new Date(b.occurred_at));
