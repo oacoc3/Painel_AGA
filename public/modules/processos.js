@@ -4,6 +4,7 @@ window.Modules.processos = (() => {
   let currentProcId = null;
   let currentNUP = '';
   let currentOpiniaoRecId = null;
+  let currentNotifLidaId = null;
   function bindTabs() {
     // Abas do cartão esquerdo
     $$('.tabs button').forEach(btn => {
@@ -101,8 +102,13 @@ window.Modules.processos = (() => {
     Utils.setMsg('procMsg', '');
     el('histProcesso').innerHTML = '<div class="msg">Selecione um processo para ver o histórico.</div>';
     el('opLista').innerHTML = '<div class="msg">Selecione um processo para ver os pareceres.</div>';
-    Utils.hide('opRecForm');
+    el('ntLista').innerHTML = '<div class="msg">Selecione um processo para ver as notificações.</div>';
+      Utils.hide('opRecForm');
     Utils.show('opLista');
+    Utils.hide('ntLidaForm');
+    Utils.show('ntLista');
+    currentOpiniaoRecId = null;
+    currentNotifLidaId = null;
     }
 
   async function deleteProcess() {
@@ -236,10 +242,24 @@ window.Modules.processos = (() => {
     }
   }
 
+  function showNotifLidaForm(id) {
+    currentNotifLidaId = id;
+    el('ntLidaInput').value = Utils.toDateTimeLocalValue(new Date());
+    Utils.hide('ntLista');
+    Utils.show('ntLidaForm');
+  }
+
+  function cancelarNotifLida() {
+    currentNotifLidaId = null;
+    el('ntLidaInput').value = '';
+    Utils.hide('ntLidaForm');
+    Utils.show('ntLista');
+  }
+
   async function marcarNotifLida() {
-    const id = el('ntIDLida').value.trim();
-    const t = el('ntLidaEm').value;
-    if (!id || !t) return Utils.setMsg('ntMsg', 'Informe ID da notificação e data/hora de leitura.', true);
+    const id = currentNotifLidaId;
+    const t = el('ntLidaInput').value;
+    if (!id || !t) return Utils.setMsg('ntMsg', 'Informe data/hora de leitura.', true);
     Utils.setMsg('ntMsg', 'Registrando leitura…');
     try {
       const { error } = await sb.from('notifications').update({
@@ -248,10 +268,40 @@ window.Modules.processos = (() => {
       }).eq('id', id);
       if (error) throw error; // trigger do banco pode mudar processo para SOB-DOC/SOB-TEC
       Utils.setMsg('ntMsg', 'Notificação marcada como LIDA.');
+      cancelarNotifLida();
       await reloadLists();
     } catch (e) {
       Utils.setMsg('ntMsg', e.message || String(e), true);
     }
+  }
+
+  async function loadNotifList(processId) {
+    const box = el('ntLista');
+    if (!box) return;
+    if (!processId) {
+      box.innerHTML = '<div class="msg">Selecione um processo para ver as notificações.</div>';
+      return;
+    }
+    const { data: nts, error } = await sb.from('notifications')
+      .select('id,type,requested_at')
+      .eq('process_id', processId)
+      .eq('status', 'SOLICITADA')
+      .order('requested_at', { ascending: false });
+    if (error) { box.innerHTML = '<div class="msg error">' + error.message + '</div>'; return; }
+    const { tbody } = Utils.renderTable(box, [
+      { key: 'type', label: 'Tipo' },
+      { key: 'requested_at', label: 'Solicitada em', value: r => Utils.fmtDateTime(r.requested_at) },
+      { key: 'btn', label: '' }
+    ], nts);
+    tbody?.querySelectorAll('tr').forEach(tr => {
+      const row = JSON.parse(tr.dataset.row);
+      const td = tr.lastElementChild;
+      td.textContent = '';
+      const btn = document.createElement('button');
+      btn.textContent = 'Registrar Leitura';
+      btn.addEventListener('click', () => showNotifLidaForm(row.id));
+      td.appendChild(btn);
+    });
   }
 
   // —— SIGADAER ——
@@ -381,6 +431,7 @@ window.Modules.processos = (() => {
       fillProcessForm(row);
       loadHistory(row.id);
       loadOpiniaoList(row.id);
+      loadNotifList(row.id);
     });
   }
 
@@ -442,6 +493,7 @@ window.Modules.processos = (() => {
     await loadProcessList();
     await loadHistory(currentProcId || '');
     await loadOpiniaoList(currentProcId || '');
+    await loadNotifList(currentProcId || '');
   }
 
   function bindForms() {
@@ -459,7 +511,8 @@ window.Modules.processos = (() => {
     el('btnVoltarOpRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelarRecOpiniao(); });
     // Notificação
     el('btnCadNotif').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarNotif(); });
-    el('btnMarcarLida').addEventListener('click', (ev) => { ev.preventDefault(); marcarNotifLida(); });
+    el('btnSalvarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); marcarNotifLida(); });
+    el('btnVoltarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); cancelarNotifLida(); });
     // SIGADAER
     el('btnCadSig').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarSig(); });
     el('btnExpSig').addEventListener('click', (ev) => { ev.preventDefault(); expedirSig(); });
@@ -476,6 +529,7 @@ window.Modules.processos = (() => {
           fillProcessForm(data);
           await loadHistory(data.id);
           await loadOpiniaoList(data.id);
+          await loadNotifList(data.id);
         } else {
           currentProcId = null;
           el('procTipo').value = '';
@@ -510,6 +564,7 @@ window.Modules.processos = (() => {
     await loadProcessList();
     el('histProcesso').innerHTML = '<div class="msg">Selecione um processo para ver o histórico.</div>';
     el('opLista').innerHTML = '<div class="msg">Selecione um processo para ver os pareceres.</div>';
+    el('ntLista').innerHTML = '<div class="msg">Selecione um processo para ver as notificações.</div>';
   }
 
   return { init, load };
