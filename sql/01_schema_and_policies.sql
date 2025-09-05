@@ -359,11 +359,16 @@ join fav_term f on f.process_id = p.id
 left join term_atra ta on ta.process_id = p.id
 where p.obra_concluida = false;
 
--- Monitorar tramitação: SIGADAER pendentes
+-- Monitorar Leitura/Expedição: notificações não lidas e SIGADAER não expedidos
 create or replace view v_monitorar_tramitacao as
-select distinct p.id as process_id, p.nup
-from processes p
-join sigadaer s on s.process_id = p.id
+select n.process_id, p.nup, n.type::text as type
+from notifications n
+join processes p on p.id = n.process_id
+where n.status = 'SOLICITADA'
+union all
+select s.process_id, p.nup, s.type::text as type
+from sigadaer s
+join processes p on p.id = s.process_id
 where s.status = 'SOLICITADO';
 
 -- Prazo DO-AGA (60 dias; pausa em SOB-*)
