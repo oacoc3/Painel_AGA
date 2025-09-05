@@ -86,6 +86,7 @@ create table processes (
   nup text not null unique,
   type process_type not null,
   status process_status not null default 'ANADOC',
+  status_since timestamptz not null default now(),
   obra_termino_date date,
   obra_concluida boolean not null default false,
   first_entry_date date not null,
