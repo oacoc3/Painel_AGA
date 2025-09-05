@@ -156,7 +156,8 @@ function renderRings(containerId, items) {
   items.forEach(it => {
     const d = document.createElement('div');
     d.className = 'ring';
-    d.innerHTML = `<div><strong style="font-size:22px">${it.count ?? 0}</strong><br><small>${it.label}</small></div>`;
+    if (!it.count) d.classList.add('empty');
+    d.innerHTML = `<div class="ring-content"><strong style="font-size:22px">${it.count ?? 0}</strong><br><small>${it.label}</small></div>`;
     box.appendChild(d);
   });
 }
