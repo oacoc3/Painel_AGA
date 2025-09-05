@@ -58,7 +58,7 @@ window.Modules.prazos = (() => {
       { key: 'requested_at', label: 'Solicitado/Expedido em', value: r => Utils.fmtDate(r.requested_at) },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
       { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) },
-      { key: 'em_atraso', label: 'Em atraso', value: r => Utils.yesNo(r.em_atraso) }
+      { key: 'em_atraso', label: 'Atraso', value: r => (r.em_atraso ? 'ATRASO' : '') }
     ], data);
   }
 
