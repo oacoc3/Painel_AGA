@@ -60,7 +60,8 @@ window.Modules.checklists = (() => {
       { key: 'name', label: 'Nome' },
       { key: 'category', label: 'Categoria' },
       { key: 'version', label: 'Versão', align: 'center' },
-      { key: 'created_at', label: 'Criado em', value: r => Utils.fmtDateTime(r.created_at) }
+      { key: 'created_at', label: 'Criado em', value: r => Utils.fmtDateTime(r.created_at) },
+      { key: 'approved_at', label: 'Aprovada em', value: r => r.approved_at ? Utils.fmtDateTime(r.approved_at) : '' }
     ], rows);
     tbody?.addEventListener('click', ev => {
       const tr = ev.target.closest('tr'); if (!tr) return;
@@ -76,7 +77,7 @@ window.Modules.checklists = (() => {
 
   async function loadTemplates() {
     const { data, error } = await sb.from('checklist_templates')
-      .select('id,name,category,version,items,created_at')
+      .select('id,name,category,version,items,created_at,approved_at
       .order('created_at', { ascending: false });
     if (error) { Utils.setMsg('ckMsg', error.message, true); return; }
     templates = (data || []);
@@ -118,6 +119,18 @@ window.Modules.checklists = (() => {
       selected = null;
       el('formChecklist').reset();
       renderCats();
+      await loadTemplates();
+    });
+
+    el('btnAprovarChecklist').addEventListener('click', async () => {
+      if (!selected) return Utils.setMsg('ckMsg', 'Selecione um checklist antes de aprovar.', true);
+      const u = await getUser();
+      if (!u) return Utils.setMsg('ckMsg', 'Sessão expirada.', true);
+      const { error } = await sb.from('checklist_templates')
+        .update({ approved_by: u.id, approved_at: new Date().toISOString() })
+        .eq('id', selected.id);
+      if (error) return Utils.setMsg('ckMsg', error.message, true);
+      Utils.setMsg('ckMsg', 'Checklist aprovada.');
       await loadTemplates();
     });
   }
