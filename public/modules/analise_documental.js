@@ -32,7 +32,7 @@ window.Modules.analise = (() => {
         if (!obs) ok = false;
       }
     });
-    const btnSalvar = el('btnSalvarChecklist');
+    const btnSalvar = el('adBtnSalvarChecklist');
     const btnLimpar = el('btnLimparChecklist');
     if (btnSalvar) btnSalvar.disabled = !ok;
     if (btnLimpar) btnLimpar.disabled = !currentTemplate;
@@ -289,7 +289,7 @@ window.Modules.analise = (() => {
     const btnIniciar = el('btnIniciarAD');
     const btnLimparAD = el('btnLimparAD');
     const btnLimparChecklist = el('btnLimparChecklist');
-    const btnSalvarChecklist = el('btnSalvarChecklist');
+    const btnSalvarChecklist = el('adBtnSalvarChecklist');
 
     if (btnIniciar) btnIniciar.addEventListener('click', ev => { ev.preventDefault(); iniciarChecklist(); });
     if (btnLimparAD) btnLimparAD.addEventListener('click', ev => { ev.preventDefault(); clearForm(); });
