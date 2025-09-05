@@ -56,6 +56,18 @@ window.Modules.modelos = (() => {
       await loadModelos();
     });
 
+    el('btnCopiarModelo').addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const txt = el('mdlTxt').value;
+      if (!txt) return Utils.setMsg('mdlMsg', 'Nada para copiar.', true);
+      try {
+        await navigator.clipboard.writeText(txt);
+        Utils.setMsg('mdlMsg', 'Conteúdo copiado para a área de transferência.');
+      } catch {
+        Utils.setMsg('mdlMsg', 'Falha ao copiar o conteúdo.', true);
+      }
+    });
+
     // Copiar conteúdo ao clicar numa linha (duplo-clique)
     el('listaModelos').addEventListener('dblclick', (ev) => {
       const tr = ev.target.closest('tr'); if (!tr) return;
