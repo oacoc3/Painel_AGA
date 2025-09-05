@@ -124,6 +124,7 @@
                   <label>Data 1ª entrada na DO-AGA <input type="date" id="procEntrada" required></label>
                   <label>Data término de obra <input type="date" id="procObraTermino"></label>
                 </div>
+                <label>Observação <textarea id="procObs"></textarea></label>
                 <div class="row actions">
                   <button id="btnObraConcluida" type="button">Obra concluída</button>
                   <button id="btnSalvarProc" disabled>Salvar</button>
@@ -135,12 +136,16 @@
             </div>
             <div id="tabOpiniao" class="tab hidden">
               <form id="formOpiniao">
-                <label>NUP <input id="opNUP" required readonly></label>
-                <label>Tipo
-                  <select id="opTipo"><option>ATM</option><option>DT</option><option>CGNA</option></select>
-                </label>
-                <label>Solicitado em <input type="datetime-local" id="opSolic"></label>
-                <button id="btnCadOpiniao">Cadastrar</button>
+                <div class="row">
+                  <label>NUP <input id="opNUP" required readonly></label>
+                  <label>Tipo
+                    <select id="opTipo"><option>ATM</option><option>DT</option><option>CGNA</option></select>
+                  </label>
+                </div>
+                <div class="row">
+                  <label>Solicitado em <input type="datetime-local" id="opSolic"></label>
+                  <div><button id="btnCadOpiniao">Cadastrar</button></div>
+                </div>
                 <hr/>
                 <div id="opLista" class="table scrolly"></div>
                 <div id="opRecForm" class="hidden">
@@ -155,16 +160,20 @@
             </div>
             <div id="tabNotif" class="tab hidden">
               <form id="formNotif">
-                <label>NUP <input id="ntNUP" required readonly></label>
-                <label>Tipo
-                  <select id="ntTipo">
-                    <option>FAV</option><option>FAV-TERM</option><option>TERM-ATRA</option>
-                    <option>DESF-NAO_INI</option><option>DESF_JJAER</option><option>DESF-REM_REB</option>
-                    <option>NCD</option><option>NCT</option>
-                  </select>
-                </label>
-                <label>Solicitada em <input type="datetime-local" id="ntSolic"></label>
-                <button id="btnCadNotif">Cadastrar</button>
+                <div class="row">
+                  <label>NUP <input id="ntNUP" required readonly></label>
+                  <label>Tipo
+                    <select id="ntTipo">
+                      <option>FAV</option><option>FAV-TERM</option><option>TERM-ATRA</option>
+                      <option>DESF-NAO_INI</option><option>DESF_JJAER</option><option>DESF-REM_REB</option>
+                      <option>NCD</option><option>NCT</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="row">
+                  <label>Solicitada em <input type="datetime-local" id="ntSolic"></label>
+                  <div><button id="btnCadNotif">Cadastrar</button></div>
+                </div>
                 <hr/>
                 <div id="ntLista" class="table scrolly"></div>
                 <div id="ntLidaForm" class="hidden">
@@ -179,19 +188,22 @@
             </div>
             <div id="tabSig" class="tab hidden">
               <form id="formSig">
-                 <label>NUP <input id="sgNUP" required readonly></label>
-                <label>Tipo
-                  <select id="sgTipo">
-                    <option>COMAE</option><option>COMPREP</option><option>COMGAP</option>
-                    <option>GABAER</option><option>SAC</option><option>ANAC</option>
-                    <option>OPR_AD</option><option>PREF</option><option>GOV</option><option>OUTRO</option>
-                  </select>
-                </label>
-                <label>Solicitado em <input type="datetime-local" id="sgSolic"></label>
-                <label>Números (6 dígitos, separados por vírgula)
-                  <input id="sgNums" placeholder="123456, 654321">
-                </label>
-                <label>Observação <textarea id="sgObs"></textarea></label>
+                <div class="row">
+                  <label>NUP <input id="sgNUP" required readonly></label>
+                  <label>Tipo
+                    <select id="sgTipo">
+                      <option>COMAE</option><option>COMPREP</option><option>COMGAP</option>
+                      <option>GABAER</option><option>SAC</option><option>ANAC</option>
+                      <option>OPR_AD</option><option>PREF</option><option>GOV</option><option>OUTRO</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="row">
+                  <label>Solicitado em <input type="datetime-local" id="sgSolic"></label>
+                  <label>Números (6 dígitos, separados por vírgula)
+                    <input id="sgNums" placeholder="123456, 654321">
+                  </label>
+                </div>
                 <button id="btnCadSig">Cadastrar</button>
                 <hr/>
                 <div id="sgLista" class="table scrolly"></div>
