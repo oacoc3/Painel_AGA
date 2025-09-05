@@ -166,9 +166,14 @@
                 <label>Solicitada em <input type="datetime-local" id="ntSolic"></label>
                 <button id="btnCadNotif">Cadastrar</button>
                 <hr/>
-                <label>Marcar leitura: ID Notificação <input id="ntIDLida"></label>
-                <label>Lida em <input type="datetime-local" id="ntLidaEm"></label>
-                <button id="btnMarcarLida">Registrar leitura</button>
+                <div id="ntLista" class="table scrolly"></div>
+                <div id="ntLidaForm" class="hidden">
+                  <label>Lida em <input type="datetime-local" id="ntLidaInput"></label>
+                  <div class="row actions">
+                    <button id="btnSalvarNtLida">Salvar</button>
+                    <button id="btnVoltarNtLida" type="button">Voltar</button>
+                  </div>
+                </div>
                 <div id="ntMsg" class="msg"></div>
               </form>
             </div>
