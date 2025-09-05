@@ -27,6 +27,11 @@ window.Modules.prazos = (() => {
     ]);
     pareceres = [...(intRes.data || []), ...(extRes.data || [])]
       .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+    const sel = el('psTipo');
+    if (sel) {
+      const tipos = Array.from(new Set(pareceres.map(p => p.type).filter(Boolean))).sort();
+      sel.innerHTML = '<option value="">Todos</option>' + tipos.map(t => `<option>${t}</option>`).join('');
+    }
     renderPareceres();
   }
 
@@ -68,14 +73,10 @@ window.Modules.prazos = (() => {
   }
 
   function renderMonitor() {
-    const filtro = (el('monFiltro')?.value || '').toLowerCase();
     const tipo = el('monTipo')?.value || '';
     let rows = monitor;
     if (tipo) rows = rows.filter(r => r.type === tipo);
-    if (filtro) rows = rows.filter(r => {
-      const text = `${r.nup || ''} ${r.type || ''} ${r.number ? String(r.number).padStart(6, '0') : ''}`.toLowerCase();
-      return text.includes(filtro);
-    });
+
     Utils.renderTable('prazoMonit', [
       { key: 'nup', label: 'NUP' },
       { key: 'type', label: 'Tipo' },
@@ -116,7 +117,6 @@ window.Modules.prazos = (() => {
 
   function init() {
     el('psTipo')?.addEventListener('change', renderPareceres);
-    el('monFiltro')?.addEventListener('input', renderMonitor);
     el('monTipo')?.addEventListener('change', renderMonitor)
   }
 
