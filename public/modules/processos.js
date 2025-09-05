@@ -80,6 +80,39 @@ window.Modules.processos = (() => {
     return data || null;
   }
 
+    function clearProcessForm() {
+    el('procNUP').value = '';
+    el('procTipo').value = '';
+    el('procStatus').value = '';
+    el('procEntrada').value = '';
+    el('procObraTermino').value = '';
+    el('procObraConcluida').checked = false;
+    currentProcId = null;
+    currentNUP = '';
+    syncNUP();
+    el('btnSalvarProc').disabled = true;
+    Utils.setMsg('procMsg', '');
+    el('histProcesso').innerHTML = '<div class="msg">Selecione um processo para ver o histórico.</div>';
+  }
+
+  async function deleteProcess() {
+    if (!currentProcId) return Utils.setMsg('procMsg', 'Nenhum processo carregado para exclusão.', true);
+    if (!confirm('Excluir processo e registros relacionados?')) return;
+    Utils.setMsg('procMsg', 'Excluindo processo…');
+    try {
+      await sb.from('internal_opinions').delete().eq('process_id', currentProcId);
+      await sb.from('notifications').delete().eq('process_id', currentProcId);
+      await sb.from('sigadaer').delete().eq('process_id', currentProcId);
+      const { error } = await sb.from('processes').delete().eq('id', currentProcId);
+      if (error) throw error;
+      clearProcessForm();
+      await reloadLists();
+      Utils.setMsg('procMsg', 'Processo excluído.');
+    } catch (e) {
+      Utils.setMsg('procMsg', e.message || String(e), true);
+    }
+  }
+
   function syncNUP() {
     ['opNUP', 'ntNUP', 'sgNUP'].forEach(id => {
       const input = el(id);
