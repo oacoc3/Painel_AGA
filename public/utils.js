@@ -22,10 +22,24 @@ function setMsg(id, txt, isError = false) {
   e.classList.toggle('error', !!isError);
 }
 
+// Normaliza valor para “apenas data” (00:00:00 local)
+function dateOnly(v) {
+  if (!v) return null;
+  if (v instanceof Date) {
+    return new Date(v.getFullYear(), v.getMonth(), v.getDate());
+  }
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [y, m, d] = v.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  const x = new Date(v);
+  if (Number.isNaN(+x)) return null;
+  return new Date(x.getFullYear(), x.getMonth(), x.getDate());
+}
+
 function fmtDate(d) {
-  if (!d) return '';
-  const x = (d instanceof Date) ? d : new Date(d);
-  if (Number.isNaN(+x)) return '';
+  const x = dateOnly(d);
+  if (!x) return '';
   const y = x.getFullYear();
   const m = String(x.getMonth()+1).padStart(2, '0');
   const day = String(x.getDate()).padStart(2, '0');
@@ -58,8 +72,8 @@ function toDateTimeLocalValue(date) {
   return `${y}-${m}-${d}T${hh}:${mm}`;
 }
 function daysBetween(a, b = new Date()) {
-  const d1 = new Date(a), d2 = new Date(b);
-  if (Number.isNaN(+d1) || Number.isNaN(+d2)) return '';
+  const d1 = dateOnly(a), d2 = dateOnly(b);
+  if (!d1 || !d2) return '';
   return Math.round((d2 - d1) / (24*3600*1000));
 }
 
