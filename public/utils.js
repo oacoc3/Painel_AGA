@@ -148,16 +148,23 @@ async function callFn(name, { method = 'GET', body, headers } = {}) {
   }
 }
 
-// Rings do Dashboard
-function renderRings(containerId, items) {
+// Velocímetros do Dashboard
+function renderVelocimetros(containerId, items) {
   const box = el(containerId);
   if (!box) return;
   box.innerHTML = '';
+  const max = Math.max(...items.map(it => it.count || 0), 1);
   items.forEach(it => {
+    const pct = (it.count || 0) / max;
+    const angle = -90 + pct * 180; // -90 a 90 graus
     const d = document.createElement('div');
-    d.className = 'ring';
+    d.className = 'velocimetro';
     if (!it.count) d.classList.add('empty');
-    d.innerHTML = `<div class="ring-content"><strong style="font-size:22px">${it.count ?? 0}</strong><br><small>${it.label}</small></div>`;
+    d.innerHTML = `
+      <div class="velocimetro-dial"></div>
+      <div class="velocimetro-needle" style="transform: rotate(${angle}deg)"></div>
+      <div class="velocimetro-content"><strong style="font-size:22px">${it.count ?? 0}</strong><br><small>${it.label}</small></div>
+    `;
     box.appendChild(d);
   });
 }
@@ -187,6 +194,6 @@ function bindNUPMask(id) {
 
 window.Utils = {
   show, hide, setText, setMsg, fmtDate, fmtDateTime, toDateInputValue,
-  toDateTimeLocalValue, daysBetween, yesNo, renderTable, callFn, renderRings,
+  toDateTimeLocalValue, daysBetween, yesNo, renderTable, callFn, renderVelocimetros,
   fmtNUP, bindNUPMask
 };
