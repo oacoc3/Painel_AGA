@@ -241,38 +241,45 @@
       <!-- Prazos -->
       <section id="viewPrazos" class="view hidden">
         <div class="prazo-grid">
-          <div class="card">
-            <h2>Pareceres Solicitados</h2>
-            <label>Tipo
-              <select id="psTipo">
-                <option value="">Todos</option>
-                <option>ATM</option>
-                <option>DT</option>
-                <option>CGNA</option>
-                <option>COMAE</option>
-                <option>COMPREP</option>
-                <option>COMGAP</option>
-                <option>GABAER</option>
-              </select>
-            </label>
-            <div id="prazoParec" class="table scrolly"></div>
+
+          <div class="prazo-col">
+            <div class="card">
+              <h2>Pareceres</h2>
+              <label>Tipo
+                <select id="psTipo">
+                  <option value="">Todos</option>
+                  <option>ATM</option>
+                  <option>DT</option>
+                  <option>CGNA</option>
+                  <option>COMAE</option>
+                  <option>COMPREP</option>
+                  <option>COMGAP</option>
+                  <option>GABAER</option>
+                </select>
+              </label>
+              <div id="prazoParec" class="table scrolly"></div>
+            </div>
+            <div class="card">
+              <h2>Remoção/Rebaixamento</h2>
+               <label>Filtrar <input id="rrFiltro"></label>
+              <div id="prazoRemocao" class="table scrolly"></div>
+            </div>
           </div>
           <div class="prazo-col">
             <div class="card">
               <h2>Término de Obra</h2>
+              <label>Filtrar <input id="obraFiltro"></label>
               <div id="prazoObra" class="table scrolly"></div>
             </div>
             <div class="card">
-              <h2>Remoção/Rebaixamento</h2>
-              <div id="prazoRemocao" class="table scrolly"></div>
+              <h2>Monitorar Leitura/Expedição</h2>
+              <label>Filtrar <input id="monFiltro"></label>
+              <div id="prazoMonit" class="table scrolly"></div>
             </div>
           </div>
           <div class="card">
-             <h2>Monitorar Leitura/Expedição</h2>
-            <div id="prazoMonit" class="table scrolly"></div>
-          </div>
-          <div class="card">
             <h2>Prazo DO-AGA</h2>
+            <label>Filtrar <input id="doagaFiltro"></label>
             <div id="prazoDOAGA" class="table scrolly"></div>
           </div>
         </div>
@@ -298,6 +305,11 @@
           </div>
           <div class="card">
             <h2>Modelos</h2>
+             <label>Categoria
+              <select id="mdlFiltroCat">
+                <option value="">Todas</option>
+              </select>
+            </label>
             <div id="listaModelos" class="table scrolly"></div>
           </div>
         </div>
