@@ -22,7 +22,7 @@ html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); 
 .build { color: var(--ink-soft); font-size: 12px; margin-left: 8px; }
 
 .nav { display: flex; gap: 6px; }
-.nav button { width: 20%; font-size: inherit; }
+.nav button { width: 20%; }
 .user { display: flex; gap: 8px; align-items: center; }
 
 .main { flex: 1; display: flex; overflow: hidden; }
@@ -38,6 +38,9 @@ textarea { resize: vertical; }
 
 button { cursor: pointer; }
 .bar button { font: inherit; }
+.user button { width: auto; }
+.nav button,
+.user button { font-size: 12px; }
 button.danger { background: #fff5f5; border-color: #e0b3b3; }
 button:disabled { opacity: .5; cursor: not-allowed; }
 
