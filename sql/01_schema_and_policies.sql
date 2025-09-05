@@ -509,6 +509,9 @@ for insert with check ( is_admin() );
 create policy "ck templates update" on checklist_templates
 for update using ( is_admin() );
 
+create policy "ck templates delete" on checklist_templates
+for delete using ( is_admin() );
+
 create policy "ck responses read" on checklist_responses
 for select using (auth.role() = 'authenticated');
 
