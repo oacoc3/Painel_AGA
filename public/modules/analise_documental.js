@@ -316,12 +316,10 @@ window.Modules.analise = (() => {
       if (to) q = q.lte('first_entry_date', to);
       const { data: procs } = await q;
 
-      // Velocímetros: contagem por status (sempre mostra todos)
+      // Contagem por status
       const countMap = {};
       DASHBOARD_STATUSES.forEach(s => { countMap[s] = 0; });
       (procs || []).forEach(p => { countMap[p.status] = (countMap[p.status] || 0) + 1; });
-      const items = DASHBOARD_STATUSES.map(s => ({ label: s, count: countMap[s] }));
-      Utils.renderVelocimetros('velocimetros', items);
 
       // Velocidade média considerando todas as passagens por status
       const ids = (procs || []).map(p => p.id);
@@ -359,9 +357,16 @@ window.Modules.analise = (() => {
         }
       });
 
-      const rows = Object.keys(agg).map(s => ({
+       const items = DASHBOARD_STATUSES.map(s => ({
         status: s,
-        avg: (agg[s].sum / agg[s].n).toFixed(1)
+        count: countMap[s] || 0,
+        avg: agg[s] ? (agg[s].sum / agg[s].n) : null
+      }));
+      Utils.renderProcessRings('velocimetros', items);
+
+      const rows = items.filter(it => it.avg != null).map(it => ({
+        status: it.status,
+        avg: it.avg.toFixed(1)
       }));
       Utils.renderTable('speedTable', [
         { key: 'status', label: 'Status' },
