@@ -481,3 +481,6 @@ for insert with check ( has_write_role() );
 -- audit (somente Admin)
 create policy "audit read admin" on audit_log
 for select using ( is_admin() );
+
+create policy "audit insert" on audit_log
+for insert with check ( auth.role() = 'authenticated' );
