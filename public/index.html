@@ -108,13 +108,18 @@
                     </select>
                   </label>
                 </div>
-                <label>Status
-                  <select id="procStatus">
+                <div class="row">
+                  <label>Status
+                    <select id="procStatus">
                     <option>ANADOC</option><option>ANATEC-PRE</option><option>ANATEC</option>
                     <option>ANAICA</option><option>SOB-DOC</option><option>SOB-TEC</option>
                     <option>SOB-PDIR</option><option>SOB-EXPL</option><option>ARQ</option>
                   </select>
-                </label>
+                          </label>
+                  <label>Data/Hora status
+                    <input type="datetime-local" id="procStatusDate">
+                  </label>
+                </div>
                 <label>Data 1ª entrada na DO-AGA <input type="date" id="procEntrada" required></label>
                 <label>Data término de obra <input type="date" id="procObraTermino"></label>
                 <label><input type="checkbox" id="procObraConcluida"> Obra concluída</label>
