@@ -415,6 +415,7 @@ window.Modules.processos = (() => {
           currentProcId = null;
           el('procTipo').value = '';
           el('procStatus').value = '';
+          el('procStatusDate').value = '';
           el('procEntrada').value = '';
           el('procObraTermino').value = '';
           el('procObraConcluida').checked = false;
