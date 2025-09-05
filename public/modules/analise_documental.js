@@ -234,12 +234,15 @@ window.Modules.analise = (() => {
   }
 
   async function abrirChecklistPDF(id) {
+    // Abre imediatamente uma aba em branco para evitar bloqueio de pop-up
+    const win = window.open('', '_blank');
     const { data, error } = await sb
       .from('checklist_responses')
       .select('answers,extra_obs,filled_at,processes(nup),checklist_templates(name,items)')
       .eq('id', id)
       .single();
     if (error) {
+      if (win) win.close();
       alert(error.message);
       return;
     }
@@ -276,7 +279,7 @@ window.Modules.analise = (() => {
     }
 
     const url = doc.output('bloburl');
-    window.open(url, '_blank');
+    if (win) win.location.href = url;
   }
 
   function bind() {
