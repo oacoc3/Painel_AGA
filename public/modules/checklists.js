@@ -77,7 +77,7 @@ window.Modules.checklists = (() => {
 
   async function loadTemplates() {
     const { data, error } = await sb.from('checklist_templates')
-      .select('id,name,category,version,items,created_at,approved_at
+      .select('id,name,category,version,items,created_at,approved_at')
       .order('created_at', { ascending: false });
     if (error) { Utils.setMsg('ckMsg', error.message, true); return; }
     templates = (data || []);
