@@ -194,13 +194,21 @@
                 <label>Observação <textarea id="sgObs"></textarea></label>
                 <button id="btnCadSig">Cadastrar</button>
                 <hr/>
-                <label>Expedir: ID SIGADAER <input id="sgIDExp"></label>
-                <label>Expedido em <input type="datetime-local" id="sgExpEm"></label>
-                <button id="btnExpSig">Registrar expedição</button>
-                <hr/>
-                <label>Receber: ID SIGADAER <input id="sgIDRec"></label>
-                <label>Recebido em <input type="datetime-local" id="sgRecEm"></label>
-                <button id="btnRecSig">Registrar recebimento</button>
+                <div id="sgLista" class="table scrolly"></div>
+                <div id="sgExpForm" class="hidden">
+                  <label>Expedido em <input type="datetime-local" id="sgExpInput"></label>
+                  <div class="row actions">
+                    <button id="btnSalvarSgExp">Salvar</button>
+                    <button id="btnVoltarSgExp" type="button">Voltar</button>
+                  </div>
+                </div>
+                <div id="sgRecForm" class="hidden">
+                  <label>Recebido em <input type="datetime-local" id="sgRecInput"></label>
+                  <div class="row actions">
+                    <button id="btnSalvarSgRec">Salvar</button>
+                    <button id="btnVoltarSgRec" type="button">Voltar</button>
+                  </div>
+                </div>
                 <div id="sgMsg" class="msg"></div>
               </form>
             </div>
