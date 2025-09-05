@@ -7,12 +7,18 @@ window.Modules.analise = (() => {
     // Convenção: category = tipo de processo (PDIR/Inscrição/Alteração/Exploração/OPEA)
     const { data, error } = await sb
       .from('checklist_templates')
-      .select('id,name,category,items')
+      .select('id,name,category,version,items')
       .eq('category', tipo)
       .not('approved_by', 'is', null)
-      .order('name');
+      .order('name')
+      .order('version', { ascending: false });
     if (error) return [];
-    return data || [];
+    const uniq = [];
+    const seen = new Set();
+    (data || []).forEach(t => {
+      if (!seen.has(t.name)) { seen.add(t.name); uniq.push(t); }
+    });
+    return uniq;
   }
 
   function renderChecklist(template) {
@@ -170,7 +176,7 @@ window.Modules.analise = (() => {
   async function load() { await refreshTemplate(); await loadIndicador(); }
 
   // Dashboard rings / speed (módulo rápido aqui)
-  const DASHBOARD_STATUSES = ['ANADOC','ANATEC-PRE','ANATEC','ANAICA','SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL','ARQ'];
+  const DASHBOARD_STATUSES = ['CONFEC','REV-OACO','APROV','ICA-PUB','EDICAO','AGD-LEIT','ANADOC','ANATEC-PRE','ANATEC','ANAICA','SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL','ARQ'];
 
   window.Modules.dashboard = {
     init() {
