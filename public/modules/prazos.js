@@ -31,9 +31,9 @@ window.Modules.prazos = (() => {
   }
 
   function renderRemocao() {
-    const filtro = (el('rrFiltro')?.value || '').toLowerCase();
+
     let rows = remocao;
-    if (filtro) rows = rows.filter(r => (r.nup || '').toLowerCase().includes(filtro));
+
     Utils.renderTable('prazoRemocao', [
       { key: 'nup', label: 'NUP' },
       { key: 'read_at', label: 'Lido em', value: r => Utils.fmtDate(r.read_at) },
@@ -50,9 +50,7 @@ window.Modules.prazos = (() => {
   }
 
   function renderObra() {
-    const filtro = (el('obraFiltro')?.value || '').toLowerCase();
     let rows = obras;
-    if (filtro) rows = rows.filter(r => (r.nup || '').toLowerCase().includes(filtro));
     Utils.renderTable('prazoObra', [
       { key: 'nup', label: 'NUP' },
       { key: 'requested_at', label: 'Solicitado/Expedido em', value: r => Utils.fmtDate(r.requested_at) },
@@ -71,7 +69,9 @@ window.Modules.prazos = (() => {
 
   function renderMonitor() {
     const filtro = (el('monFiltro')?.value || '').toLowerCase();
+    const tipo = el('monTipo')?.value || '';
     let rows = monitor;
+    if (tipo) rows = rows.filter(r => r.type === tipo);
     if (filtro) rows = rows.filter(r => {
       const text = `${r.nup || ''} ${r.type || ''} ${r.number ? String(r.number).padStart(6, '0') : ''}`.toLowerCase();
       return text.includes(filtro);
@@ -87,16 +87,18 @@ window.Modules.prazos = (() => {
     const { data } = await sb.from('v_monitorar_tramitacao')
       .select('nup,type,number');
     monitor = data || [];
+    const sel = el('monTipo');
+    if (sel) {
+      const tipos = Array.from(new Set(monitor.map(m => m.type).filter(Boolean))).sort();
+      sel.innerHTML = '<option value="">Todos</option>' + tipos.map(t => `<option>${t}</option>`).join('');
+    }
     renderMonitor();
   }
 
   function renderDOAGA() {
-    const filtro = (el('doagaFiltro')?.value || '').toLowerCase();
+
     let rows = doaga;
-    if (filtro) rows = rows.filter(r => {
-      const text = `${r.nup || ''} ${r.status || ''}`.toLowerCase();
-      return text.includes(filtro);
-    });
+
     Utils.renderTable('prazoDOAGA', [
       { key: 'nup', label: 'NUP' },
       { key: 'requested_at', label: 'Solicitado/Expedido em', value: r => Utils.fmtDate(r.requested_at) },
@@ -114,10 +116,8 @@ window.Modules.prazos = (() => {
 
   function init() {
     el('psTipo')?.addEventListener('change', renderPareceres);
-    el('rrFiltro')?.addEventListener('input', renderRemocao);
-    el('obraFiltro')?.addEventListener('input', renderObra);
     el('monFiltro')?.addEventListener('input', renderMonitor);
-    el('doagaFiltro')?.addEventListener('input', renderDOAGA);
+    el('monTipo')?.addEventListener('change', renderMonitor)
   }
 
   async function load() {
