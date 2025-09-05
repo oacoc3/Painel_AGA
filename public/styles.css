@@ -41,6 +41,8 @@ button { cursor: pointer; }
 .user button { width: auto; }
 .nav button,
 .user button { font-size: 12px; }
+.bar button,
+#viewProcessos button { padding: 4px 8px; }
 button.danger { background: #fff5f5; border-color: #e0b3b3; }
 button:disabled { opacity: .5; cursor: not-allowed; }
 
