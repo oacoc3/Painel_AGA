@@ -440,6 +440,7 @@ window.Modules.processos = (() => {
     const { data: sigs, error } = await sb.from('sigadaer')
       .select('id,type,requested_at,status')
       .eq('process_id', processId)
+      .neq('status', 'RECEBIDO')
       .order('requested_at', { ascending: false });
     if (error) { box.innerHTML = '<div class="msg error">' + error.message + '</div>'; return; }
     const { tbody } = Utils.renderTable(box, [
@@ -626,6 +627,22 @@ window.Modules.processos = (() => {
       .eq('entity_type','process_notes')
       .filter('details->>process_id','eq', processId);
     push(a5);
+
+    // Ajusta data/hora conforme informado pelo usuário
+    list.forEach(r => {
+      const d = r.details || {};
+      if (r.entity_type === 'internal_opinions') {
+        if (r.action === 'INSERT' && d.requested_at) r.occurred_at = d.requested_at;
+        else if (r.action === 'UPDATE' && d.status === 'RECEBIDO' && d.received_at) r.occurred_at = d.received_at;
+      } else if (r.entity_type === 'notifications') {
+        if (r.action === 'INSERT' && d.requested_at) r.occurred_at = d.requested_at;
+        else if (r.action === 'UPDATE' && d.status === 'LIDA' && d.read_at) r.occurred_at = d.read_at;
+      } else if (r.entity_type === 'sigadaer') {
+        if (r.action === 'INSERT' && d.requested_at) r.occurred_at = d.requested_at;
+        else if (r.action === 'UPDATE' && d.status === 'EXPEDIDO' && d.expedit_at) r.occurred_at = d.expedit_at;
+        else if (r.action === 'UPDATE' && d.status === 'RECEBIDO' && d.received_at) r.occurred_at = d.received_at;
+      }
+    });
 
     // Descrição das ações e nomes dos usuários
     list.sort((a,b) => new Date(a.occurred_at) - new Date(b.occurred_at));
