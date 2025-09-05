@@ -779,5 +779,5 @@ window.Modules.processos = (() => {
     el('sgLista').innerHTML = '<div class="msg">Selecione um processo para ver os SIGADAER.</div>';
   }
 
-  return { init, load };
+  return { init, load, reloadLists };
 })();
