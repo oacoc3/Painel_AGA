@@ -68,6 +68,8 @@ window.Modules.processos = (() => {
       }
        if (note) {
         await sb.from('audit_log').insert({
+          user_id: u.id,
+          user_email: u.email,
           action: 'NOTE',
           entity_type: 'process_notes',
           entity_id: currentProcId,
