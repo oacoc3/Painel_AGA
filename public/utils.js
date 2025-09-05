@@ -139,7 +139,31 @@ function renderRings(containerId, items) {
   });
 }
 
+function fmtNUP(v) {
+  const d = String(v || '').replace(/\D/g, '').slice(0, 17);
+  const p1 = d.slice(0, 5);
+  const p2 = d.slice(5, 11);
+  const p3 = d.slice(11, 15);
+  const p4 = d.slice(15, 17);
+  let out = p1;
+  if (p2) out += '.' + p2;
+  if (p3) out += '/' + p3;
+  if (p4) out += '-' + p4;
+  return out;
+}
+
+function bindNUPMask(id) {
+  const input = el(id);
+  if (!input) return;
+  input.setAttribute('pattern', '^[0-9]{5}\\.[0-9]{6}/[0-9]{4}-[0-9]{2}$');
+  input.addEventListener('input', () => {
+    input.value = fmtNUP(input.value);
+    input.setSelectionRange(input.value.length, input.value.length);
+  });
+}
+
 window.Utils = {
   show, hide, setText, setMsg, fmtDate, fmtDateTime, toDateInputValue,
-  toDateTimeLocalValue, daysBetween, yesNo, renderTable, callFn, renderRings
+  toDateTimeLocalValue, daysBetween, yesNo, renderTable, callFn, renderRings,
+  fmtNUP, bindNUPMask
 };
