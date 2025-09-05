@@ -30,42 +30,51 @@ window.Modules.analise = (() => {
       return;
     }
 
-    // items: [{code,text,options?}, ...]
+    // items: [{categoria, itens:[{code,requisito,texto_sugerido}]}]
     const frag = document.createDocumentFragment();
-    (template.items || []).forEach(item => {
-      const wrap = document.createElement('div');
-      wrap.style.margin = '6px 0';
-      const label = document.createElement('label');
-      label.innerHTML = `${item.code ? `<strong>${item.code}</strong> — ` : ''}${item.text || ''}`;
-      if (Array.isArray(item.options) && item.options.length) {
-        const sel = document.createElement('select');
-        sel.name = item.code || item.text;
-        item.options.forEach(op => {
-          const o = document.createElement('option');
-          o.value = op;
-          o.textContent = op;
-          sel.appendChild(o);
-        });
+    (template.items || []).forEach(cat => {
+      const catDiv = document.createElement('div');
+      const h = document.createElement('h3');
+      h.textContent = cat.categoria || '';
+      catDiv.appendChild(h);
+
+      (cat.itens || []).forEach(item => {
+        const wrap = document.createElement('div');
+        wrap.style.margin = '6px 0';
+
+        const label = document.createElement('label');
+        label.innerHTML = `${item.code ? `<strong>${item.code}</strong> — ` : ''}${item.requisito || ''}`;
         wrap.appendChild(label);
-        wrap.appendChild(sel);
-      } else {
-        // Padrão: select simples [Conforme|Não conforme|N/A] + observação opcional
-        wrap.appendChild(label);
+
         const sel = document.createElement('select');
-        sel.name = (item.code || item.text) + '::val';
+        sel.name = item.code;
         ['Conforme', 'Não conforme', 'N/A'].forEach(v => {
           const o = document.createElement('option');
           o.value = v;
           o.textContent = v;
           sel.appendChild(o);
         });
+
         const obs = document.createElement('input');
         obs.placeholder = 'Observação (opcional)';
-        obs.name = (item.code || item.text) + '::obs';
+        obs.name = item.code + '::obs';
+
+        const hint = document.createElement('div');
+        hint.className = 'hint';
+        hint.textContent = item.texto_sugerido || '';
+        hint.style.display = 'none';
+
+        sel.addEventListener('change', () => {
+          hint.style.display = sel.value === 'Não conforme' && item.texto_sugerido ? 'block' : 'none';
+        });
+
         wrap.appendChild(sel);
         wrap.appendChild(obs);
-      }
-      frag.appendChild(wrap);
+        wrap.appendChild(hint);
+        catDiv.appendChild(wrap);
+      });
+
+      frag.appendChild(catDiv);
     });
     box.appendChild(frag);
   }
@@ -93,13 +102,9 @@ window.Modules.analise = (() => {
     // Coleta respostas
     const answers = [];
     $$('#ckContainer select').forEach(sel => {
-      if (sel.name.endsWith('::val')) {
-        const base = sel.name.replace('::val', '');
-        const obs = $(`#ckContainer input[name="${base}::obs"]`)?.value || null;
-        answers.push({ code: base, value: sel.value, obs });
-      } else {
-        answers.push({ code: sel.name, value: sel.value });
-      }
+      const code = sel.name;
+      const obs = $(`#ckContainer input[name="${code}::obs"]`)?.value || null;
+      answers.push({ code, value: sel.value, obs });
     });
 
     const u = await getUser();
