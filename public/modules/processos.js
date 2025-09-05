@@ -233,6 +233,7 @@ window.Modules.processos = (() => {
       { key: 'btn', label: '' }
     ], ops);
     tbody?.querySelectorAll('tr').forEach(tr => {
+      if (!tr.dataset.row) return;
       const row = JSON.parse(tr.dataset.row);
       const td = tr.lastElementChild;
       td.textContent = '';
@@ -317,6 +318,7 @@ window.Modules.processos = (() => {
       { key: 'btn', label: '' }
     ], nts);
     tbody?.querySelectorAll('tr').forEach(tr => {
+      if (!tr.dataset.row) return;
       const row = JSON.parse(tr.dataset.row);
       const td = tr.lastElementChild;
       td.textContent = '';
@@ -447,6 +449,7 @@ window.Modules.processos = (() => {
       { key: 'btns', label: '' }
     ], sigs);
     tbody?.querySelectorAll('tr').forEach(tr => {
+      if (!tr.dataset.row) return;
       const row = JSON.parse(tr.dataset.row);
       const td = tr.lastElementChild;
       td.textContent = '';
@@ -514,7 +517,7 @@ window.Modules.processos = (() => {
 
     // Click → carrega no formulário e histórico
     tbody?.addEventListener('click', (ev) => {
-      const tr = ev.target.closest('tr'); if (!tr) return;
+      const tr = ev.target.closest('tr'); if (!tr || !tr.dataset.row) return;
       const row = JSON.parse(tr.dataset.row);
       fillProcessForm(row);
       loadHistory(row.id);
