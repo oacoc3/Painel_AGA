@@ -21,13 +21,15 @@ window.Modules.prazos = (() => {
       sb.from('v_prazo_pareceres').select('nup,type,requested_at,due_date,days_remaining'),
       sb.from('v_prazo_pareceres_externos').select('nup,type,requested_at,due_date,days_remaining')
     ]);
-    pareceres = [...(intRes.data || []), ...(extRes.data || [])];
+    pareceres = [...(intRes.data || []), ...(extRes.data || [])]
+      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
     renderPareceres();
   }
 
   async function loadRemocao() {
     const { data } = await sb.from('v_prazo_remocao_rebaixamento')
       .select('nup,read_at,due_date,days_remaining');
+    (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
     Utils.renderTable('prazoRemocao', [
       { key: 'nup', label: 'NUP' },
       { key: 'read_at', label: 'Lido em', value: r => Utils.fmtDate(r.read_at) },
@@ -50,16 +52,18 @@ window.Modules.prazos = (() => {
 
   async function loadMonitor() {
     const { data } = await sb.from('v_monitorar_tramitacao')
-      .select('nup,type');
+      .select('nup,type,number');
     Utils.renderTable('prazoMonit', [
       { key: 'nup', label: 'NUP' },
-      { key: 'type', label: 'Tipo' }
+      { key: 'type', label: 'Tipo' },
+      { key: 'number', label: 'Número', value: r => r.number ? String(r.number).padStart(6, '0') : '' }
     ], data);
   }
 
   async function loadDOAGA() {
     const { data } = await sb.from('v_prazo_do_aga')
       .select('nup,status,requested_at,due_date,days_remaining');
+    (data || []).sort((a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31'));
     Utils.renderTable('prazoDOAGA', [
       { key: 'nup', label: 'NUP' },
       { key: 'requested_at', label: 'Solicitado/Expedido em', value: r => Utils.fmtDate(r.requested_at) },
