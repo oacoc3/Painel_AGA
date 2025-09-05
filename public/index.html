@@ -242,23 +242,27 @@
       <section id="viewPrazos" class="view hidden">
         <div class="columns">
           <div class="card">
-            <h2>Pareceres ATM</h2>
-            <div id="prazoATM" class="table scrolly"></div>
+            <h2>Pareceres Solicitados</h2>
+            <label>Tipo
+              <select id="psTipo">
+                <option value="">Todos</option>
+                <option>ATM</option>
+                <option>DT</option>
+                <option>CGNA</option>
+                <option>COMAE</option>
+                <option>COMPREP</option>
+                <option>COMGAP</option>
+                <option>GABAER</option>
+              </select>
+            </label>
+            <div id="prazoParec" class="table scrolly"></div>
           </div>
           <div class="card">
-            <h2>Pareceres DT</h2>
-            <div id="prazoDT" class="table scrolly"></div>
-          </div>
-          <div class="card">
-            <h2>Pareceres CGNA</h2>
-            <div id="prazoCGNA" class="table scrolly"></div>
+            <h2>Remoção/Rebaixamento</h2>
+            <div id="prazoRemocao" class="table scrolly"></div>
           </div>
         </div>
         <div class="columns">
-          <div class="card">
-            <h2>Pareceres Externos</h2>
-            <div id="prazoExt" class="table scrolly"></div>
-          </div>
           <div class="card">
             <h2>Término de Obra</h2>
             <div id="prazoObra" class="table scrolly"></div>
