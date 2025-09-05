@@ -361,12 +361,12 @@ where p.obra_concluida = false;
 
 -- Monitorar Leitura/Expedição: notificações não lidas e SIGADAER não expedidos
 create or replace view v_monitorar_tramitacao as
-select n.process_id, p.nup, n.type::text as type
+select n.process_id, p.nup, n.type::text as type, null::integer as number
 from notifications n
 join processes p on p.id = n.process_id
 where n.status = 'SOLICITADA'
 union all
-select s.process_id, p.nup, s.type::text as type
+select s.process_id, p.nup, s.type::text as type, s.numbers[1] as number
 from sigadaer s
 join processes p on p.id = s.process_id
 where s.status = 'SOLICITADO';
