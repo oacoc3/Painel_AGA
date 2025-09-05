@@ -180,7 +180,8 @@ create table checklist_templates (
   name text not null,
   category text not null,
   version int not null default 1,
-  items jsonb not null, -- [{code,text,options?},...]
+  -- Estrutura: [{categoria, itens:[{code,requisito,texto_sugerido}]}]
+  items jsonb not null,
   approved_by uuid references profiles(id),
   approved_at timestamptz,
   created_by uuid not null references profiles(id),
