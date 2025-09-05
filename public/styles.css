@@ -108,3 +108,12 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .velocimetro-content { position: absolute; bottom: 8px; width: 100%; text-align: center; }
 .msg { margin-top: 8px; color: var(--ink-soft); min-height: 1lh; }
 .msg.error { color: var(--warn); }
+
+
+.ck-category { border: 1px dashed var(--line); padding: 8px; margin: 8px 0; }
+.ck-category > .ck-items { margin: 8px 0; }
+.ck-item { display: flex; gap: 4px; margin: 4px 0; }
+.ck-item input { flex: 1; }
+.ck-item .del-item { width: auto; padding: 0 8px; }
+.ck-category .add-item, .ck-category .del-cat { width: auto; margin-top: 4px; }
+.hint { margin-top: 4px; font-size: 12px; color: var(--warn); }
