@@ -5,6 +5,8 @@ window.Modules.processos = (() => {
   let currentNUP = '';
   let currentOpiniaoRecId = null;
   let currentNotifLidaId = null;
+  let currentSigExpId = null;
+  let currentSigRecId = null;
   function bindTabs() {
     // Abas do cartão esquerdo
     $$('.tabs button').forEach(btn => {
@@ -103,12 +105,18 @@ window.Modules.processos = (() => {
     el('histProcesso').innerHTML = '<div class="msg">Selecione um processo para ver o histórico.</div>';
     el('opLista').innerHTML = '<div class="msg">Selecione um processo para ver os pareceres.</div>';
     el('ntLista').innerHTML = '<div class="msg">Selecione um processo para ver as notificações.</div>';
-      Utils.hide('opRecForm');
+    el('sgLista').innerHTML = '<div class="msg">Selecione um processo para ver os SIGADAER.</div>';
+    Utils.hide('opRecForm');
     Utils.show('opLista');
     Utils.hide('ntLidaForm');
     Utils.show('ntLista');
-    currentOpiniaoRecId = null;
+    Utils.hide('sgExpForm');
+    Utils.hide('sgRecForm');
+    Utils.show('sgLista');
+      currentOpiniaoRecId = null;
     currentNotifLidaId = null;
+    currentSigExpId = null;
+    currentSigRecId = null;
     }
 
   async function deleteProcess() {
@@ -342,11 +350,24 @@ window.Modules.processos = (() => {
       Utils.setMsg('sgMsg', e.message || String(e), true);
     }
   }
+  function showSigExpForm(id) {
+    currentSigExpId = id;
+    el('sgExpInput').value = Utils.toDateTimeLocalValue(new Date());
+    Utils.hide('sgLista');
+    Utils.hide('sgRecForm');
+    Utils.show('sgExpForm');
+  }
 
+  function cancelarSigExp() {
+    currentSigExpId = null;
+    el('sgExpInput').value = '';
+    Utils.hide('sgExpForm');
+    Utils.show('sgLista');
+  }
   async function expedirSig() {
-    const id = el('sgIDExp').value.trim();
-    const t = el('sgExpEm').value;
-    if (!id || !t) return Utils.setMsg('sgMsg', 'Informe ID e data/hora de expedição.', true);
+    const id = currentSigExpId;
+    const t = el('sgExpInput').value;
+    if (!id || !t) return Utils.setMsg('sgMsg', 'Informe data/hora de expedição.', true);
     Utils.setMsg('sgMsg', 'Registrando expedição…');
     try {
       const { error } = await sb.from('sigadaer').update({
@@ -355,14 +376,30 @@ window.Modules.processos = (() => {
       }).eq('id', id);
       if (error) throw error;
       Utils.setMsg('sgMsg', 'SIGADAER marcado como EXPEDIDO.');
+      cancelarSigExp();
       await reloadLists();
     } catch (e) { Utils.setMsg('sgMsg', e.message || String(e), true); }
   }
 
+  function showSigRecForm(id) {
+    currentSigRecId = id;
+    el('sgRecInput').value = Utils.toDateTimeLocalValue(new Date());
+    Utils.hide('sgLista');
+    Utils.hide('sgExpForm');
+    Utils.show('sgRecForm');
+  }
+
+  function cancelarSigRec() {
+    currentSigRecId = null;
+    el('sgRecInput').value = '';
+    Utils.hide('sgRecForm');
+    Utils.show('sgLista');
+  }
+
   async function receberSig() {
-    const id = el('sgIDRec').value.trim();
-    const t = el('sgRecEm').value;
-    if (!id || !t) return Utils.setMsg('sgMsg', 'Informe ID e data/hora de recebimento.', true);
+    const id = currentSigRecId;
+    const t = el('sgRecInput').value;
+    if (!id || !t) return Utils.setMsg('sgMsg', 'Informe data/hora de recebimento.', true);
     Utils.setMsg('sgMsg', 'Registrando recebimento…');
     try {
       const { error } = await sb.from('sigadaer').update({
@@ -371,8 +408,42 @@ window.Modules.processos = (() => {
       }).eq('id', id);
       if (error) throw error; // trigger impede RECEBIDO se não EXPEDIDO
       Utils.setMsg('sgMsg', 'SIGADAER marcado como RECEBIDO.');
+      cancelarSigRec();
       await reloadLists();
     } catch (e) { Utils.setMsg('sgMsg', e.message || String(e), true); }
+  }
+
+  async function loadSigList(processId) {
+    const box = el('sgLista');
+    if (!box) return;
+    if (!processId) {
+      box.innerHTML = '<div class="msg">Selecione um processo para ver os SIGADAER.</div>';
+      return;
+    }
+    const { data: sigs, error } = await sb.from('sigadaer')
+      .select('id,type,requested_at,status')
+      .eq('process_id', processId)
+      .order('requested_at', { ascending: false });
+    if (error) { box.innerHTML = '<div class="msg error">' + error.message + '</div>'; return; }
+    const { tbody } = Utils.renderTable(box, [
+      { key: 'type', label: 'Tipo' },
+      { key: 'requested_at', label: 'Solicitado em', value: r => Utils.fmtDateTime(r.requested_at) },
+      { key: 'status', label: 'Status' },
+      { key: 'btns', label: '' }
+    ], sigs);
+    tbody?.querySelectorAll('tr').forEach(tr => {
+      const row = JSON.parse(tr.dataset.row);
+      const td = tr.lastElementChild;
+      td.textContent = '';
+      const btnExp = document.createElement('button');
+      btnExp.textContent = 'Registrar Expedição';
+      btnExp.addEventListener('click', () => showSigExpForm(row.id));
+      td.appendChild(btnExp);
+      const btnRec = document.createElement('button');
+      btnRec.textContent = 'Registrar Recebimento';
+      btnRec.addEventListener('click', () => showSigRecForm(row.id));
+      td.appendChild(btnRec);
+    });
   }
 
   // —— Listas e histórico ——
@@ -432,6 +503,7 @@ window.Modules.processos = (() => {
       loadHistory(row.id);
       loadOpiniaoList(row.id);
       loadNotifList(row.id);
+      loadSigList(row.id);
     });
   }
 
@@ -494,6 +566,7 @@ window.Modules.processos = (() => {
     await loadHistory(currentProcId || '');
     await loadOpiniaoList(currentProcId || '');
     await loadNotifList(currentProcId || '');
+    await loadSigList(currentProcId || '');
   }
 
   function bindForms() {
@@ -515,8 +588,10 @@ window.Modules.processos = (() => {
     el('btnVoltarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); cancelarNotifLida(); });
     // SIGADAER
     el('btnCadSig').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarSig(); });
-    el('btnExpSig').addEventListener('click', (ev) => { ev.preventDefault(); expedirSig(); });
-    el('btnRecSig').addEventListener('click', (ev) => { ev.preventDefault(); receberSig(); });
+    el('btnSalvarSgExp').addEventListener('click', (ev) => { ev.preventDefault(); expedirSig(); });
+    el('btnVoltarSgExp').addEventListener('click', (ev) => { ev.preventDefault(); cancelarSigExp(); });
+    el('btnSalvarSgRec').addEventListener('click', (ev) => { ev.preventDefault(); receberSig(); });
+    el('btnVoltarSgRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelarSigRec(); });
 
     const procNUP = el('procNUP');
     const handleNUP = async () => {
@@ -530,6 +605,7 @@ window.Modules.processos = (() => {
           await loadHistory(data.id);
           await loadOpiniaoList(data.id);
           await loadNotifList(data.id);
+          await loadSigList(data.id);
         } else {
           currentProcId = null;
           el('procTipo').value = '';
@@ -565,6 +641,7 @@ window.Modules.processos = (() => {
     el('histProcesso').innerHTML = '<div class="msg">Selecione um processo para ver o histórico.</div>';
     el('opLista').innerHTML = '<div class="msg">Selecione um processo para ver os pareceres.</div>';
     el('ntLista').innerHTML = '<div class="msg">Selecione um processo para ver as notificações.</div>';
+    el('sgLista').innerHTML = '<div class="msg">Selecione um processo para ver os SIGADAER.</div>';
   }
 
   return { init, load };
