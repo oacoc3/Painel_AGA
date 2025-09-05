@@ -64,9 +64,10 @@ window.Modules.prazos = (() => {
 
   async function loadMonitor() {
     const { data } = await sb.from('v_monitorar_tramitacao')
-      .select('nup');
+      .select('nup,type');
     Utils.renderTable('prazoMonit', [
-      { key: 'nup', label: 'NUP' }
+      { key: 'nup', label: 'NUP' },
+      { key: 'type', label: 'Tipo' }
     ], data);
   }
 
