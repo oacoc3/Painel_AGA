@@ -235,7 +235,8 @@ window.Modules.analise = (() => {
 
   async function abrirChecklistPDF(id) {
     // Abre imediatamente uma aba em branco para evitar bloqueio de pop-up
-    const win = window.open('', '_blank', 'noopener');
+    const win = window.open('', '_blank');
+    if (win) win.opener = null;
     try {
       const { data, error } = await sb
         .from('checklist_responses')
