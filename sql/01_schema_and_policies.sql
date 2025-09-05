@@ -371,6 +371,17 @@ from sigadaer s
 join processes p on p.id = s.process_id
 where s.status = 'SOLICITADO';
 
+-- Remoção / Rebaixamento (DESF-REM_REB lida)
+create or replace view v_prazo_remocao_rebaixamento as
+select n.process_id, p.nup,
+       date(timezone('America/Sao_Paulo', n.read_at)) as read_at,
+       date(timezone('America/Sao_Paulo', n.read_at)) + 120 as due_date,
+       date(timezone('America/Sao_Paulo', n.read_at)) + 1 as start_count,
+       date(timezone('America/Sao_Paulo', n.read_at)) + 120 - current_date as days_remaining
+from notifications n
+join processes p on p.id = n.process_id
+where n.type = 'DESF-REM_REB' and n.status = 'LIDA';
+
 -- Prazo DO-AGA (60 dias; pausa em SOB-*)
 create or replace view v_prazo_do_aga as
 select p.id as process_id, p.nup, p.status,
