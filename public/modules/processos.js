@@ -199,7 +199,6 @@ window.Modules.processos = (() => {
       .order('requested_at', { ascending: false });
     if (error) { box.innerHTML = '<div class="msg error">' + error.message + '</div>'; return; }
     const { tbody } = Utils.renderTable(box, [
-      { key: 'id', label: 'ID' },
       { key: 'type', label: 'Tipo' },
       { key: 'requested_at', label: 'Solicitado em', value: r => Utils.fmtDateTime(r.requested_at) },
       { key: 'btn', label: '' }
