@@ -19,9 +19,9 @@
   <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
   <script src="./mpa.js" defer></script>
-  <script src="./modules/auth.js" defer></script>
+  <script src="./modules/prazos.js" defer></script>
 </head>
-<body data-route="login">
+<body data-route="prazos">
   <div id="app" class="vh">
 <header class="bar">
       <div class="brand">
@@ -42,15 +42,45 @@
       </div>
     </header>
 <main class="main">
-<section id="viewLogin" class="view centered">
-        <div class="panel">
-          <h1>Login</h1>
-          <!-- AJAX: evitamos navegação por submit tradicional -->
-          <form id="loginForm" data-ajax>
-            <label>E-mail <input id="loginEmail" type="email" required></label>
-            <button id="btnDoLogin" type="submit">Enviar link de acesso</button>
-          </form>
-          <div id="loginMsg" class="msg"></div>
+<section id="viewPrazos" class="view">
+        <div class="prazo-grid">
+
+          <div class="prazo-col">
+            <div class="card">
+              <h2>Pareceres</h2>
+              <label>Tipo
+                <select id="psTipo">
+                  <option value="">Todos</option>
+
+                </select>
+              </label>
+              <div id="prazoParec" class="table scrolly"></div>
+            </div>
+            <div class="card">
+              <h2>Remoção/Rebaixamento</h2>
+
+              <div id="prazoRemocao" class="table scrolly"></div>
+            </div>
+          </div>
+          <div class="prazo-col">
+            <div class="card">
+              <h2>Término de Obra</h2>
+
+              <div id="prazoObra" class="table scrolly"></div>
+            </div>
+            <div class="card">
+              <h2>Monitorar Leitura/Expedição</h2>
+               <label>Tipo
+                <select id="monTipo"><option value="">Todos</option></select>
+              </label>
+ 
+              <div id="prazoMonit" class="table scrolly"></div>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Prazo DO-AGA</h2>
+            <div id="prazoDOAGA" class="table scrolly"></div>
+          </div>
         </div>
       </section>
 </main>

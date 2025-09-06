@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <base href="/" />
+  <title>Painel DO-AGA</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./process_ring.css" />
+  <!-- Supabase client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <!-- App config e cliente -->
+  <script src="./config.js" defer></script>
+  <script src="./supabaseClient.js" defer></script>
+  <!-- Sessão pronta antes de inicializar a página -->
+  <script src="./auth-ready.js" defer></script>
+  <script src="./utils.js" defer></script>
+  <script src="./process_ring.js" defer></script>
+  <!-- Guardas de segurança: não alteram visual -->
+  <script src="./safety-guards.js" defer></script>
+  <script src="./mpa.js" defer></script>
+  <script src="./modules/processos.js" defer></script>
+</head>
+<body data-route="processos">
+  <div id="app" class="vh">
+<header class="bar">
+      <div class="brand">
+        <span class="logo">■</span>
+        <strong>Painel DO-AGA</strong>
+        <small class="build" id="buildInfo">build: carregando…</small>
+      </div>
+      <nav id="topNav" class="nav hidden">
+        <button data-route="dashboard">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise">Análise Documental</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+      </nav>
+      <div id="userBox" class="user hidden">
+        <button id="btnLogout" class="danger" type="button">Sair</button>
+      </div>
+    </header>
+<main class="main">
+<section id="viewProcessos" class="view">
+        <div class="split">
+          <div class="card">
+            <h2>Cadastro / Atualização</h2>
+            <div class="tabs">
+              <button data-tab="proc" type="button">Processo</button>
+              <button data-tab="opiniao" type="button">Parecer Interno</button>
+              <button data-tab="notif" type="button">Notificação</button>
+              <button data-tab="sig" type="button">SIGADAER</button>
+            </div>
+            <div id="tabProc" class="tab">
+              <form id="formProc" data-ajax>
+                <div class="row">
+                  <label>NUP
+                    <input id="procNUP" required pattern="^[0-9]{5}\.[0-9]{6}/[0-9]{4}-[0-9]{2}$">
+                  </label>
+                  <label>Tipo
+                    <select id="procTipo">
+                      <option>PDIR</option>
+                      <option>Inscrição</option>
+                      <option>Alteração</option>
+                      <option>Exploração</option>
+                      <option>OPEA</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="row">
+                  <label>Status
+                    <select id="procStatus">
+                    <option>CONFEC</option><option>REV-OACO</option><option>APROV</option><option>ICA-PUB</option><option>EDICAO</option><option>AGD-LEIT</option>
+                      <option>ANADOC</option><option>ANATEC-PRE</option><option>ANATEC</option>
+                    <option>ANAICA</option><option>SOB-DOC</option><option>SOB-TEC</option>
+                    <option>SOB-PDIR</option><option>SOB-EXPL</option><option>ARQ</option>
+                  </select>
+                          </label>
+                  <label>Data/Hora status
+                    <input type="datetime-local" id="procStatusDate">
+                  </label>
+                </div>
+                <div class="row">
+                  <label>Data 1ª entrada na DO-AGA <input type="date" id="procEntrada" required></label>
+                  <label>Data término de obra <input type="date" id="procObraTermino"></label>
+                </div>
+                <label>Observação <textarea id="procObs"></textarea></label>
+                <div class="row actions">
+                  <button id="btnObraConcluida" type="button">Obra concluída</button>
+                  <button id="btnSalvarProc" type="button" disabled>Salvar</button>
+                  <button id="btnLimparProc" type="button">Limpar</button>
+                  <button id="btnExcluirProc" class="danger" type="button">Excluir</button>
+                </div>
+                <div id="procMsg" class="msg"></div>
+              </form>
+            </div>
+            <div id="tabOpiniao" class="tab">
+              <form id="formOpiniao" data-ajax>
+                <div class="row">
+                  <label>NUP <input id="opNUP" required readonly></label>
+                  <label>Tipo
+                    <select id="opTipo"><option>ATM</option><option>DT</option><option>CGNA</option></select>
+                  </label>
+                </div>
+                <div class="row stretch">
+                  <label>Solicitado em <input type="datetime-local" id="opSolic"></label>
+                  <button id="btnCadOpiniao" type="button">Cadastrar</button>
+                </div>
+                <hr/>
+                <div id="opLista" class="table scrolly"></div>
+                <div id="opRecForm" class="">
+                  <label>Recebido em <input type="datetime-local" id="opRecInput"></label>
+                  <div class="row actions">
+                    <button id="btnSalvarOpRec" type="button">Salvar</button>
+                    <button id="btnVoltarOpRec" type="button">Voltar</button>
+                  </div>
+                </div>
+                <div id="opMsg" class="msg"></div>
+              </form>
+            </div>
+            <div id="tabNotif" class="tab">
+              <form id="formNotif" data-ajax>
+                <div class="row">
+                  <label>NUP <input id="ntNUP" required readonly></label>
+                  <label>Tipo
+                    <select id="ntTipo">
+                      <option>FAV</option><option>FAV-TERM</option><option>TERM-ATRA</option>
+                      <option>DESF-NAO_INI</option><option>DESF_JJAER</option><option>DESF-REM_REB</option>
+                      <option>NCD</option><option>NCT</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="row stretch">
+                  <label>Solicitada em <input type="datetime-local" id="ntSolic"></label>
+                  <button id="btnCadNotif" type="button">Cadastrar</button>
+                </div>
+                <hr/>
+                <div id="ntLista" class="table scrolly"></div>
+                <div id="ntLidaForm" class="">
+                  <label>Lida em <input type="datetime-local" id="ntLidaInput"></label>
+                  <div class="row actions">
+                    <button id="btnSalvarNtLida" type="button">Salvar</button>
+                    <button id="btnVoltarNtLida" type="button">Voltar</button>
+                  </div>
+                </div>
+                <div id="ntMsg" class="msg"></div>
+              </form>
+            </div>
+            <div id="tabSig" class="tab">
+              <form id="formSig" data-ajax>
+                <div class="row">
+                  <label>NUP <input id="sgNUP" required readonly></label>
+                  <label>Tipo
+                    <select id="sgTipo">
+                      <option>COMAE</option><option>COMPREP</option><option>COMGAP</option>
+                      <option>GABAER</option><option>SAC</option><option>ANAC</option>
+                      <option>OPR_AD</option><option>PREF</option><option>GOV</option><option>OUTRO</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="row">
+                  <label>Solicitado em <input type="datetime-local" id="sgSolic"></label>
+                  <label>Nº SIGADAER
+                    <input id="sgNum" pattern="\d{6}" maxlength="6" placeholder="123456">
+                  </label>
+                </div>
+                <button id="btnCadSig" type="button">Cadastrar</button>
+                <hr/>
+                <div id="sgLista" class="table scrolly"></div>
+                <div id="sgExpForm" class="">
+                  <label>Expedido em <input type="datetime-local" id="sgExpInput"></label>
+                  <div class="row actions">
+                    <button id="btnSalvarSgExp" type="button">Salvar</button>
+                    <button id="btnVoltarSgExp" type="button">Voltar</button>
+                  </div>
+                </div>
+                <div id="sgRecForm" class="">
+                  <label>Recebido em <input type="datetime-local" id="sgRecInput"></label>
+                  <div class="row actions">
+                    <button id="btnSalvarSgRec" type="button">Salvar</button>
+                    <button id="btnVoltarSgRec" type="button">Voltar</button>
+                  </div>
+                </div>
+                <div id="sgMsg" class="msg"></div>
+              </form>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Lista de Processos</h2>
+            <div id="listaProcessos" class="table scrolly"></div>
+          </div>
+
+          <div class="card">
+            <h2>Histórico (Auditoria)</h2>
+            <div id="histProcesso" class="table scrolly"></div>
+          </div>
+        </div>
+      </section>
+</main>
+
+<footer class="bar foot">
+      <span>Retro-UI</span>
+      <span>© DO-AGA</span>
+      <span id="footBuild"></span>
+    </footer>
+  </div>
+
+  <!-- Preenche build no cabeçalho e rodapé -->
+  <script defer src="./build-info-client.js"></script>
+</body>
+</html>

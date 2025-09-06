@@ -19,9 +19,9 @@
   <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
   <script src="./mpa.js" defer></script>
-  <script src="./modules/auth.js" defer></script>
+  <script src="./modules/modelos.js" defer></script>
 </head>
-<body data-route="login">
+<body data-route="modelos">
   <div id="app" class="vh">
 <header class="bar">
       <div class="brand">
@@ -42,15 +42,32 @@
       </div>
     </header>
 <main class="main">
-<section id="viewLogin" class="view centered">
-        <div class="panel">
-          <h1>Login</h1>
-          <!-- AJAX: evitamos navegação por submit tradicional -->
-          <form id="loginForm" data-ajax>
-            <label>E-mail <input id="loginEmail" type="email" required></label>
-            <button id="btnDoLogin" type="submit">Enviar link de acesso</button>
-          </form>
-          <div id="loginMsg" class="msg"></div>
+<section id="viewModelos" class="view">
+        <div class="split">
+          <div class="card">
+            <h2>Cadastrar / Atualizar Modelo</h2>
+            <form id="formModelo" data-ajax>
+              <input type="hidden" id="mdlId">
+              <label>Categoria <input id="mdlCat" required></label>
+              <label>Título <input id="mdlTit" required></label>
+              <label>Conteúdo <textarea id="mdlTxt" rows="8" required></textarea></label>
+              <div class="row">
+                <button id="btnSalvarModelo" type="button">Salvar</button>
+                <button id="btnCopiarModelo" type="button">Copiar</button>
+                <button id="btnExcluirModelo" class="danger" type="button">Excluir</button>
+              </div>
+              <div id="mdlMsg" class="msg"></div>
+            </form>
+          </div>
+          <div class="card">
+            <h2>Modelos</h2>
+             <label>Categoria
+              <select id="mdlFiltroCat">
+                <option value="">Todas</option>
+              </select>
+            </label>
+            <div id="listaModelos" class="table scrolly"></div>
+          </div>
         </div>
       </section>
 </main>

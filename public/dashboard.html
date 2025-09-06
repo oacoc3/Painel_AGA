@@ -19,9 +19,9 @@
   <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
   <script src="./mpa.js" defer></script>
-  <script src="./modules/auth.js" defer></script>
+  <script src="./modules/dashboard.js" defer></script>
 </head>
-<body data-route="login">
+<body data-route="dashboard">
   <div id="app" class="vh">
 <header class="bar">
       <div class="brand">
@@ -42,15 +42,23 @@
       </div>
     </header>
 <main class="main">
-<section id="viewLogin" class="view centered">
-        <div class="panel">
-          <h1>Login</h1>
-          <!-- AJAX: evitamos navegação por submit tradicional -->
-          <form id="loginForm" data-ajax>
-            <label>E-mail <input id="loginEmail" type="email" required></label>
-            <button id="btnDoLogin" type="submit">Enviar link de acesso</button>
-          </form>
-          <div id="loginMsg" class="msg"></div>
+<section id="viewDashboard" class="view">
+        <div class="grid">
+          <div class="card">
+            <h2>Visão Geral</h2>
+            <div id="velocimetros" class="velocimetros"></div>
+            <div class="filters">
+               <label>Intervalo (1ª entrada):
+                <input type="date" id="dashFrom"> —
+                <input type="date" id="dashTo">
+                <button id="btnDashFilter" type="button">Aplicar</button>
+              </label>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Velocidade média (dias/processo)</h2>
+            <div id="speedTable" class="table scrolly"></div>
+          </div>
         </div>
       </section>
 </main>

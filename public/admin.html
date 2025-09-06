@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <base href="/" />
+  <title>Painel DO-AGA</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./process_ring.css" />
+  <!-- Supabase client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <!-- App config e cliente -->
+  <script src="./config.js" defer></script>
+  <script src="./supabaseClient.js" defer></script>
+  <!-- Sessão pronta antes de inicializar a página -->
+  <script src="./auth-ready.js" defer></script>
+  <script src="./utils.js" defer></script>
+  <script src="./process_ring.js" defer></script>
+  <!-- Guardas de segurança: não alteram visual -->
+  <script src="./safety-guards.js" defer></script>
+  <script src="./mpa.js" defer></script>
+  <script src="./modules/admin.js" defer></script>
+  <script src="./modules/checklists.js" defer></script>
+</head>
+<body data-route="admin">
+  <div id="app" class="vh">
+<header class="bar">
+      <div class="brand">
+        <span class="logo">■</span>
+        <strong>Painel DO-AGA</strong>
+        <small class="build" id="buildInfo">build: carregando…</small>
+      </div>
+      <nav id="topNav" class="nav hidden">
+        <button data-route="dashboard">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise">Análise Documental</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+      </nav>
+      <div id="userBox" class="user hidden">
+        <button id="btnLogout" class="danger" type="button">Sair</button>
+      </div>
+    </header>
+<main class="main">
+<section id="viewAdmin" class="view">
+        <div class="grid">
+          <div class="admin-col">
+            <div class="card">
+              <h2>Criar usuário</h2>
+              <form id="formUser" data-ajax>
+                <label>E-mail <input id="adEmail" type="email" required></label>
+                <label>Identificação <input id="adName" required></label>
+                <label>Perfil
+                  <select id="adRole">
+                    <option>Administrador</option>
+                    <option>Analista OACO</option>
+                    <option>Analista OAGA</option>
+                    <option>CH OACO</option>
+                    <option>CH OAGA</option>
+                    <option>CH AGA</option>
+                    <option>Visitante</option>
+                  </select>
+                </label>
+                <button id="btnCreateUser" type="button">Criar</button>
+                <div id="adminMsg" class="msg"></div>
+              </form>
+            </div>
+            <div class="card">
+              <h2>Usuários</h2>
+              <div id="listaUsers" class="table scrolly"></div>
+            </div>
+          </div>
+          <div class="admin-col">
+            <div class="card">
+              <h2>Gerenciar Checklists</h2>
+              <form id="formChecklist" data-ajax>
+                <input type="hidden" id="ckId">
+                <label>Nome <input id="ckName" required></label>
+                <label>Categoria
+                  <select id="ckCat" required>
+                    <option>PDIR</option>
+                    <option>Inscrição</option>
+                    <option>Alteração</option>
+                    <option>Exploração</option>
+                    <option>OPEA</option>
+                  </select>
+                </label>
+                <label>Itens</label>
+                <div id="ckCats"></div>
+                <button id="btnAddCat" type="button">Adicionar categoria</button>
+                <div class="row">
+                  <button id="adminBtnSalvarChecklist" type="button">Salvar</button>
+                   <button id="btnAprovarChecklist" type="button">Aprovar</button>
+                  <button id="btnExcluirChecklist" class="danger" type="button">Excluir</button>
+                </div>
+                <div id="ckMsg" class="msg"></div>
+              </form>
+            </div>
+            <div class="card">
+              <h2>Checklists</h2>
+              <div id="listaCk" class="table scrolly"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+</main>
+
+<footer class="bar foot">
+      <span>Retro-UI</span>
+      <span>© DO-AGA</span>
+      <span id="footBuild"></span>
+    </footer>
+  </div>
+
+  <!-- Preenche build no cabeçalho e rodapé -->
+  <script defer src="./build-info-client.js"></script>
+</body>
+</html>

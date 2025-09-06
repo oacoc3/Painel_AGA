@@ -18,10 +18,12 @@
   <script src="./process_ring.js" defer></script>
   <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
+  <!-- jsPDF para exportar PDF (Análise Documental) -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
   <script src="./mpa.js" defer></script>
-  <script src="./modules/auth.js" defer></script>
+  <script src="./modules/analise_documental.js" defer></script>
 </head>
-<body data-route="login">
+<body data-route="analise">
   <div id="app" class="vh">
 <header class="bar">
       <div class="brand">
@@ -42,15 +44,38 @@
       </div>
     </header>
 <main class="main">
-<section id="viewLogin" class="view centered">
-        <div class="panel">
-          <h1>Login</h1>
-          <!-- AJAX: evitamos navegação por submit tradicional -->
-          <form id="loginForm" data-ajax>
-            <label>E-mail <input id="loginEmail" type="email" required></label>
-            <button id="btnDoLogin" type="submit">Enviar link de acesso</button>
-          </form>
-          <div id="loginMsg" class="msg"></div>
+<section id="viewAnalise" class="view">
+        <div class="analysis-grid">
+          <div class="analysis-col">
+            <div class="card">
+              <h2>Nova Análise Documental</h2>
+              <form id="formAD" data-ajax>
+                <label>NUP <input id="adNUP" required></label>
+                <label>Tipo do Processo
+                  <select id="adTipo">
+                    <option>PDIR</option><option>Inscrição</option><option>Alteração</option><option>Exploração</option><option>OPEA</option>
+                  </select>
+                </label>
+                <div class="row actions">
+                  <button id="btnLimparAD" type="button">Limpar</button>
+                  <button id="btnIniciarAD" type="button">Iniciar Preenchimento de Checklist</button>
+                </div>
+                <div id="adMsg" class="msg"></div>
+              </form>
+            </div>
+            <div class="card">
+              <h2>Checklists concluídas</h2>
+              <div id="listaAD" class="table scrolly"></div>
+            </div>
+          </div>
+          <div class="card" id="adChecklistCard">
+            <h2>Checklist</h2>
+            <div id="ckContainer"></div>
+            <div class="row actions" id="adActions">
+              <button id="btnLimparChecklist" type="button" disabled>Limpar</button>
+                <button id="adBtnSalvarChecklist" type="button" disabled>Salvar</button>
+            </div>
+          </div>
         </div>
       </section>
 </main>
