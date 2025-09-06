@@ -1,27 +1,15 @@
 // public/build-info-client.js
 (function () {
-  const TRY_IDS = ['appVersion', 'footerVersion', 'buildVersion'];
-
-  function findTargetEl() {
-    for (const id of TRY_IDS) {
-      const el = document.getElementById(id);
-      if (el) return el;
-    }
-    const dataEl = document.querySelector('[data-build-info]');
-    if (dataEl) return dataEl;
-    return null;
-  }
-
   function fmt(info) {
-    // Prioriza dados do deploy; se não existirem, usa APP_CONFIG.VERSION (fallback local)
-    const local = (window.APP_CONFIG && window.APP_CONFIG.VERSION) ? `v${window.APP_CONFIG.VERSION}` : '';
+    const local = (window.APP_CONFIG && window.APP_CONFIG.VERSION)
+      ? `v${window.APP_CONFIG.VERSION}`
+      : '';
     if (!info || info.ok !== true) return local || '';
 
     const parts = [];
     if (local) parts.push(local);
     if (info.branch) parts.push(info.branch);
     if (info.commit_short) parts.push(`@${info.commit_short}`);
-    // Ex.: "v1.4.2 main @a1b2c3d"
     return parts.join(' ').trim() || local || '';
   }
 
@@ -39,24 +27,33 @@
   }
 
   async function apply() {
+    const headerEl = document.getElementById('buildInfo'); // small no header
+    const footerEl = document.getElementById('footBuild'); // span no footer
+
     try {
       const res = await fetchWithTimeout('/.netlify/functions/build-info', 4000);
       const data = await res.json().catch(() => ({}));
-      window.APP_BUILD_INFO = data; // expõe global p/ inspeção/telemetria, se quiser
-      const tgt = findTargetEl();
+      window.APP_BUILD_INFO = data;
+
       const text = fmt(data);
-      if (tgt && text) {
-        tgt.textContent = text;
-        tgt.setAttribute('title', data.deployed_at ? `Deploy: ${data.deployed_at}` : '');
-      } else {
-        // sem alvo visível -> apenas loga (não altera visual)
+      if (headerEl && text) {
+        headerEl.textContent = `build: ${text}`;
+        if (data.deployed_at) headerEl.setAttribute('title', `Deploy: ${data.deployed_at}`);
+      }
+      if (footerEl && text) {
+        footerEl.textContent = text;
+        if (data.deployed_at) footerEl.setAttribute('title', `Deploy: ${data.deployed_at}`);
+      }
+
+      if (!headerEl && !footerEl) {
+        // Nenhum alvo visível — não altera visual; apenas loga
         console.info('[build-info]', text || '(sem info)', data);
       }
     } catch (e) {
-      // Falha ao buscar build-info -> mantém apenas APP_CONFIG.VERSION, se houver
-      const tgt = findTargetEl();
+      // Fallback para versão local, se existir
       const local = (window.APP_CONFIG && window.APP_CONFIG.VERSION) ? `v${window.APP_CONFIG.VERSION}` : '';
-      if (tgt && local) tgt.textContent = local;
+      if (headerEl && local) headerEl.textContent = `build: ${local}`;
+      if (footerEl && local) footerEl.textContent = local;
       console.warn('[build-info] falha ao obter info do deploy:', e);
     }
   }
