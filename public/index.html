@@ -14,9 +14,13 @@
   <!-- App -->
   <script src="./config.js" defer></script>
   <script src="./supabaseClient.js" defer></script>
+  <!-- Garante sessão pronta antes do App (SPA = Single-Page Application) -->
+  <script src="./auth-ready.js" defer></script>
 
   <script src="./utils.js" defer></script>
   <script src="./process_ring.js" defer></script>
+  <!-- Guardas de segurança: não alteram visual -->
+  <script src="./safety-guards.js" defer></script>
   <script src="./app.js" defer></script>
   <!-- Módulos -->
   <script src="./modules/auth.js" defer></script>
@@ -56,7 +60,8 @@
       <section id="viewLogin" class="view centered">
         <div class="panel">
           <h1>Login</h1>
-          <form id="loginForm">
+          <!-- AJAX: evitamos navegação por submit tradicional -->
+          <form id="loginForm" data-ajax>
             <label>E-mail <input id="loginEmail" type="email" required></label>
             <button id="btnDoLogin" type="submit">Enviar link de acesso</button>
           </form>
@@ -91,13 +96,13 @@
           <div class="card">
             <h2>Cadastro / Atualização</h2>
             <div class="tabs">
-              <button data-tab="proc">Processo</button>
-              <button data-tab="opiniao">Parecer Interno</button>
-              <button data-tab="notif">Notificação</button>
-              <button data-tab="sig">SIGADAER</button>
+              <button data-tab="proc" type="button">Processo</button>
+              <button data-tab="opiniao" type="button">Parecer Interno</button>
+              <button data-tab="notif" type="button">Notificação</button>
+              <button data-tab="sig" type="button">SIGADAER</button>
             </div>
             <div id="tabProc" class="tab">
-              <form id="formProc">
+              <form id="formProc" data-ajax>
                 <div class="row">
                   <label>NUP
                     <input id="procNUP" required pattern="^[0-9]{5}\.[0-9]{6}/[0-9]{4}-[0-9]{2}$">
@@ -140,7 +145,7 @@
               </form>
             </div>
             <div id="tabOpiniao" class="tab hidden">
-              <form id="formOpiniao">
+              <form id="formOpiniao" data-ajax>
                 <div class="row">
                   <label>NUP <input id="opNUP" required readonly></label>
                   <label>Tipo
@@ -164,7 +169,7 @@
               </form>
             </div>
             <div id="tabNotif" class="tab hidden">
-              <form id="formNotif">
+              <form id="formNotif" data-ajax>
                 <div class="row">
                   <label>NUP <input id="ntNUP" required readonly></label>
                   <label>Tipo
@@ -192,7 +197,7 @@
               </form>
             </div>
             <div id="tabSig" class="tab hidden">
-              <form id="formSig">
+              <form id="formSig" data-ajax>
                 <div class="row">
                   <label>NUP <input id="sgNUP" required readonly></label>
                   <label>Tipo
@@ -291,7 +296,7 @@
         <div class="split">
           <div class="card">
             <h2>Cadastrar / Atualizar Modelo</h2>
-            <form id="formModelo">
+            <form id="formModelo" data-ajax>
               <input type="hidden" id="mdlId">
               <label>Categoria <input id="mdlCat" required></label>
               <label>Título <input id="mdlTit" required></label>
@@ -322,7 +327,7 @@
           <div class="analysis-col">
             <div class="card">
               <h2>Nova Análise Documental</h2>
-              <form id="formAD">
+              <form id="formAD" data-ajax>
                 <label>NUP <input id="adNUP" required></label>
                 <label>Tipo do Processo
                   <select id="adTipo">
@@ -358,7 +363,7 @@
           <div class="admin-col">
             <div class="card">
               <h2>Criar usuário</h2>
-              <form id="formUser">
+              <form id="formUser" data-ajax>
                 <label>E-mail <input id="adEmail" type="email" required></label>
                 <label>Identificação <input id="adName" required></label>
                 <label>Perfil
@@ -384,7 +389,7 @@
           <div class="admin-col">
             <div class="card">
               <h2>Gerenciar Checklists</h2>
-              <form id="formChecklist">
+              <form id="formChecklist" data-ajax>
                 <input type="hidden" id="ckId">
                 <label>Nome <input id="ckName" required></label>
                 <label>Categoria
