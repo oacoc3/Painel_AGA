@@ -6,6 +6,7 @@ window.Modules.admin = (() => {
       .select('id,email,name,role,created_at,updated_at')
       .order('created_at', { ascending: false });
     if (error) return Utils.setMsg('adminMsg', error.message, true);
+
     Utils.renderTable('listaUsers', [
       { key: 'name', label: 'Identificação' },
       { key: 'email', label: 'E-mail' },
@@ -29,8 +30,22 @@ window.Modules.admin = (() => {
     if (!id) return;
     if (!confirm('Excluir usuário?')) return;
     Utils.setMsg('adminMsg', 'Excluindo usuário...');
-    const res = await Utils.callFn('delete-user', { method: 'POST', body: { id } });
-    if (!res.ok) return Utils.setMsg('adminMsg', (res.data && res.data.error) || 'Falha ao excluir usuário.', true);
+
+    const session = await getSession();
+    const token = session && session.access_token;
+    if (!token) {
+      return Utils.setMsg('adminMsg', 'Sessão inválida. Faça login novamente.', true);
+    }
+
+    const res = await Utils.callFn('delete-user', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: { id }
+    });
+    if (!res.ok) {
+      const msg = (res.data && res.data.error) || 'Falha ao excluir usuário.';
+      return Utils.setMsg('adminMsg', msg, true);
+    }
     Utils.setMsg('adminMsg', 'Usuário excluído.');
     await loadUsers();
   }
@@ -49,12 +64,24 @@ window.Modules.admin = (() => {
       if (!email || !name || !role) {
         return Utils.setMsg('adminMsg', 'Preencha todos os campos.', true);
       }
+
       Utils.setMsg('adminMsg', 'Criando usuário...');
+
+      const session = await getSession();
+      const token = session && session.access_token;
+      if (!token) {
+        return Utils.setMsg('adminMsg', 'Sessão inválida. Faça login novamente.', true);
+      }
+
       const res = await Utils.callFn('create-user', {
         method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
         body: { email, name, role }
       });
-      if (!res.ok) return Utils.setMsg('adminMsg', (res.data && res.data.error) || 'Falha ao criar usuário.', true);
+      if (!res.ok) {
+        const msg = (res.data && res.data.error) || 'Falha ao criar usuário.';
+        return Utils.setMsg('adminMsg', msg, true);
+      }
       Utils.setMsg('adminMsg', 'Usuário criado com sucesso.');
       el('formUser').reset();
       await loadUsers();
