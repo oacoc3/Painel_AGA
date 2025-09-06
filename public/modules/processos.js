@@ -238,6 +238,7 @@ window.Modules.processos = (() => {
       const td = tr.lastElementChild;
       td.textContent = '';
       const btn = document.createElement('button');
+      btn.type = 'button';
       btn.textContent = 'Registrar Recebimento';
       btn.addEventListener('click', () => showRecOpiniaoForm(row.id));
       td.appendChild(btn);
@@ -323,6 +324,7 @@ window.Modules.processos = (() => {
       const td = tr.lastElementChild;
       td.textContent = '';
       const btn = document.createElement('button');
+      btn.type = 'button';
       btn.textContent = 'Registrar Leitura';
       btn.addEventListener('click', () => showNotifLidaForm(row.id));
       td.appendChild(btn);
@@ -455,11 +457,13 @@ window.Modules.processos = (() => {
       const td = tr.lastElementChild;
       td.textContent = '';
       const btnExp = document.createElement('button');
+      btnExp.type = 'button';
       btnExp.textContent = 'Registrar Expedição';
       btnExp.disabled = row.status !== 'SOLICITADO';
       btnExp.addEventListener('click', () => showSigExpForm(row.id));
       td.appendChild(btnExp);
       const btnRec = document.createElement('button');
+      btnRec.type = 'button';
       btnRec.textContent = 'Registrar Recebimento';
       btnRec.disabled = row.status !== 'EXPEDIDO';
       btnRec.addEventListener('click', () => showSigRecForm(row.id));
