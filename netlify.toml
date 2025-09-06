@@ -5,11 +5,7 @@
   node_version = "20"
 
 # SPA: fallback para index.html (mantemos também public/_redirects por segurança)
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-
+# (Removido fallback de SPA para MPA)
 # Headers de segurança (equivalentes ao bloco que você mostrou)
 [[headers]]
   for = "/*"
