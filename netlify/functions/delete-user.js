@@ -1,6 +1,7 @@
 // netlify/functions/delete-user.js
 // Remove usuário de auth e profile usando Service Role.
-// Requer AUTORIZAÇÃO via header "Authorization: Bearer <access_token>" de um usuário com role "Administrador".
+// Requer AUTORIZAÇÃO via header "Authorization: Bearer <access_token>"
+// Aceita Administrador via JWT (user_metadata.role) OU via banco (profiles.role).
 const { createClient } = require('@supabase/supabase-js');
 
 const json = (statusCode, data) => ({
@@ -14,23 +15,18 @@ const json = (statusCode, data) => ({
 
 const getBearer = (headers = {}) => {
   const h = headers.authorization || headers.Authorization || '';
-  if (!h) return null;
-  const m = /^Bearer\s+(.+)$/i.exec(h.trim());
+  const m = /^Bearer\s+(.+)$/i.exec(h);
   return m ? m[1] : null;
 };
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Cache-Control': 'no-store',
-      },
-      body: '',
-    };
+    return { statusCode: 204, headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Cache-Control': 'no-store',
+    }, body: '' };
   }
 
   if (event.httpMethod !== 'POST') {
@@ -54,8 +50,22 @@ exports.handler = async (event) => {
     if (tokenErr || !userFromToken?.user) {
       return json(401, { ok: false, error: 'Invalid or expired token' });
     }
-    const callerRole = userFromToken.user?.user_metadata?.role;
-    if (callerRole !== 'Administrador') {
+
+    const caller = userFromToken.user;
+    const callerId = caller.id;
+    const callerRoleJWT = caller?.user_metadata?.role;
+
+    let isAdmin = (callerRoleJWT === 'Administrador');
+    if (!isAdmin && callerId) {
+      const { data: prof, error: profErr } = await admin
+        .from('profiles')
+        .select('role')
+        .eq('id', callerId)
+        .single();
+      if (!profErr && prof?.role === 'Administrador') isAdmin = true;
+    }
+
+    if (!isAdmin) {
       return json(403, { ok: false, error: 'Forbidden: requires Administrador' });
     }
 
@@ -63,10 +73,11 @@ exports.handler = async (event) => {
     let payload = {};
     try { payload = JSON.parse(event.body || '{}'); }
     catch { return json(400, { ok: false, error: 'Invalid JSON body' }); }
-
     const { id } = payload;
-    if (!id) {
-      return json(400, { ok: false, error: 'Missing user id' });
+    if (!id) return json(400, { ok: false, error: 'Missing id' });
+
+    if (id === callerId) {
+      return json(400, { ok: false, error: 'Você não pode excluir a si mesmo.' });
     }
 
     // 3) Apaga do Auth
