@@ -46,7 +46,7 @@
         <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
       </nav>
       <div id="userBox" class="user hidden">
-        <button id="btnLogout" class="danger">Sair</button>
+        <button id="btnLogout" class="danger" type="button">Sair</button>
       </div>
     </header>
 
@@ -74,7 +74,7 @@
                <label>Intervalo (1ª entrada):
                 <input type="date" id="dashFrom"> —
                 <input type="date" id="dashTo">
-                <button id="btnDashFilter">Aplicar</button>
+                <button id="btnDashFilter" type="button">Aplicar</button>
               </label>
             </div>
           </div>
@@ -132,7 +132,7 @@
                 <label>Observação <textarea id="procObs"></textarea></label>
                 <div class="row actions">
                   <button id="btnObraConcluida" type="button">Obra concluída</button>
-                  <button id="btnSalvarProc" disabled>Salvar</button>
+                  <button id="btnSalvarProc" type="button" disabled>Salvar</button>
                   <button id="btnLimparProc" type="button">Limpar</button>
                   <button id="btnExcluirProc" class="danger" type="button">Excluir</button>
                 </div>
@@ -149,14 +149,14 @@
                 </div>
                 <div class="row stretch">
                   <label>Solicitado em <input type="datetime-local" id="opSolic"></label>
-                  <button id="btnCadOpiniao">Cadastrar</button>
+                  <button id="btnCadOpiniao" type="button">Cadastrar</button>
                 </div>
                 <hr/>
                 <div id="opLista" class="table scrolly"></div>
                 <div id="opRecForm" class="hidden">
                   <label>Recebido em <input type="datetime-local" id="opRecInput"></label>
                   <div class="row actions">
-                    <button id="btnSalvarOpRec">Salvar</button>
+                    <button id="btnSalvarOpRec" type="button">Salvar</button>
                     <button id="btnVoltarOpRec" type="button">Voltar</button>
                   </div>
                 </div>
@@ -177,14 +177,14 @@
                 </div>
                 <div class="row stretch">
                   <label>Solicitada em <input type="datetime-local" id="ntSolic"></label>
-                  <button id="btnCadNotif">Cadastrar</button>
+                  <button id="btnCadNotif" type="button">Cadastrar</button>
                 </div>
                 <hr/>
                 <div id="ntLista" class="table scrolly"></div>
                 <div id="ntLidaForm" class="hidden">
                   <label>Lida em <input type="datetime-local" id="ntLidaInput"></label>
                   <div class="row actions">
-                    <button id="btnSalvarNtLida">Salvar</button>
+                    <button id="btnSalvarNtLida" type="button">Salvar</button>
                     <button id="btnVoltarNtLida" type="button">Voltar</button>
                   </div>
                 </div>
@@ -209,20 +209,20 @@
                     <input id="sgNum" pattern="\d{6}" maxlength="6" placeholder="123456">
                   </label>
                 </div>
-                <button id="btnCadSig">Cadastrar</button>
+                <button id="btnCadSig" type="button">Cadastrar</button>
                 <hr/>
                 <div id="sgLista" class="table scrolly"></div>
                 <div id="sgExpForm" class="hidden">
                   <label>Expedido em <input type="datetime-local" id="sgExpInput"></label>
                   <div class="row actions">
-                    <button id="btnSalvarSgExp">Salvar</button>
+                    <button id="btnSalvarSgExp" type="button">Salvar</button>
                     <button id="btnVoltarSgExp" type="button">Voltar</button>
                   </div>
                 </div>
                 <div id="sgRecForm" class="hidden">
                   <label>Recebido em <input type="datetime-local" id="sgRecInput"></label>
                   <div class="row actions">
-                    <button id="btnSalvarSgRec">Salvar</button>
+                    <button id="btnSalvarSgRec" type="button">Salvar</button>
                     <button id="btnVoltarSgRec" type="button">Voltar</button>
                   </div>
                 </div>
@@ -297,7 +297,7 @@
               <label>Título <input id="mdlTit" required></label>
               <label>Conteúdo <textarea id="mdlTxt" rows="8" required></textarea></label>
               <div class="row">
-                <button id="btnSalvarModelo">Salvar</button>
+                <button id="btnSalvarModelo" type="button">Salvar</button>
                 <button id="btnCopiarModelo" type="button">Copiar</button>
                 <button id="btnExcluirModelo" class="danger" type="button">Excluir</button>
               </div>
@@ -330,8 +330,8 @@
                   </select>
                 </label>
                 <div class="row actions">
-                  <button id="btnLimparAD">Limpar</button>
-                  <button id="btnIniciarAD">Iniciar Preenchimento de Checklist</button>
+                  <button id="btnLimparAD" type="button">Limpar</button>
+                  <button id="btnIniciarAD" type="button">Iniciar Preenchimento de Checklist</button>
                 </div>
                 <div id="adMsg" class="msg"></div>
               </form>
@@ -345,8 +345,8 @@
             <h2>Checklist</h2>
             <div id="ckContainer"></div>
             <div class="row actions" id="adActions">
-              <button id="btnLimparChecklist" disabled>Limpar</button>
-                <button id="adBtnSalvarChecklist" disabled>Salvar</button>
+              <button id="btnLimparChecklist" type="button" disabled>Limpar</button>
+                <button id="adBtnSalvarChecklist" type="button" disabled>Salvar</button>
             </div>
           </div>
         </div>
@@ -400,7 +400,7 @@
                 <div id="ckCats"></div>
                 <button id="btnAddCat" type="button">Adicionar categoria</button>
                 <div class="row">
-                  <button id="adminBtnSalvarChecklist">Salvar</button>
+                  <button id="adminBtnSalvarChecklist" type="button">Salvar</button>
                    <button id="btnAprovarChecklist" type="button">Aprovar</button>
                   <button id="btnExcluirChecklist" class="danger" type="button">Excluir</button>
                 </div>
