@@ -15,6 +15,7 @@ window.Modules.admin = (() => {
         label: '',
         render: r => {
           const btn = document.createElement('button');
+          btn.type = 'button';
           btn.textContent = 'Excluir';
           btn.className = 'danger';
           btn.addEventListener('click', () => deleteUser(r.id));
