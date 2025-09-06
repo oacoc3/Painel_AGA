@@ -2,7 +2,28 @@
 window.Modules = window.Modules || {};
 window.Modules.admin = (() => {
   async function loadUsers() {
-    const { data, error } = await sb.from('profiles')
+    // Usa RPC com SECURITY DEFINER para listar perfis respeitando a autorização de Administrador
+    const { data, error } = await sb.rpc('admin_list_profiles');
+    if (error) return Utils.setMsg('adminMsg', error.message, true);
+
+    Utils.renderTable('listaUsers', [
+      { key: 'name', label: 'Identificação' },
+      { key: 'email', label: 'E-mail' },
+      { key: 'role', label: 'Perfil' },
+      { key: 'created_at', label: 'Criado em', value: r => Utils.fmtDateTime(r.created_at) },
+      {
+        label: '',
+        value: (r) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = 'Excluir';
+          btn.addEventListener('click', () => onDeleteUser(r));
+          return btn;
+        }
+      }
+    ], data || []);
+  }
+= await sb.from('profiles')
       .select('id,email,name,role,created_at,updated_at')
       .order('created_at', { ascending: false });
     if (error) return Utils.setMsg('adminMsg', error.message, true);
