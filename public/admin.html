@@ -1,107 +1,119 @@
-// public/modules/admin.js
-window.Modules = window.Modules || {};
-window.Modules.admin = (() => {
-  async function loadUsers() {
-    // Usa RPC com SECURITY DEFINER para listar perfis respeitando a autorização de Administrador
-    const { data, error } = await sb.rpc('admin_list_profiles');
-    if (error) return Utils.setMsg('adminMsg', error.message, true);
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <base href="/" />
+  <title>Painel DO-AGA</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./process_ring.css" />
+  <!-- Supabase client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <!-- App config e cliente -->
+  <script src="./config.js" defer></script>
+  <script src="./supabaseClient.js" defer></script>
+  <!-- Sessão pronta antes de inicializar a página -->
+  <script src="./auth-ready.js" defer></script>
+  <script src="./utils.js" defer></script>
+  <script src="./process_ring.js" defer></script>
+  <!-- Guardas de segurança: não alteram visual -->
+  <script src="./safety-guards.js" defer></script>
+  <script src="./mpa.js" defer></script>
+  <script src="./modules/admin.js" defer></script>
+  <script src="./modules/checklists.js" defer></script>
+</head>
+<body data-route="admin">
+  <div id="app" class="vh">
+<header class="bar">
+      <div class="brand">
+        <span class="logo">■</span>
+        <strong>Painel DO-AGA</strong>
+        <small class="build" id="buildInfo">build: carregando…</small>
+      </div>
+      <nav id="topNav" class="nav hidden">
+        <button data-route="dashboard">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise">Análise Documental</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+      </nav>
+      <div id="userBox" class="user hidden">
+        <button id="btnLogout" class="danger" type="button">Sair</button>
+      </div>
+    </header>
+<main class="main">
+<section id="viewAdmin" class="view">
+        <div class="grid">
+          <div class="admin-col">
+            <div class="card">
+              <h2>Criar usuário</h2>
+              <form id="formUser" data-ajax>
+                <label>E-mail <input id="adEmail" type="email" required></label>
+                <label>Identificação <input id="adName" required></label>
+                <label>Perfil
+                  <select id="adRole">
+                    <option>Administrador</option>
+                    <option>Analista OACO</option>
+                    <option>Analista OAGA</option>
+                    <option>CH OACO</option>
+                    <option>CH OAGA</option>
+                    <option>CH AGA</option>
+                    <option>Visitante</option>
+                  </select>
+                </label>
+                <button id="btnCreateUser" type="button">Criar</button>
+                <div id="adminMsg" class="msg"></div>
+              </form>
+            </div>
+            <div class="card">
+              <h2>Usuários</h2>
+              <div id="listaUsers" class="table scrolly"></div>
+            </div>
+          </div>
+          <div class="admin-col">
+            <div class="card">
+              <h2>Gerenciar Checklists</h2>
+              <form id="formChecklist" data-ajax>
+                <input type="hidden" id="ckId">
+                <label>Nome <input id="ckName" required></label>
+                <label>Categoria
+                  <select id="ckCat" required>
+                    <option>PDIR</option>
+                    <option>Inscrição</option>
+                    <option>Alteração</option>
+                    <option>Exploração</option>
+                    <option>OPEA</option>
+                  </select>
+                </label>
+                <label>Itens</label>
+                <div id="ckCats"></div>
+                <button id="btnAddCat" type="button">Adicionar categoria</button>
+                <div class="row">
+                  <button id="adminBtnSalvarChecklist" type="button">Salvar</button>
+                   <button id="btnAprovarChecklist" type="button">Aprovar</button>
+                  <button id="btnExcluirChecklist" class="danger" type="button">Excluir</button>
+                </div>
+                <div id="ckMsg" class="msg"></div>
+              </form>
+            </div>
+            <div class="card">
+              <h2>Checklists</h2>
+              <div id="listaCk" class="table scrolly"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+</main>
 
-    Utils.renderTable('listaUsers', [
-      { key: 'name', label: 'Identificação' },
-      { key: 'email', label: 'E-mail' },
-      { key: 'role', label: 'Perfil' },
-      { key: 'created_at', label: 'Criado em', value: r => Utils.fmtDateTime(r.created_at) },
-      {
-        label: '',
-        render: (r) => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.textContent = 'Excluir';
-          btn.className = 'danger';
-          btn.addEventListener('click', () => onDeleteUser(r));
-          return btn;
-        }
-      }
-    ], data || []);
-  }
+<footer class="bar foot">
+      <span>Retro-UI</span>
+      <span>© DO-AGA</span>
+      <span id="footBuild"></span>
+    </footer>
+  </div>
 
-  async function onDeleteUser(row) {
-    const id = row?.id;
-    if (!id) return;
-    if (!confirm('Excluir usuário?')) return;
-    Utils.setMsg('adminMsg', 'Excluindo usuário...');
-
-    const session = await getSession();
-    const token = session && session.access_token;
-    if (!token) {
-      return Utils.setMsg('adminMsg', 'Sessão inválida. Faça login novamente.', true);
-    }
-
-    const res = await Utils.callFn('delete-user', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: { id }
-    });
-    if (!res.ok) {
-      const msg = (res.data && res.data.error) || 'Falha ao excluir usuário.';
-      return Utils.setMsg('adminMsg', msg, true);
-    }
-    Utils.setMsg('adminMsg', 'Usuário excluído.');
-    await loadUsers();
-  }
-
-  function bindForm() {
-    el('btnCreateUser').addEventListener('click', async (ev) => {
-      ev.preventDefault();
-
-      Utils.setMsg('adminMsg', '');
-      const profile = App.state.profile;
-      if (!profile || profile.role !== 'Administrador') {
-        return Utils.setMsg('adminMsg', 'Apenas Administrador pode criar usuários.', true);
-      }
-      const email = el('adEmail').value.trim();
-      const name = el('adName').value.trim();
-      const role = el('adRole').value;
-      if (!email || !name || !role) {
-        return Utils.setMsg('adminMsg', 'Preencha todos os campos.', true);
-      }
-
-      Utils.setMsg('adminMsg', 'Criando usuário...');
-
-      const session = await getSession();
-      const token = session && session.access_token;
-      if (!token) {
-        return Utils.setMsg('adminMsg', 'Sessão inválida. Faça login novamente.', true);
-      }
-
-      const res = await Utils.callFn('create-user', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: { email, name, role }
-      });
-      if (!res.ok) {
-        const msg = (res.data && res.data.error) || 'Falha ao criar usuário.';
-        return Utils.setMsg('adminMsg', msg, true);
-      }
-      Utils.setMsg('adminMsg', 'Usuário criado com sucesso.');
-      el('formUser').reset();
-      await loadUsers();
-    });
-  }
-
-  function init() {
-    bindForm();
-  }
-
-  async function load() {
-    // Só deixa abrir se perfil for Admin
-    const p = App.state.profile;
-    if (!p || p.role !== 'Administrador') {
-      Utils.setMsg('adminMsg', 'Acesso restrito a Administrador.', true);
-      return;
-    }
-    await loadUsers();
-  }
-
-  return { init, load };
-})();
+  <!-- Preenche build no cabeçalho e rodapé -->
+  <script defer src="./build-info-client.js"></script>
+</body>
+</html>
