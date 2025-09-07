@@ -729,3 +729,132 @@ where p.id = u.id
 
 
 -- ============== Fim do arquivo 7: Painel_AGA-main/sql/06_backfill_profiles.sql ==============
+
+
+
+
+-- sql/06_fix_history_and_opinions.sql
+-- 2025-09-07 — Ajustes para histórico e pareceres internos
+
+-- =========================================================
+-- (A) internal_opinions.finalized_at
+-- =========================================================
+alter table internal_opinions
+  add column if not exists finalized_at timestamptz;
+
+-- =========================================================
+-- (B) Tabela HISTORY que o frontend espera
+-- =========================================================
+create table if not exists history (
+  id uuid primary key default gen_random_uuid(),
+  process_id uuid not null references processes(id) on delete cascade,
+  action text not null,
+  details jsonb,
+  user_id uuid,
+  user_email text,
+  created_at timestamptz not null default now()
+);
+
+-- Habilita RLS (Row-Level Security)
+alter table history enable row level security;
+
+-- Permite leitura a qualquer usuário autenticado
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename  = 'history'
+      and policyname = 'history read'
+  ) then
+    create policy "history read" on history
+      for select using ( auth.role() = 'authenticated' );
+  end if;
+end$$;
+
+-- Índice para acelerar as consultas do frontend
+create index if not exists idx_history_process_id_created_at
+  on history (process_id, created_at desc);
+
+-- =========================================================
+-- (C) Função + triggers para alimentar HISTORY automaticamente
+-- =========================================================
+create or replace function add_history_event()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  pid uuid;
+begin
+  -- Deriva o process_id conforme a tabela que disparou o trigger
+  if tg_table_name = 'processes' then
+    pid := coalesce(new.id, old.id);
+  elsif tg_table_name in ('internal_opinions','notifications','sigadaer','checklist_responses') then
+    pid := coalesce(new.process_id, old.process_id);
+  else
+    -- Para outras tabelas, não faz nada
+    return coalesce(new, old);
+  end if;
+
+  insert into history(process_id, action, details, user_id, user_email, created_at)
+  values (
+    pid,
+    tg_op,
+    row_to_json(coalesce(new, old)),
+    auth.uid(),
+    auth.jwt()->>'email',
+    now()
+  );
+
+  return coalesce(new, old);
+end
+$$;
+
+-- Triggers (INSERT/UPDATE) nas tabelas pertinentes
+drop trigger if exists history_processes on processes;
+create trigger history_processes
+  after insert or update on processes
+  for each row execute function add_history_event();
+
+drop trigger if exists history_internal_opinions on internal_opinions;
+create trigger history_internal_opinions
+  after insert or update on internal_opinions
+  for each row execute function add_history_event();
+
+drop trigger if exists history_notifications on notifications;
+create trigger history_notifications
+  after insert or update on notifications
+  for each row execute function add_history_event();
+
+drop trigger if exists history_sigadaer on sigadaer;
+create trigger history_sigadaer
+  after insert or update on sigadaer
+  for each row execute function add_history_event();
+
+drop trigger if exists history_checklists on checklist_responses;
+create trigger history_checklists
+  after insert or update on checklist_responses
+  for each row execute function add_history_event();
+
+-- =========================================================
+-- (D) (Opcional) Backfill do histórico a partir do audit_log
+--     Apenas para eventos de 'processes' (os demais exigiriam JOIN).
+-- =========================================================
+insert into history (process_id, action, details, user_id, user_email, created_at)
+select
+  al.entity_id as process_id,
+  al.action,
+  al.details,
+  al.user_id,
+  al.user_email,
+  al.occurred_at
+from audit_log al
+where al.entity_type = 'processes'
+  and not exists (
+    select 1 from history h
+    where h.process_id = al.entity_id
+      and h.action     = al.action
+      and h.created_at = al.occurred_at
+  );
