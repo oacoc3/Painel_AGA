@@ -13,41 +13,20 @@ window.Modules.admin = (() => {
       { key: 'created_at', label: 'Criado em', value: r => Utils.fmtDateTime(r.created_at) },
       {
         label: '',
-        value: (r) => {
+        render: (r) => {
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.textContent = 'Excluir';
+          btn.className = 'danger';
           btn.addEventListener('click', () => onDeleteUser(r));
           return btn;
         }
       }
     ], data || []);
   }
-= await sb.from('profiles')
-      .select('id,email,name,role,created_at,updated_at')
-      .order('created_at', { ascending: false });
-    if (error) return Utils.setMsg('adminMsg', error.message, true);
 
-    Utils.renderTable('listaUsers', [
-      { key: 'name', label: 'Identificação' },
-      { key: 'email', label: 'E-mail' },
-      { key: 'role', label: 'Perfil' },
-      { key: 'created_at', label: 'Criado em', value: r => Utils.fmtDateTime(r.created_at) },
-      {
-        label: '',
-        render: r => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.textContent = 'Excluir';
-          btn.className = 'danger';
-          btn.addEventListener('click', () => deleteUser(r.id));
-          return btn;
-        }
-      }
-    ], data || []);
-  }
-
-  async function deleteUser(id) {
+  async function onDeleteUser(row) {
+    const id = row?.id;
     if (!id) return;
     if (!confirm('Excluir usuário?')) return;
     Utils.setMsg('adminMsg', 'Excluindo usuário...');
@@ -74,6 +53,7 @@ window.Modules.admin = (() => {
   function bindForm() {
     el('btnCreateUser').addEventListener('click', async (ev) => {
       ev.preventDefault();
+
       Utils.setMsg('adminMsg', '');
       const profile = App.state.profile;
       if (!profile || profile.role !== 'Administrador') {
