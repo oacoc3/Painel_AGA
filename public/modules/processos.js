@@ -14,7 +14,8 @@ window.Modules.processos = (() => {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.tab;
         ['tabProc','tabOpiniao','tabNotif','tabSig'].forEach(id => Utils.hide(id));
-        Utils.show(tab);
+        const targetId = ({proc:'tabProc',opiniao:'tabOpiniao',notif:'tabNotif',sig:'tabSig'})[tab] || tab;
+        Utils.show(targetId);
         buttons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
       });
@@ -131,9 +132,16 @@ window.Modules.processos = (() => {
   }
 
   function syncNUP() {
-    setText('opNUP', currentNUP || '');
-    setText('ntNUP', currentNUP || '');
-    setText('sgNUP', currentNUP || '');
+    ['opNUP','ntNUP','sgNUP'].forEach(id => {
+      const e = el(id);
+      if (!e) return;
+      const v = currentNUP || '';
+      if (e.tagName === 'INPUT' || e.tagName === 'TEXTAREA') {
+        e.value = v;
+      } else {
+        e.textContent = v;
+      }
+    });
   }
 
   function describeHistoryItem(item) {
@@ -194,7 +202,7 @@ window.Modules.processos = (() => {
 
   // —— Parecer Interno ——
   async function cadastrarOpiniao() {
-    const nup = el('opNUP').textContent.trim();
+    const _nupEl = el('opNUP'); const nup = _nupEl ? String((_nupEl.value ?? _nupEl.textContent)).trim() : '';
     const type = el('opTipo').value;
     const requested_at_input = el('opSolic').value;
     const requested_at = requested_at_input ? new Date(requested_at_input).toISOString() : new Date().toISOString();
@@ -444,7 +452,7 @@ window.Modules.processos = (() => {
   }
 
   async function cadastrarSIG() {
-    const nup = el('sgNUP').textContent.trim();
+    const _sgNupEl = el('sgNUP'); const nup = _sgNupEl ? String((_sgNupEl.value ?? _sgNupEl.textContent)).trim() : '';
     const type = el('sgTipo').value;
     const numberInputEl = el('sgNumero') || el('sgNum');
     const numberInput = numberInputEl ? numberInputEl.value : '';
