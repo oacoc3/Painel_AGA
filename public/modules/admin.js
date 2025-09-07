@@ -50,19 +50,34 @@ window.Modules.admin = (() => {
     await loadUsers();
   }
 
+  async function getMyRole() {
+    // Tenta via JWT (user_metadata.role); se ausente, cai para tabela profiles
+    const u = await getUser();
+    if (!u) return null;
+    const roleFromJwt = (u.user_metadata && u.user_metadata.role) || null;
+    if (roleFromJwt) return roleFromJwt;
+
+    const { data, error } = await sb.from('profiles').select('role').eq('id', u.id).single();
+    if (error) {
+      console.warn('[admin] Falha ao obter role do banco:', error);
+      return null;
+    }
+    return data?.role || null;
+  }
+
   function bindForm() {
     el('btnCreateUser').addEventListener('click', async (ev) => {
       ev.preventDefault();
 
       Utils.setMsg('adminMsg', '');
-      const profile = App.state.profile;
-      if (!profile || profile.role !== 'Administrador') {
+      const role = await getMyRole();
+      if (role !== 'Administrador') {
         return Utils.setMsg('adminMsg', 'Apenas Administrador pode criar usuários.', true);
       }
       const email = el('adEmail').value.trim();
       const name = el('adName').value.trim();
-      const role = el('adRole').value;
-      if (!email || !name || !role) {
+      const roleSel = el('adRole').value;
+      if (!email || !name || !roleSel) {
         return Utils.setMsg('adminMsg', 'Preencha todos os campos.', true);
       }
 
@@ -77,7 +92,7 @@ window.Modules.admin = (() => {
       const res = await Utils.callFn('create-user', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
-        body: { email, name, role }
+        body: { email, name, role: roleSel }
       });
       if (!res.ok) {
         const msg = (res.data && res.data.error) || 'Falha ao criar usuário.';
@@ -95,8 +110,8 @@ window.Modules.admin = (() => {
 
   async function load() {
     // Só deixa abrir se perfil for Admin
-    const p = App.state.profile;
-    if (!p || p.role !== 'Administrador') {
+    const role = await getMyRole();
+    if (role !== 'Administrador') {
       Utils.setMsg('adminMsg', 'Acesso restrito a Administrador.', true);
       return;
     }
