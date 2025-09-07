@@ -14,18 +14,26 @@ window.Modules.processos = (() => {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.tab;
         ['tabProc','tabOpiniao','tabNotif','tabSig'].forEach(id => Utils.hide(id));
-        Utils.show('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
-        buttons.forEach(b => b.classList.toggle('active', b===btn));
+        Utils.show(tab);
+        buttons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
       });
     });
-    if (buttons[0]) buttons[0].click();
+    const first = buttons[0];
+    if (first) first.click();
   }
 
   function bindProcFormTracking() {
-    const form = el('formProc');
-    if (!form) return;
-    form.addEventListener('input', () => {
-      el('btnSalvarProc').disabled = false;
+    const inputs = ['procNUP','procTipo','procStatus','procStatusDate','procEntrada','procObraTermino','procObs'];
+    inputs.forEach(id => {
+      const e = el(id);
+      if (!e) return;
+      e.addEventListener('input', () => {
+        el('btnSalvarProc').disabled = false;
+      });
+      e.addEventListener('change', () => {
+        el('btnSalvarProc').disabled = false;
+      });
     });
   }
 
@@ -34,11 +42,15 @@ window.Modules.processos = (() => {
     const type = el('procTipo').value;
     const status = el('procStatus').value;
     const statusSinceInput = el('procStatusDate').value;
-    const firstEntry = el('procEntrada').value;
-    const obraTerm = el('procObraTermino').value || null;
+    const firstEntry = el('procEntrada').value ? new Date(el('procEntrada').value).toISOString() : null;
+    const obraTerm = el('procObraTermino').value ? new Date(el('procObraTermino').value).toISOString() : null;
     const obraConcl = el('btnObraConcluida').classList.contains('active');
-    const note = el('procObs').value.trim();
-    if (!nup || !firstEntry) return Utils.setMsg('procMsg', 'Preencha NUP e Data 1ª entrada.', true);
+    const crea = el('procObs').value?.trim() || null;
+
+    if (!nup || !firstEntry) {
+      Utils.setMsg('procMsg', 'Preencha NUP e Data 1ª entrada.', true);
+      return;
+    }
     Utils.setMsg('procMsg', currentProcId ? 'Atualizando...' : 'Cadastrando...');
 
     try {
@@ -70,33 +82,30 @@ window.Modules.processos = (() => {
         const { error } = await sb.from('processes').update(payload).eq('id', currentProcId);
         if (error) throw error;
       }
-      if (note) {
-        await sb.from('audit_log').insert({
-          user_id: u.id,
-          user_email: u.email,
-          action: 'NOTE',
-          entity_type: 'process_notes',
-          entity_id: currentProcId,
-          details: { process_id: currentProcId, note }
-        });
-        el('procObs').value = '';
-      }
-      Utils.setMsg('procMsg', 'Salvo com sucesso.');
+      currentNUP = nup;
+      syncNUP();
       el('btnSalvarProc').disabled = true;
+      Utils.setMsg('procMsg', 'Salvo.');
       await reloadLists();
+      await loadHistory(currentProcId);
     } catch (e) {
       Utils.setMsg('procMsg', e.message || String(e), true);
     }
   }
 
   async function findProcessByNUP(nup) {
-    const { data, error } = await sb.from('processes').select('id').eq('nup', nup).maybeSingle();
+    const { data, error } = await sb
+      .from('processes')
+      .select('id')
+      .eq('nup', nup)
+      .maybeSingle();
     if (error) throw error;
     return data?.id || null;
   }
 
   async function fetchProcessByNUP(nup) {
-    const { data, error } = await sb.from('processes')
+    const { data, error } = await sb
+      .from('processes')
       .select('id,nup,type,status,status_since,first_entry_date,obra_termino_date,obra_concluida')
       .eq('nup', nup)
       .maybeSingle();
@@ -140,19 +149,17 @@ window.Modules.processos = (() => {
     if (!box) return;
     box.innerHTML = '<div class="msg">Carregando histórico…</div>';
     try {
-      const { data, error } = await sb.from('audit_log')
-        .select('created_at,user_email,action,details')
-        .eq('entity_type','process_notes')
-        .eq('entity_id', processId)
+      const { data, error } = await sb.from('history')
+        .select('*')
+        .eq('process_id', processId)
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(100);
       if (error) throw error;
       if (!data || !data.length) {
-        box.innerHTML = '<div class="msg">Sem registros de histórico.</div>';
+        box.innerHTML = '<div class="msg">Nenhum evento de histórico.</div>';
         return;
       }
       const ul = document.createElement('ul');
-      ul.className = 'history';
       data.forEach(item => {
         const li = document.createElement('li');
         li.textContent = describeHistoryItem(item);
@@ -166,35 +173,23 @@ window.Modules.processos = (() => {
   }
 
   async function loadProcessFromNUP() {
-    const procNUP = el('procNUP');
-    if (!procNUP) return;
-    procNUP.addEventListener('change', async () => {
-      const nup = procNUP.value.trim();
-      currentNUP = nup;
-      syncNUP();
-      if (!nup) return;
-      Utils.setMsg('procMsg', 'Carregando…');
-      try {
-        const p = await fetchProcessByNUP(nup);
-        if (p) {
-          currentProcId = p.id;
-          el('procTipo').value = p.type || '';
-          el('procStatus').value = p.status || '';
-          el('procStatusDate').value = p.status_since ? Utils.toDateTimeLocalValue(p.status_since) : '';
-          el('procEntrada').value = p.first_entry_date ? Utils.toDateInputValue(p.first_entry_date) : '';
-          el('procObraTermino').value = p.obra_termino_date ? Utils.toDateInputValue(p.obra_termino_date) : '';
-          if (p.obra_concluida) el('btnObraConcluida').classList.add('active'); else el('btnObraConcluida').classList.remove('active');
-          Utils.setMsg('procMsg', `Carregado processo ${p.nup}.`);
-          await loadHistory(p.id);
-        } else {
-          clearProcessForm();
-          el('procNUP').value = nup;
-          Utils.setMsg('procMsg', 'Processo não encontrado.');
-        }
-      } catch (e) {
-        Utils.setMsg('procMsg', e.message || String(e), true);
-      }
-    });
+    const url = new URL(location.href);
+    const nupParam = url.searchParams.get('nup');
+    if (!nupParam) return;
+    const p = await fetchProcessByNUP(nupParam);
+    if (!p) return;
+    currentProcId = p.id;
+    currentNUP = p.nup || '';
+    syncNUP();
+    el('procNUP').value = p.nup || '';
+    el('procTipo').value = p.type || '';
+    el('procStatus').value = p.status || '';
+    el('procStatusDate').value = Utils.toDateTimeLocalValue(p.status_since);
+    el('procEntrada').value = Utils.toDateInputValue(p.first_entry_date);
+    el('procObraTermino').value = Utils.toDateInputValue(p.obra_termino_date);
+    if (p.obra_concluida) el('btnObraConcluida').classList.add('active');
+    await reloadLists();
+    await loadHistory(p.id);
   }
 
   // —— Parecer Interno ——
@@ -237,14 +232,14 @@ window.Modules.processos = (() => {
 
   async function finalizarOpiniao() {
     const t = el('opFinInput').value;
-    const finished_at = t ? new Date(t).toISOString() : new Date().toISOString();
+    const finalized_at = t ? new Date(t).toISOString() : new Date().toISOString();
     if (!currentOpiniaoRecId) return Utils.setMsg('opMsg', 'Nenhuma solicitação selecionada.', true);
     Utils.setMsg('opMsg', 'Finalizando parecer…');
     try {
-      const { error } = await sb.from('internal_opinions').update({ finished_at }).eq('id', currentOpiniaoRecId);
+      const { error } = await sb.from('internal_opinions').update({ finalized_at }).eq('id', currentOpiniaoRecId);
       if (error) throw error;
-      Utils.setMsg('opMsg', 'Parecer marcado como FINALIZADO.');
-      cancelarRecOpiniao();
+      Utils.setMsg('opMsg', 'Parecer finalizado.');
+      cancelarFinOpiniao();
       await reloadLists();
     } catch (e) {
       Utils.setMsg('opMsg', e.message || String(e), true);
@@ -255,19 +250,19 @@ window.Modules.processos = (() => {
     const box = el('opLista');
     if (!box) return;
     if (!processId) {
-      box.innerHTML = '<div class="msg">Selecione um processo para ver os pareceres.</div>';
+      box.innerHTML = '<div class="msg">Selecione um processo para ver os pareceres internos.</div>';
       return;
     }
     box.innerHTML = '<div class="msg">Carregando pareceres…</div>';
     try {
       const { data, error } = await sb.from('internal_opinions')
-        .select('id,type,requested_at,received_at,finished_at')
+        .select('id,type,requested_at,received_at,finalized_at')
         .eq('process_id', processId)
         .order('requested_at', { ascending: false });
       if (error) throw error;
 
       if (!data || !data.length) {
-        box.innerHTML = '<div class="msg">Nenhum parecer cadastrado.</div>';
+        box.innerHTML = '<div class="msg">Nenhuma solicitação de parecer interno.</div>';
         return;
       }
 
@@ -282,18 +277,21 @@ window.Modules.processos = (() => {
           <td>${row.type || ''}</td>
           <td>${row.requested_at ? Utils.fmtDateTime(row.requested_at) : ''}</td>
           <td>${row.received_at ? Utils.fmtDateTime(row.received_at) : ''}</td>
-          <td>${row.finished_at ? Utils.fmtDateTime(row.finished_at) : ''}</td>
+          <td>${row.finalized_at ? Utils.fmtDateTime(row.finalized_at) : ''}</td>
           <td></td>
         `;
         const td = tr.querySelector('td:last-child');
-        const btnRec = document.createElement('button');
-        btnRec.textContent = 'Marcar Recebido';
-        btnRec.addEventListener('click', () => showOpiniaoRecForm(row.id));
-        td.appendChild(btnRec);
-        const btnFin = document.createElement('button');
-        btnFin.textContent = 'Finalizar';
-        btnFin.addEventListener('click', () => showOpiniaoFinForm(row.id));
-        td.appendChild(btnFin);
+        if (!row.received_at) {
+          const btnR = document.createElement('button');
+          btnR.textContent = 'Marcar Recebido';
+          btnR.addEventListener('click', () => showOpiniaoRecForm(row.id));
+          td.appendChild(btnR);
+        } else if (!row.finalized_at) {
+          const btnF = document.createElement('button');
+          btnF.textContent = 'Marcar Finalizado';
+          btnF.addEventListener('click', () => showOpiniaoFinForm(row.id));
+          td.appendChild(btnF);
+        }
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
@@ -336,8 +334,8 @@ window.Modules.processos = (() => {
   async function cadastrarNotif() {
     const nup = el('ntNUP').value.trim();
     const type = el('ntTipo').value;
-    const t = el('ntSolic').value;
-    const requested_at = t ? new Date(t).toISOString() : new Date().toISOString();
+    const requested_at_input = el('ntSolic').value;
+    const requested_at = requested_at_input ? new Date(requested_at_input).toISOString() : new Date().toISOString();
     Utils.setMsg('ntMsg', 'Cadastrando notificação…');
     try {
       const pid = await findProcessByNUP(nup);
@@ -347,7 +345,7 @@ window.Modules.processos = (() => {
         process_id: pid, type, requested_at, created_by: u.id
       });
       if (error) throw error;
-      Utils.setMsg('ntMsg', 'Notificação cadastrada (status SOLICITADA).');
+      Utils.setMsg('ntMsg', 'Notificação cadastrada.');
       await reloadLists();
     } catch (e) {
       Utils.setMsg('ntMsg', e.message || String(e), true);
@@ -448,7 +446,8 @@ window.Modules.processos = (() => {
   async function cadastrarSIG() {
     const nup = el('sgNUP').textContent.trim();
     const type = el('sgTipo').value;
-    const numberInput = el('sgNumero').value;
+    const numberInputEl = el('sgNumero') || el('sgNum');
+    const numberInput = numberInputEl ? numberInputEl.value : '';
     const whenInput = el('sgSolic').value;
     const requested_at = whenInput ? new Date(whenInput).toISOString() : new Date().toISOString();
     Utils.setMsg('sgMsg', 'Cadastrando SIGADAER…');
@@ -456,11 +455,17 @@ window.Modules.processos = (() => {
       const pid = await findProcessByNUP(nup);
       if (!pid) throw new Error('Processo não encontrado para o NUP informado.');
       const u = await getUser();
-      const num = parseSigNumber(numberInput);
-      if (num !== null) {
-        const { data: exists, error: errChk } = await sb.from('sigadaer')
-          .select('id').contains('numbers', [num]).eq('process_id', pid).maybeSingle();
-        if (errChk) throw errChk;
+
+      let num = null;
+      if (numberInput) {
+        // Permite formatos: "SIG2024-12" ou "2024-0012" (via regex em parseSigNumber)
+        num = parseSigNumber(numberInput) || numberInput;
+        // Evitar duplicidade de número no mesmo processo
+        const { data: existing, error: err2 } = await sb.from('sigadaer')
+          .select('numbers')
+          .eq('process_id', pid);
+        if (err2) throw err2;
+        const exists = (existing || []).some(row => Array.isArray(row.numbers) && row.numbers.includes(num));
         if (exists) throw new Error(`SIG ${num} já cadastrado para este processo.`);
       }
       const { error } = await sb.from('sigadaer').insert({
@@ -504,11 +509,64 @@ window.Modules.processos = (() => {
     }
   }
 
+  // —— Lista de SIGADAER ——
+  async function loadSIGList(processId) {
+    const box = el('sgLista');
+    if (!box) return;
+    if (!processId) {
+      box.innerHTML = '<div class="msg">Selecione um processo para ver as solicitações SIGADAER.</div>';
+      return;
+    }
+    box.innerHTML = '<div class="msg">Carregando SIGADAER…</div>';
+    try {
+      const { data, error } = await sb.from('sigadaer')
+        .select('id,type,numbers,requested_at,received_at')
+        .eq('process_id', processId)
+        .order('requested_at', { ascending: false });
+      if (error) throw error;
+
+      if (!data || !data.length) {
+        box.innerHTML = '<div class="msg">Nenhuma solicitação SIGADAER encontrada.</div>';
+        return;
+      }
+
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th>Tipo</th><th>Números</th><th>Solicitada</th><th>Recebida</th><th>Ações</th></tr>';
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        const nums = Array.isArray(row.numbers) ? row.numbers.join(', ') : '';
+        tr.innerHTML = `
+          <td>${row.type || ''}</td>
+          <td>${nums}</td>
+          <td>${row.requested_at ? Utils.fmtDateTime(row.requested_at) : ''}</td>
+          <td>${row.received_at ? Utils.fmtDateTime(row.received_at) : ''}</td>
+          <td></td>
+        `;
+        const td = tr.querySelector('td:last-child');
+        if (!row.received_at) {
+          const btn = document.createElement('button');
+          btn.textContent = 'Marcar Recebido';
+          btn.addEventListener('click', () => showSIGRecForm(row.id));
+          td.appendChild(btn);
+        }
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      box.innerHTML = '';
+      box.appendChild(table);
+    } catch (e) {
+      box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
+    }
+  }
+
   // —— EXCLUSÃO DE PROCESSO ——
   async function deleteProcess() {
-    if (!currentProcId) return Utils.setMsg('procMsg', 'Nenhum processo carregado para exclusão.', true);
-    if (!confirm('Excluir processo e registros relacionados?')) return;
-    Utils.setMsg('procMsg', 'Excluindo processo…');
+    if (!currentProcId) return Utils.setMsg('procMsg', 'Abra um processo primeiro.', true);
+    if (!confirm('Deseja excluir este processo e seus registros relacionados?')) return;
+    Utils.setMsg('procMsg', 'Excluindo…');
     try {
       await sb.from('internal_opinions').delete().eq('process_id', currentProcId);
       await sb.from('notifications').delete().eq('process_id', currentProcId);
@@ -523,9 +581,9 @@ window.Modules.processos = (() => {
     }
   }
 
-  // —— LISTAGENS ——
+  // —— Lista de Processos ——
   async function loadProcessList() {
-    const box = el('procLista');
+    const box = el('listaProcessos');
     if (!box) return;
     box.innerHTML = '<div class="msg">Carregando…</div>';
     try {
@@ -557,17 +615,16 @@ window.Modules.processos = (() => {
         `;
         tr.addEventListener('click', async () => {
           currentProcId = p.id;
-          currentNUP = p.nup;
+          currentNUP = p.nup || '';
           syncNUP();
           el('procNUP').value = p.nup || '';
           el('procTipo').value = p.type || '';
           el('procStatus').value = p.status || '';
-          el('procStatusDate').value = p.status_since ? Utils.toDateTimeLocalValue(p.status_since) : '';
-          el('procEntrada').value = p.first_entry_date ? Utils.toDateInputValue(p.first_entry_date) : '';
-          el('procObraTermino').value = p.obra_termino_date ? Utils.toDateInputValue(p.obra_termino_date) : '';
-          if (p.obra_concluida) el('btnObraConcluida').classList.add('active'); else el('btnObraConcluida').classList.remove('active');
-          el('btnSalvarProc').disabled = true;
-          Utils.setMsg('procMsg', `Carregado processo ${p.nup}.`);
+          el('procStatusDate').value = Utils.toDateTimeLocalValue(p.status_since);
+          el('procEntrada').value = Utils.toDateInputValue(p.first_entry_date);
+          el('procObraTermino').value = Utils.toDateInputValue(p.obra_termino_date);
+          if (p.obra_concluida) el('btnObraConcluida').classList.add('active');
+          await reloadLists();
           await loadHistory(p.id);
         });
         tbody.appendChild(tr);
@@ -590,43 +647,46 @@ window.Modules.processos = (() => {
     const ids = ['procLista','opLista','ntLista','sgLista'];
     const procs = ids.map(id => el(id)).filter(Boolean);
     procs.forEach(box => box.innerHTML = '<div class="msg">Carregando…</div>');
-    try {
-      await loadProcessList();
-      if (currentProcId) {
-        await loadNotifAndSig(currentProcId);
-      } else {
-        ['opLista','ntLista','sgLista'].forEach(id => {
-          const e = el(id);
-          if (e) e.innerHTML = '<div class="msg">Selecione um processo.</div>';
-        });
-      }
-    } catch (e) {
-      Utils.setMsg('procMsg', e.message || String(e), true);
-    }
+    await Promise.all([
+      loadProcessList(),
+      loadNotifAndSig(currentProcId)
+    ]);
   }
 
   function bindActions() {
-    el('btnSalvarProc').addEventListener('click', (ev) => { ev.preventDefault(); upsertProcess(); });
-    el('btnLimparProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); });
-    el('btnExcluirProc').addEventListener('click', (ev) => { ev.preventDefault(); deleteProcess(); });
+    if (el('btnSalvarProc')) el('btnSalvarProc').addEventListener('click', (ev) => { ev.preventDefault(); upsertProcess(); });
+    if (el('btnLimparProc')) el('btnLimparProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); });
+    if (el('btnExcluirProc')) el('btnExcluirProc').addEventListener('click', (ev) => { ev.preventDefault(); deleteProcess(); });
 
-    el('btnObraConcluida').addEventListener('click', (ev) => {
+    if (el('btnObraConcluida')) el('btnObraConcluida').addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.target.classList.toggle('active');
       el('btnSalvarProc').disabled = false;
     });
 
-    el('btnCadOp').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarOpiniao(); });
-    el('btnRecOp').addEventListener('click', (ev) => { ev.preventDefault(); registrarRecebOpiniao(); });
-    el('btnFinOp').addEventListener('click', (ev) => { ev.preventDefault(); finalizarOpiniao(); });
+    // IDs antigos (manter compatibilidade se existirem no HTML)
+    if (el('btnCadOp')) el('btnCadOp').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarOpiniao(); });
+    if (el('btnRecOp')) el('btnRecOp').addEventListener('click', (ev) => { ev.preventDefault(); registrarRecebOpiniao(); });
+    if (el('btnFinOp')) el('btnFinOp').addEventListener('click', (ev) => { ev.preventDefault(); finalizarOpiniao(); });
 
-    el('btnCadNotif').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarNotif(); });
-    el('btnRegNotifLida').addEventListener('click', (ev) => { ev.preventDefault(); registrarNotifLida(); });
-    el('btnCancNotifLida').addEventListener('click', (ev) => { ev.preventDefault(); cancelarNotifLida(); });
+    if (el('btnCadNotif')) el('btnCadNotif').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarNotif(); });
+    if (el('btnRegNotifLida')) el('btnRegNotifLida').addEventListener('click', (ev) => { ev.preventDefault(); registrarNotifLida(); });
+    if (el('btnCancNotifLida')) el('btnCancNotifLida').addEventListener('click', (ev) => { ev.preventDefault(); cancelarNotifLida(); });
 
-    el('btnCadSig').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarSIG(); });
-    el('btnRegSigRec').addEventListener('click', (ev) => { ev.preventDefault(); registrarSIGRecebido(); });
-    el('btnCancSigRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelarSIGRec(); });
+    if (el('btnCadSig')) el('btnCadSig').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarSIG(); });
+    if (el('btnRegSigRec')) el('btnRegSigRec').addEventListener('click', (ev) => { ev.preventDefault(); registrarSIGRecebido(); });
+    if (el('btnCancSigRec')) el('btnCancSigRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelarSIGRec(); });
+
+    // IDs conforme o HTML atual
+    if (el('btnCadOpiniao')) el('btnCadOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarOpiniao(); });
+    if (el('btnSalvarOpRec')) el('btnSalvarOpRec').addEventListener('click', (ev) => { ev.preventDefault(); registrarRecebOpiniao(); });
+    if (el('btnVoltarOpRec')) el('btnVoltarOpRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelarRecOpiniao(); });
+
+    if (el('btnSalvarNtLida')) el('btnSalvarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); registrarNotifLida(); });
+    if (el('btnVoltarNtLida')) el('btnVoltarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); cancelarNotifLida(); });
+
+    if (el('btnSalvarSgRec')) el('btnSalvarSgRec').addEventListener('click', (ev) => { ev.preventDefault(); registrarSIGRecebido(); });
+    if (el('btnVoltarSgRec')) el('btnVoltarSgRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelarSIGRec(); });
   }
 
   function init() {
