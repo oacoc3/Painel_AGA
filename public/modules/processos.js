@@ -7,6 +7,7 @@ window.Modules.processos = (() => {
   let currentNotifLidaId = null;
   let currentSigExpId = null;
   let currentSigRecId = null;
+  let procFormEnabled = false;
 
   function el(id) { return document.getElementById(id); }
 
@@ -15,6 +16,16 @@ window.Modules.processos = (() => {
     if (el('opNUP')) el('opNUP').value = currentNUP || '';
     if (el('ntNUP')) el('ntNUP').value = currentNUP || '';
     if (el('sgNUP')) el('sgNUP').value = currentNUP || '';
+  }
+
+  function setProcFormEnabled(on) {
+    procFormEnabled = on;
+    ['procTipo','procStatus','procStatusDate','procEntrada','procObraTermino','procObs'].forEach(id => {
+      const e = el(id); if (e) e.disabled = !on;
+    });
+    ['btnObraConcluida','btnSalvarProc','btnNovoProc'].forEach(id => {
+      const b = el(id); if (b) b.disabled = !on;
+    });
   }
 
   // Mostra a aba (formulário à esquerda) e alterna a lista do meio
@@ -50,10 +61,9 @@ window.Modules.processos = (() => {
     el('procObraTermino').value = '';
     el('procObs').value = '';
     el('btnObraConcluida').classList.remove('active');
-    el('btnSalvarProc').disabled = true;
     Utils.setMsg('procMsg', '');
-    // Limpa listas e histórico visuais
-    if (el('procLista')) el('procLista').innerHTML = '';
+    setProcFormEnabled(false);
+    // Limpa listas relacionadas e histórico
     if (el('opLista')) el('opLista').innerHTML = '';
     if (el('ntLista')) el('ntLista').innerHTML = '';
     if (el('sgLista')) el('sgLista').innerHTML = '';
@@ -65,9 +75,60 @@ window.Modules.processos = (() => {
     inputs.forEach(id => {
       const e = el(id);
       if (!e) return;
-      e.addEventListener('input', () => { el('btnSalvarProc').disabled = false; });
-      e.addEventListener('change', () => { el('btnSalvarProc').disabled = false; });
+      ['input','change'].forEach(evt => {
+        e.addEventListener(evt, () => { if (procFormEnabled) el('btnSalvarProc').disabled = false; });
+      });
     });
+  }
+
+  async function buscarProcesso() {
+    const nup = el('procNUP').value.trim();
+    if (!nup) return Utils.setMsg('procMsg', 'Informe o NUP.', true);
+    Utils.setMsg('procMsg', 'Buscando…');
+    try {
+      const { data, error } = await sb.from('processes')
+        .select('id,nup,type,status,status_since,first_entry_date,obra_termino_date,obra_concluida,observations')
+        .eq('nup', nup)
+        .maybeSingle();
+      if (error) throw error;
+
+      setProcFormEnabled(true);
+      el('btnSalvarProc').disabled = true;
+      el('btnNovoProc').disabled = false;
+
+      if (data) {
+        currentProcId = data.id;
+        currentNUP = data.nup;
+        syncNUP();
+        el('procTipo').value = data.type;
+        el('procStatus').value = data.status || 'ANATEC-PRE';
+        el('procStatusDate').value = data.status_since ? Utils.toDateTimeLocalValue(data.status_since) : '';
+        el('procEntrada').value = data.first_entry_date ? Utils.toDateInputValue(data.first_entry_date) : '';
+        el('procObraTermino').value = data.obra_termino_date ? Utils.toDateInputValue(data.obra_termino_date) : '';
+        el('procObs').value = data.observations || '';
+        if (data.obra_concluida) el('btnObraConcluida').classList.add('active'); else el('btnObraConcluida').classList.remove('active');
+        Utils.setMsg('procMsg', 'Processo encontrado.');
+        await reloadLists();
+      } else {
+        currentProcId = null;
+        currentNUP = nup;
+        syncNUP();
+        el('procTipo').value = 'PDIR';
+        el('procStatus').value = 'ANATEC-PRE';
+        el('procStatusDate').value = '';
+        el('procEntrada').value = '';
+        el('procObraTermino').value = '';
+        el('procObs').value = '';
+        el('btnObraConcluida').classList.remove('active');
+        if (el('opLista')) el('opLista').innerHTML = '';
+        if (el('ntLista')) el('ntLista').innerHTML = '';
+        if (el('sgLista')) el('sgLista').innerHTML = '';
+        await loadHistory(null);
+        Utils.setMsg('procMsg', 'Nenhum processo encontrado. Preencha os campos para cadastrar.');
+      }
+    } catch (e) {
+      Utils.setMsg('procMsg', e.message || String(e), true);
+    }
   }
 
   async function upsertProcess() {
@@ -180,7 +241,9 @@ window.Modules.processos = (() => {
           el('procObraTermino').value = row.obra_termino_date ? Utils.toDateInputValue(row.obra_termino_date) : '';
           el('procObs').value = row.observations || '';
           if (row.obra_concluida) el('btnObraConcluida').classList.add('active'); else el('btnObraConcluida').classList.remove('active');
+          setProcFormEnabled(true);
           el('btnSalvarProc').disabled = true;
+          el('btnNovoProc').disabled = false;
           Utils.setMsg('procMsg', 'Processo selecionado.');
           await reloadLists(); // carrega listas das outras abas + histórico
         });
@@ -514,7 +577,8 @@ window.Modules.processos = (() => {
     // Processo
     if (el('btnObraConcluida')) el('btnObraConcluida').addEventListener('click', toggleObraConcluida);
     if (el('btnSalvarProc')) el('btnSalvarProc').addEventListener('click', (ev) => { ev.preventDefault(); upsertProcess(); });
-    if (el('btnNovoProc')) el('btnNovoProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); });
+    if (el('btnNovoProc')) el('btnNovoProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); loadHistory(null); });
+    if (el('btnBuscarProc')) el('btnBuscarProc').addEventListener('click', (ev) => { ev.preventDefault(); buscarProcesso(); });
     bindProcFormTracking();
 
     // Parecer
@@ -579,6 +643,7 @@ window.Modules.processos = (() => {
 
   async function init() {
     bindEvents();
+    clearProcessForm();
     await loadProcessList(); // carrega a lista inicial
     await loadHistory(null); // mostra mensagem "Selecione um processo…"
   }
