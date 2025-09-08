@@ -70,6 +70,15 @@ window.Modules.processos = (() => {
       if (b) b.disabled = !on;
     });
   }
+
+  // Mantém o NUP sincronizado nas outras abas (Parecer, Notificação, SIGADAER)
+  function syncNupFields() {
+    ['opNUP', 'ntNUP', 'sgNUP'].forEach(id => {
+      const e = el(id);
+      if (e) e.value = currentNUP;
+    });
+  }
+
   function showTab(tab) {
     const ids = { proc: 'tabProc', opiniao: 'tabOpiniao', notif: 'tabNotif', sig: 'tabSig' };
     Object.entries(ids).forEach(([k, id]) => {
@@ -82,9 +91,11 @@ window.Modules.processos = (() => {
     Object.values(maps).forEach(id => { const x = el(id); if (x) x.style.display = 'none'; });
     const visible = el(maps[tab]); if (visible) visible.style.display = 'block';
   }
+
   function clearProcessForm() {
     currentProcId = null;
     currentNUP = '';
+    syncNupFields();
 
     if (el('procNUP')) el('procNUP').value = '';
     if (el('procTipo')) el('procTipo').value = 'PDIR';
@@ -100,6 +111,7 @@ window.Modules.processos = (() => {
     U.setMsg('procMsg', '');
     if (el('histProcesso')) el('histProcesso').innerHTML = '';
   }
+
   function bindProcFormTracking() {
     ['procTipo','procStatus','procStatusDate','procEntrada','procObraTermino','procObs'].forEach(id => {
       const e = el(id); if (!e) return;
@@ -111,6 +123,7 @@ window.Modules.processos = (() => {
       });
     });
   }
+
   function toggleObraConcluida() {
     const b = el('btnObraConcluida'); if (!b) return;
     b.classList.toggle('active');
@@ -134,6 +147,7 @@ window.Modules.processos = (() => {
       if (data) {
         currentProcId = data.id;
         currentNUP = data.nup;
+        syncNupFields();
 
         el('procTipo').value = data.type || 'PDIR';
         el('procStatus').value = data.status || 'ANATEC-PRE';
@@ -161,6 +175,7 @@ window.Modules.processos = (() => {
 
         currentProcId = null;
         currentNUP = nup;
+        syncNupFields();
 
         el('procTipo').value = 'PDIR';
         el('procStatus').value = 'ANATEC-PRE';
@@ -211,9 +226,11 @@ window.Modules.processos = (() => {
       } else {
         const { error } = await sb.from('processes').update(payload).eq('id', currentProcId);
         if (error) throw error;
+        currentNUP = nup;
         U.setMsg('procMsg', 'Processo atualizado.');
       }
 
+      syncNupFields();
       if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true;
       await loadProcessList();
       await reloadLists();
@@ -277,6 +294,7 @@ window.Modules.processos = (() => {
 
           currentProcId = row.id;
           currentNUP = row.nup;
+          syncNupFields();
 
           if (el('procNUP')) el('procNUP').value = row.nup;
           if (el('procTipo')) el('procTipo').value = row.type || 'PDIR';
@@ -328,6 +346,7 @@ window.Modules.processos = (() => {
     if (el('btnSalvarProc')) el('btnSalvarProc').addEventListener('click', (ev) => { ev.preventDefault(); upsertProcess(); });
     if (el('btnNovoProc')) el('btnNovoProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); });
     if (el('btnBuscarProc')) el('btnBuscarProc').addEventListener('click', (ev) => { ev.preventDefault(); buscarProcesso(); });
+    if (el('procNUP')) el('procNUP').addEventListener('input', () => { currentNUP = el('procNUP').value.trim(); syncNupFields(); });
     bindProcFormTracking();
   }
 
