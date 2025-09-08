@@ -51,187 +51,68 @@
     <main class="main">
       <section id="viewProcessos" class="view">
         <div class="split processos">
-          <!-- COLUNA ESQUERDA: Formulário com abas -->
+          <!-- COLUNA ESQUERDA: Formulário de processo -->
           <div class="card">
             <h2>Processos</h2>
 
-            <div class="tabs">
-              <div class="tab-buttons">
-                <button data-tab="proc" type="button" class="active">Processo</button>
-                <button data-tab="opiniao" type="button" id="tabBtnOpiniao" class="hidden" disabled>Parecer Interno</button>
-                <button data-tab="notif" type="button" id="tabBtnNotif" class="hidden" disabled>Notificação</button>
-                <button data-tab="sig" type="button" id="tabBtnSig" class="hidden" disabled>SIGADAER</button>
+            <form id="formProc" data-ajax>
+              <div class="row">
+                <label>NUP <input id="procNUP" required placeholder="00000.000000/0000-00"></label>
+                <button id="btnBuscarProc" type="button">Buscar</button>
+                <button id="btnLimparProc" type="button">Limpar</button>
               </div>
 
-              <!-- Aba: Processo -->
-              <div id="tabProc" class="tab" style="display:block">
-                <form id="formProc" data-ajax>
-                  <div class="row">
-                    <label>NUP <input id="procNUP" required placeholder="00000.000000/0000-00"></label>
-                    <button id="btnBuscarProc" type="button">Buscar</button>
-                       <button id="btnLimparProc" type="button">Limpar</button>
-                  </div>
-
-                  <div id="procCampos" class="hidden">
-                    <div class="row">
-                      <label>Tipo
-                        <select id="procTipo" disabled>
-                          <option>PDIR</option><option>Inscrição</option><option>Alteração</option><option>Exploração</option><option>OPEA</option>
-                        </select>
-                      </label>
-                      <label>Status
-                        <select id="procStatus" disabled>
-                          <option>ANATEC-PRE</option><option>ANATEC</option><option>ANADOC</option><option>ANAICA</option><option>DIPEJ</option><option>ICA-PUB</option><option>OPEA</option><option>JJAER</option><option>DADOS</option><option>ARQ</option>
-                        </select>
-                      </label>
-                    </div>
-                    <div class="row">
-                      <label>Desde <input type="datetime-local" id="procStatusDate" disabled></label>
-                      <label>1ª entrada <input type="date" id="procEntrada" disabled></label>
-                      <label>Término da obra <input type="date" id="procObraTermino" disabled></label>
-                    </div>
-                    <div class="row">
-                      <label class="grow">Observações
-                        <textarea id="procObs" rows="2" placeholder="(opcional)" disabled></textarea>
-                      </label>
-                      <div class="actions">
-                        <button id="btnObraConcluida" type="button" disabled>Obra concluída</button>
-                        <button id="btnSalvarProc" type="button" disabled>Salvar</button>
-                        <button id="btnNovoProc" type="button" disabled>Cancelar</button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div id="procMsg" class="msg"></div>
-                </form>
+              <div id="procAcoes" class="hidden">
+                <div class="row actions">
+                  <button id="btnNovoOpiniao" type="button">Novo Parecer Interno</button>
+                  <button id="btnNovaNotif" type="button">Nova Notificação</button>
+                  <button id="btnNovoSig" type="button">Novo SIGADER</button>
+                </div>
+                <div class="row actions">
+                  <button id="btnVerOpiniao" type="button" disabled>Ver Pareceres Internos</button>
+                  <button id="btnVerNotif" type="button" disabled>Ver Notificações</button>
+                  <button id="btnVerSig" type="button" disabled>Ver SIGADER</button>
+                </div>
               </div>
 
-              <!-- Aba: Parecer Interno -->
-              <div id="tabOpiniao" class="tab" style="display:none">
-                <form id="formOpiniao" data-ajax>
-                  <div class="row">
-                    <label>NUP <input id="opNUP" required readonly></label>
-                    <label>Tipo
-                      <select id="opTipo">
-                         <option>ATM</option><option>DT</option><option>CGNA</option>
-                      </select>
-                    </label>
-                    <label>Status
-                      <select id="opStatus">
-                        <option>PENDENTE</option><option>RECEBIDO</option><option>FINALIZADO</option>
-                      </select>
-                    </label>
+              <div id="procCampos" class="hidden">
+                <div class="row">
+                  <label>Tipo
+                    <select id="procTipo" disabled>
+                      <option>PDIR</option><option>Inscrição</option><option>Alteração</option><option>Exploração</option><option>OPEA</option>
+                    </select>
+                  </label>
+                  <label>Status
+                    <select id="procStatus" disabled>
+                      <option>ANATEC-PRE</option><option>ANATEC</option><option>ANADOC</option><option>ANAICA</option><option>DIPEJ</option><option>ICA-PUB</option><option>OPEA</option><option>JJAER</option><option>DADOS</option><option>ARQ</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="row">
+                  <label>Desde <input type="datetime-local" id="procStatusDate" disabled></label>
+                  <label>1ª entrada <input type="date" id="procEntrada" disabled></label>
+                  <label>Término da obra <input type="date" id="procObraTermino" disabled></label>
+                </div>
+                <div class="row">
+                  <label class="grow">Observações
+                    <textarea id="procObs" rows="2" placeholder="(opcional)" disabled></textarea>
+                  </label>
+                  <div class="actions">
+                    <button id="btnObraConcluida" type="button" disabled>Obra concluída</button>
+                    <button id="btnSalvarProc" type="button" disabled>Salvar</button>
+                    <button id="btnNovoProc" type="button" disabled>Cancelar</button>
                   </div>
-                  <div class="row">
-                    <label>Solicitada em <input type="datetime-local" id="opSolic"></label>
-                    <div class="actions">
-                      <button id="btnCadOpiniao" type="button">Novo Parecer Interno</button>
-                    </div>
-                  </div>
-
-                  <div id="opRecForm" class="hidden">
-                    <label>Recebida em <input type="datetime-local" id="opRecInput"></label>
-                    <div class="row actions">
-                      <button id="btnSalvarOpRec" type="button">Salvar</button>
-                      <button id="btnVoltarOpRec" type="button">Voltar</button>
-                    </div>
-                  </div>
-
-                  <div id="opFinForm" class="hidden">
-                    <label>Finalizada em <input type="datetime-local" id="opFinInput"></label>
-                    <div class="row actions">
-                      <button id="btnSalvarOpFin" type="button">Salvar</button>
-                      <button id="btnVoltarOpFin" type="button">Voltar</button>
-                    </div>
-                  </div>
-
-                  <div id="opMsg" class="msg"></div>
-                </form>
+                </div>
               </div>
 
-              <!-- Aba: Notificação -->
-              <div id="tabNotif" class="tab" style="display:none">
-                <form id="formNotif" data-ajax>
-                  <div class="row">
-                    <label>NUP <input id="ntNUP" required readonly></label>
-                    <label>Tipo
-                      <select id="ntTipo">
-                        <option>FAV</option><option>FAV-TERM</option><option>TERM-ATRA</option><option>DESF-NAO_INI</option><option>DESF_JJAER</option><option>DESF-REM_REB</option><option>NCD</option><option>NCT</option>
-                      </select>
-                    </label>
-                    <label>Status
-                      <select id="ntStatus">
-                        <option>PENDENTE</option><option>LIDA</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div class="row stretch">
-                    <label>Solicitada em <input type="datetime-local" id="ntSolic"></label>
-                    <div class="actions">
-                      <button id="btnCadNotif" type="button">Nova Notificação</button>
-                    </div>
-                  </div>
-
-                  <div id="ntLidaForm" class="hidden">
-                    <label>Lida em <input type="datetime-local" id="ntLidaInput"></label>
-                    <div class="row actions">
-                      <button id="btnSalvarNtLida" type="button">Salvar</button>
-                      <button id="btnVoltarNtLida" type="button">Voltar</button>
-                    </div>
-                  </div>
-
-                  <div id="ntMsg" class="msg"></div>
-                </form>
-              </div>
-
-              <!-- Aba: SIGADAER -->
-              <div id="tabSig" class="tab" style="display:none">
-                <form id="formSig" data-ajax>
-                  <div class="row">
-                    <label>NUP <input id="sgNUP" required readonly></label>
-                    <label>Números <input id="sgNums" placeholder="Ex.: 123/2024; 456/2024"></label>
-                    <label>Tipo
-                      <select id="sgTipo">
-                          <option>COMAE</option><option>COMPREP</option><option>COMGAP</option><option>GABAER</option><option>SAC</option><option>ANAC</option><option>OPR_AD</option><option>PREF</option><option>GOV</option><option>OUTRO</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div class="row stretch">
-                    <label>Solicitada em <input type="datetime-local" id="sgSolic"></label>
-                    <div class="actions">
-                      <button id="btnCadSig" type="button">Novo SIGADAER</button>
-                    </div>
-                  </div>
-
-                  <div id="sgExpForm" class="hidden">
-                    <label>Expedida em <input type="datetime-local" id="sgExpInput"></label>
-                    <div class="row actions">
-                      <button id="btnSalvarSgExp" type="button">Salvar</button>
-                      <button id="btnVoltarSgExp" type="button">Voltar</button>
-                    </div>
-                  </div>
-
-                  <div id="sgRecForm" class="hidden">
-                    <label>Recebida em <input type="datetime-local" id="sgRecInput"></label>
-                    <div class="row actions">
-                      <button id="btnSalvarSgRec" type="button">Salvar</button>
-                      <button id="btnVoltarSgRec" type="button">Voltar</button>
-                    </div>
-                  </div>
-
-                  <div id="sgMsg" class="msg"></div>
-                </form>
-              </div>
-            </div>
+              <div id="procMsg" class="msg"></div>
+            </form>
           </div>
 
-          <!-- COLUNA DO MEIO: Lista -->
+          <!-- COLUNA DO MEIO: Lista de processos -->
           <div class="card">
             <h2>Lista</h2>
-            <div id="procLista" class="table scrolly" style="display:block"></div>
-            <div id="opLista"   class="table scrolly" style="display:none"></div>
-            <div id="ntLista"   class="table scrolly" style="display:none"></div>
-            <div id="sgLista"   class="table scrolly" style="display:none"></div>
+            <div id="procLista" class="table scrolly"></div>
           </div>
         </div>
       </section>
