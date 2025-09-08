@@ -49,6 +49,13 @@
 /* Linha selecionada na lista */
 #procLista tr.selected { background: #ffe; }
 
+/* Células editáveis (status e obra) */
+#procLista td.editable {
+  cursor: pointer;
+  background: #fffdcc;
+  text-decoration: underline;
+}
+
 /* Popup do histórico */
 .hist-popup {
   padding: 16px;
