@@ -62,30 +62,31 @@
                 <form id="formProc" data-ajax>
                   <div class="row">
                     <label>NUP <input id="procNUP" required placeholder="00000.000000/0000-00"></label>
+                    <button id="btnBuscarProc" type="button">Buscar</button>
                     <label>Tipo
-                      <select id="procTipo">
+                      <select id="procTipo" disabled>
                         <option>PDIR</option><option>Inscrição</option><option>Alteração</option><option>Exploração</option><option>OPEA</option>
                       </select>
                     </label>
                     <label>Status
-                      <select id="procStatus">
+                      <select id="procStatus" disabled>
                         <option>ANATEC-PRE</option><option>ANATEC</option><option>ANADOC</option><option>ANAICA</option><option>ANAMOP</option><option>ANAPROT</option><option>ANAPJ</option><option>JJAER</option><option>DADOS</option><option>ARQ</option>
                       </select>
                     </label>
                   </div>
                   <div class="row">
-                    <label>Desde <input type="datetime-local" id="procStatusDate"></label>
-                    <label>1ª entrada <input type="date" id="procEntrada"></label>
-                    <label>Término da obra <input type="date" id="procObraTermino"></label>
+                    <label>Desde <input type="datetime-local" id="procStatusDate" disabled></label>
+                    <label>1ª entrada <input type="date" id="procEntrada" disabled></label>
+                    <label>Término da obra <input type="date" id="procObraTermino" disabled></label>
                   </div>
                   <div class="row">
                     <label class="grow">Observações
-                      <textarea id="procObs" rows="2" placeholder="(opcional)"></textarea>
+                      <textarea id="procObs" rows="2" placeholder="(opcional)" disabled></textarea>
                     </label>
                     <div class="actions">
-                      <button id="btnObraConcluida" type="button">Obra concluída</button>
+                      <button id="btnObraConcluida" type="button" disabled>Obra concluída</button>
                       <button id="btnSalvarProc" type="button" disabled>Salvar</button>
-                      <button id="btnNovoProc" type="button">Novo</button>
+                      <button id="btnNovoProc" type="button" disabled>Novo</button>
                     </div>
                   </div>
                   <div id="procMsg" class="msg"></div>
