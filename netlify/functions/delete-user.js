@@ -4,29 +4,33 @@
 // Aceita Administrador via JWT (user_metadata.role) OU via banco (profiles.role).
 const { createClient } = require('@supabase/supabase-js');
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Cache-Control': 'no-store',
+  'Content-Type': 'application/json',
+};
+
 const json = (statusCode, data) => ({
   statusCode,
-  headers: {
-    'Content-Type': 'application/json',
-    'Cache-Control': 'no-store',
-  },
+  headers: CORS_HEADERS,
   body: JSON.stringify(data),
 });
 
-const getBearer = (headers = {}) => {
-  const h = headers.authorization || headers.Authorization || '';
-  const m = /^Bearer\s+(.+)$/i.exec(h);
-  return m ? m[1] : null;
-};
+function getBearer(headers = {}) {
+  try {
+    const h = headers.authorization || headers.Authorization || '';
+    const m = /^Bearer\s+(.+)$/i.exec((h || '').trim());
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Cache-Control': 'no-store',
-    }, body: '' };
+    return { statusCode: 204, headers: CORS_HEADERS, body: '' };
   }
 
   if (event.httpMethod !== 'POST') {
