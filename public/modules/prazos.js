@@ -7,17 +7,33 @@ window.Modules.prazos = (() => {
   let monitor = [];
   let doaga = [];
 
+  function bindRowLinks(tbody) {
+    if (!tbody) return;
+    tbody.querySelectorAll('tr').forEach(tr => {
+      if (!tr.dataset.row) return;
+      try {
+        const data = JSON.parse(tr.dataset.row);
+        if (!data?.nup) return;
+        tr.addEventListener('click', () => {
+          sessionStorage.setItem('procPreSelect', data.nup);
+          window.location.href = 'processos.html';
+        });
+      } catch {}
+    });
+  }
+
   function renderPareceres() {
     const tipo = el('psTipo')?.value;
     let rows = pareceres;
     if (tipo) rows = rows.filter(r => r.type === tipo);
-    Utils.renderTable('prazoParec', [
+    const { tbody } = Utils.renderTable('prazoParec', [
       { key: 'nup', label: 'NUP' },
       { key: 'type', label: 'Tipo' },
       { key: 'requested_at', label: 'Solicitado/Expedido em', value: r => Utils.fmtDate(r.requested_at) },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
       { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
     ], rows);
+    bindRowLinks(tbody);
   }
 
   async function loadPareceres() {
@@ -36,15 +52,14 @@ window.Modules.prazos = (() => {
   }
 
   function renderRemocao() {
-
     let rows = remocao;
-
-    Utils.renderTable('prazoRemocao', [
+    const { tbody } = Utils.renderTable('prazoRemocao', [
       { key: 'nup', label: 'NUP' },
       { key: 'read_at', label: 'Lido em', value: r => Utils.fmtDate(r.read_at) },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
       { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
     ], rows);
+    bindRowLinks(tbody);
   }
 
   async function loadRemocao() {
@@ -56,13 +71,14 @@ window.Modules.prazos = (() => {
 
   function renderObra() {
     let rows = obras;
-    Utils.renderTable('prazoObra', [
+    const { tbody } = Utils.renderTable('prazoObra', [
       { key: 'nup', label: 'NUP' },
       { key: 'requested_at', label: 'Solicitado/Expedido em', value: r => Utils.fmtDate(r.requested_at) },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
       { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) },
       { key: 'em_atraso', label: 'Atraso', value: r => (r.em_atraso ? 'ATRASO' : '') }
     ], rows);
+    bindRowLinks(tbody);
   }
 
   async function loadObra() {
@@ -77,11 +93,12 @@ window.Modules.prazos = (() => {
     let rows = monitor;
     if (tipo) rows = rows.filter(r => r.type === tipo);
 
-    Utils.renderTable('prazoMonit', [
+    const { tbody } = Utils.renderTable('prazoMonit', [
       { key: 'nup', label: 'NUP' },
       { key: 'type', label: 'Tipo' },
       { key: 'number', label: 'Número', value: r => r.number ? String(r.number).padStart(6, '0') : '' }
     ], rows);
+    bindRowLinks(tbody);
   }
 
   async function loadMonitor() {
@@ -97,15 +114,14 @@ window.Modules.prazos = (() => {
   }
 
   function renderDOAGA() {
-
     let rows = doaga;
-
-    Utils.renderTable('prazoDOAGA', [
+    const { tbody } = Utils.renderTable('prazoDOAGA', [
       { key: 'nup', label: 'NUP' },
       { key: 'requested_at', label: 'Solicitado/Expedido em', value: r => Utils.fmtDate(r.requested_at) },
       { key: 'status', label: 'Status/Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : r.status) },
       { key: 'days_remaining', label: 'Dias rem.', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
     ], rows);
+    bindRowLinks(tbody);
   }
 
   async function loadDOAGA() {
@@ -117,7 +133,7 @@ window.Modules.prazos = (() => {
 
   function init() {
     el('psTipo')?.addEventListener('change', renderPareceres);
-    el('monTipo')?.addEventListener('change', renderMonitor)
+    el('monTipo')?.addEventListener('change', renderMonitor);
   }
 
   async function load() {
