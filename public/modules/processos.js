@@ -8,20 +8,25 @@ window.Modules.processos = (() => {
   let currentSigExpId = null;
   let currentSigRecId = null;
 
-  function bindTabs() {
-    // Abas do cartão esquerdo
-    const buttons = $$('.tabs button');
-    const showTab = (tab) => {
-      ['tabProc','tabOpiniao','tabNotif','tabSig'].forEach(id => Utils.hide(id));
-      Utils.show(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
-      // destaca botão ativo
-      buttons.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-    };
-    buttons.forEach(btn => {
-      btn.addEventListener('click', () => showTab(btn.dataset.tab));
+  function el(id) { return document.getElementById(id); }
+
+  function syncNUP() {
+    if (el('procNUP')) el('procNUP').value = currentNUP || '';
+    if (el('opNUP')) el('opNUP').value = currentNUP || '';
+    if (el('ntNUP')) el('ntNUP').value = currentNUP || '';
+    if (el('sgNUP')) el('sgNUP').value = currentNUP || '';
+  }
+
+  function showTab(tab) {
+    const tabs = ['proc','opiniao','notif','sig'];
+    tabs.forEach(t => {
+      const box = el('tab' + t.charAt(0).toUpperCase() + t.slice(1));
+      if (box) box.style.display = t === tab ? 'block' : 'none';
     });
-    // Abre 'Processo' por padrão já com destaque
-    showTab('proc');
+
+    const buttons = Array.from(document.querySelectorAll('[data-tab]'));
+    // destaca botão ativo
+    buttons.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   }
 
   function toggleObraConcluida() {
@@ -87,7 +92,8 @@ window.Modules.processos = (() => {
           first_entry_date: firstEntry,
           obra_termino_date: obraTerm,
           obra_concluida: obraConcl,
-          observations: crea
+          observations: crea,
+          created_by: u.id
         };
         const { data, error } = await sb.from('processes').insert(payload).select('id').maybeSingle();
         if (error) throw error;
@@ -101,120 +107,81 @@ window.Modules.processos = (() => {
           observations: crea,
           obra_termino_date: obraTerm,
           obra_concluida: obraConcl,
+          status_since: statusSinceInput ? new Date(statusSinceInput).toISOString() : null,
           first_entry_date: firstEntry
         };
-        if (statusSinceInput) payload.status_since = new Date(statusSinceInput).toISOString();
         const { error } = await sb.from('processes').update(payload).eq('id', currentProcId);
         if (error) throw error;
         Utils.setMsg('procMsg', 'Processo atualizado.');
       }
-
-      el('btnSalvarProc').disabled = true;
-      await reloadLists();
-      await loadHistory(currentProcId);
-    } catch (e) {
-      Utils.setMsg('procMsg', e.message || String(e), true);
-    }
-  }
-
-  async function deleteProcess() {
-    if (!currentProcId) return Utils.setMsg('procMsg', 'Nenhum processo selecionado.', true);
-    if (!confirm('Tem certeza que deseja excluir este processo?')) return;
-    try {
-      const { error } = await sb.from('processes').delete().eq('id', currentProcId);
-      if (error) throw error;
-      Utils.setMsg('procMsg', 'Processo excluído.');
-      clearProcessForm();
       await reloadLists();
     } catch (e) {
       Utils.setMsg('procMsg', e.message || String(e), true);
     }
   }
 
-  function describeHistoryItem(item) {
-    const ts = Utils.fmtDateTime(item.created_at);
-    const who = item.by_name || item.by_email || (item.by_user_id ? item.by_user_id.slice(0,8) : '—');
-    const act = item.action || '—';
-    const d = item.data || {};
-
-    // Heurísticas para identificar a origem do registro
-    const isProcess   = 'nup' in d && 'type' in d && 'status' in d;
-    const isOpinion   = 'requested_at' in d && 'type' in d && ('finalized_at' in d || (d.status && !('read_at' in d)));
-    const isNotif     = 'requested_at' in d && 'type' in d && ('read_at' in d) && !('numbers' in d);
-    const isSIG       = ('numbers' in d) || ('expedit_at' in d) || (d.status && d.status === 'EXPEDIDA');
-
-    function bit(v, label) {
-      if (!v) return '';
-      return `${label}: ${Utils.fmtDateTime(v)}`;
-    }
-
-    let resumo = '';
-    if (isProcess) {
-      const partes = [];
-      if (d.type) partes.push(`Processo ${d.type}`);
-      if (d.status) partes.push(`Status: ${d.status}`);
-      const ss = d.status_since ? ` em ${Utils.fmtDateTime(d.status_since)}` : '';
-      if (d.status) partes[partes.length - 1] = partes[partes.length - 1] + ss;
-      partes.push(...[
-        bit(d.first_entry_date, '1ª entrada'),
-        bit(d.obra_termino_date, 'Término obra'),
-        (typeof d.obra_concluida === 'boolean') ? `Obra concluída: ${Utils.yesNo(d.obra_concluida)}` : ''
-      ].filter(Boolean));
-      resumo = partes.join(' — ');
-    } else if (isOpinion) {
-      const estado = d.finalized_at ? 'FINALIZADO' : (d.received_at ? 'RECEBIDO' : (d.status || 'SOLICITADO'));
-      const quando = d.finalized_at || d.received_at || d.requested_at;
-      const partes = [];
-      if (d.type) partes.push(`Parecer ${d.type}`);
-      partes.push(estado + (quando ? ` em ${Utils.fmtDateTime(quando)}` : ''));
-      resumo = partes.join(' — ');
-    } else if (isNotif) {
-      const quando = d.read_at || d.requested_at;
-      const partes = [];
-      if (d.type) partes.push(`Notificação ${d.type}`);
-      partes.push((d.read_at ? 'LIDA' : 'SOLICITADA') + (quando ? ` em ${Utils.fmtDateTime(quando)}` : ''));
-      resumo = partes.join(' — ');
-    } else if (isSIG) {
-      const partes = [];
-      if (d.numbers) partes.push(`SIGADAER (${d.numbers})`);
-      if (d.status === 'EXPEDIDA' || d.expedit_at) partes.push(`EXPEDIDA em ${Utils.fmtDateTime(d.expedit_at || d.requested_at)}`);
-      if (d.received_at) partes.push(`RECEBIDA em ${Utils.fmtDateTime(d.received_at)}`);
-      resumo = partes.join(' — ');
-    } else {
-      try {
-        resumo = JSON.stringify(d);
-      } catch {
-        resumo = String(d);
-      }
-    }
-
-    return `${ts} — ${who} — ${act} — ${resumo}`;
-  }
-
-  async function loadHistory(processId) {
-    const box = el('procHistory');
+  async function loadProcessList() {
+    const box = el('procLista');
     if (!box) return;
     box.innerHTML = '<div class="msg">Carregando…</div>';
     try {
-      const { data, error } = await sb.from('history')
-        .select('*')
-        .eq('process_id', processId)
+      const { data, error } = await sb.from('processes')
+        .select('id,nup,type,status,status_since,first_entry_date,obra_termino_date,obra_concluida,created_at,created_by')
         .order('created_at', { ascending: false })
         .limit(100);
       if (error) throw error;
+
       if (!data || !data.length) {
-        box.innerHTML = '<div class="msg">Sem histórico.</div>';
+        box.innerHTML = '<div class="msg">Nenhum processo encontrado.</div>';
         return;
       }
-      const ul = document.createElement('ul');
-      ul.className = 'history';
-      data.forEach(item => {
-        const li = document.createElement('li');
-        li.textContent = describeHistoryItem(item);
-        ul.appendChild(li);
+
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th>NUP</th><th>Tipo</th><th>Status</th><th>Desde</th><th>1ª Entrada</th><th>Obra (término)</th><th>Concluída</th><th>Ações</th></tr>';
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.nup}</td>
+          <td>${row.type}</td>
+          <td>${row.status || ''}</td>
+          <td>${row.status_since ? Utils.fmtDateTime(row.status_since) : ''}</td>
+          <td>${row.first_entry_date ? Utils.fmtDate(row.first_entry_date) : ''}</td>
+          <td>${row.obra_termino_date ? Utils.fmtDate(row.obra_termino_date) : ''}</td>
+          <td>${row.obra_concluida ? 'Sim' : 'Não'}</td>
+          <td>
+            <button type="button" data-id="${row.id}" class="selProc">Selecionar</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
       });
+      table.appendChild(tbody);
       box.innerHTML = '';
-      box.appendChild(ul);
+      box.appendChild(table);
+
+      Array.from(box.querySelectorAll('.selProc')).forEach(btn => {
+        btn.addEventListener('click', async () => {
+          currentProcId = btn.getAttribute('data-id');
+          const row = data.find(r => r.id === currentProcId);
+          currentNUP = row?.nup || '';
+          syncNUP();
+          // Preenche o formulário
+          el('procNUP').value = row.nup;
+          el('procTipo').value = row.type;
+          el('procStatus').value = row.status || 'ANATEC-PRE';
+          el('procStatusDate').value = row.status_since ? Utils.toDateTimeLocalValue(row.status_since) : '';
+          el('procEntrada').value = row.first_entry_date ? Utils.toDateLocalValue(row.first_entry_date) : '';
+          el('procObraTermino').value = row.obra_termino_date ? Utils.toDateLocalValue(row.obra_termino_date) : '';
+          el('procObs').value = row.observations || '';
+          row.obra_concluida ? el('btnObraConcluida').classList.add('active') : el('btnObraConcluida').classList.remove('active');
+          el('btnSalvarProc').disabled = true;
+          Utils.setMsg('procMsg', 'Processo selecionado.');
+          await reloadLists();
+        });
+      });
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
     }
@@ -228,7 +195,11 @@ window.Modules.processos = (() => {
     if (!currentProcId) return Utils.setMsg('opMsg', 'Nenhum processo selecionado.', true);
     Utils.setMsg('opMsg', 'Cadastrando…');
     try {
-      const payload = { process_id: currentProcId, type, requested_at };
+      if (!window.getUser) throw new Error('Auth não inicializado.');
+      const u = await getUser();
+      if (!u) throw new Error('Sessão expirada. Faça login novamente.');
+
+      const payload = { process_id: currentProcId, type, requested_at, created_by: u.id };
       const { error } = await sb.from('internal_opinions').insert(payload);
       if (error) throw error;
       Utils.setMsg('opMsg', 'Parecer cadastrado (status SOLICITADO).');
@@ -266,6 +237,22 @@ window.Modules.processos = (() => {
     }
   }
 
+  async function finalizarOpiniao() {
+    const t = el('opFinInput').value;
+    const finalized_at = t ? new Date(t).toISOString() : new Date().toISOString();
+    if (!currentOpiniaoRecId) return Utils.setMsg('opMsg', 'Nenhuma solicitação selecionada.', true);
+    Utils.setMsg('opMsg', 'Finalizando…');
+    try {
+      const { error } = await sb.from('internal_opinions').update({ status: 'FINALIZADO', finalized_at }).eq('id', currentOpiniaoRecId);
+      if (error) throw error;
+      Utils.setMsg('opMsg', 'Parecer finalizado.');
+      cancelarFinOpiniao();
+      await reloadLists();
+    } catch (e) {
+      Utils.setMsg('opMsg', e.message || String(e), true);
+    }
+  }
+
   function showFinOpiniaoForm(id) {
     currentOpiniaoRecId = id;
     el('opFinInput').value = Utils.toDateTimeLocalValue(new Date());
@@ -278,19 +265,59 @@ window.Modules.processos = (() => {
     Utils.show('opLista');
   }
 
-  async function finalizarOpiniao() {
-    const t = el('opFinInput').value;
-    const finalized_at = t ? new Date(t).toISOString() : new Date().toISOString();
-    if (!currentOpiniaoRecId) return Utils.setMsg('opMsg', 'Nenhuma solicitação selecionada.', true);
-    Utils.setMsg('opMsg', 'Registrando finalização…');
+  async function loadOpiniaoList(processId) {
+    const box = el('opLista');
+    if (!box) return;
+    box.innerHTML = '<div class="msg">Carregando…</div>';
     try {
-      const { error } = await sb.from('internal_opinions').update({ finalized_at }).eq('id', currentOpiniaoRecId);
+      const { data, error } = await sb.from('internal_opinions')
+        .select('id,type,requested_at,received_at,finalized_at,status')
+        .eq('process_id', processId)
+        .order('requested_at', { ascending: false });
       if (error) throw error;
-      Utils.setMsg('opMsg', 'Finalização registrada.');
-      cancelarFinOpiniao();
-      await reloadLists();
+
+      if (!data || !data.length) {
+        box.innerHTML = '<div class="msg">Nenhum parecer encontrado.</div>';
+        return;
+      }
+
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th>Tipo</th><th>Solicitado</th><th>Recebido</th><th>Finalizado</th><th>Status</th><th>Ações</th></tr>';
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.type}</td>
+          <td>${row.requested_at ? Utils.fmtDateTime(row.requested_at) : ''}</td>
+          <td>${row.received_at ? Utils.fmtDateTime(row.received_at) : ''}</td>
+          <td>${row.finalized_at ? Utils.fmtDateTime(row.finalized_at) : ''}</td>
+          <td>${row.status}</td>
+          <td>
+            <button type="button" data-id="${row.id}" class="recOp">Recebido</button>
+            <button type="button" data-id="${row.id}" class="finOp">Finalizar</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      box.innerHTML = '';
+      box.appendChild(table);
+
+      Array.from(box.querySelectorAll('.recOp')).forEach(btn => {
+        btn.addEventListener('click', () => {
+          showRecebOpiniaoForm(btn.getAttribute('data-id'));
+        });
+      });
+      Array.from(box.querySelectorAll('.finOp')).forEach(btn => {
+        btn.addEventListener('click', () => {
+          showFinOpiniaoForm(btn.getAttribute('data-id'));
+        });
+      });
     } catch (e) {
-      Utils.setMsg('opMsg', e.message || String(e), true);
+      box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
     }
   }
 
@@ -302,7 +329,11 @@ window.Modules.processos = (() => {
     if (!currentProcId) return Utils.setMsg('ntMsg', 'Nenhum processo selecionado.', true);
     Utils.setMsg('ntMsg', 'Cadastrando…');
     try {
-      const payload = { process_id: currentProcId, type, requested_at };
+      if (!window.getUser) throw new Error('Auth não inicializado.');
+      const u = await getUser();
+      if (!u) throw new Error('Sessão expirada. Faça login novamente.');
+
+      const payload = { process_id: currentProcId, type, requested_at, created_by: u.id };
       const { error } = await sb.from('notifications').insert(payload);
       if (error) throw error;
       Utils.setMsg('ntMsg', 'Notificação cadastrada.');
@@ -330,125 +361,13 @@ window.Modules.processos = (() => {
     if (!currentNotifLidaId) return Utils.setMsg('ntMsg', 'Nenhuma notificação selecionada.', true);
     Utils.setMsg('ntMsg', 'Marcando como lida…');
     try {
-      const { error } = await sb.from('notifications').update({ read_at }).eq('id', currentNotifLidaId);
+      const { error } = await sb.from('notifications').update({ status: 'LIDA', read_at }).eq('id', currentNotifLidaId);
       if (error) throw error;
       Utils.setMsg('ntMsg', 'Notificação marcada como lida.');
       cancelarNotifLida();
       await reloadLists();
     } catch (e) {
       Utils.setMsg('ntMsg', e.message || String(e), true);
-    }
-  }
-
-  // ======== SIGADAER ========
-  function showSIGExpedidoForm(id) {
-    currentSigExpId = id;
-    el('sgExpInput').value = Utils.toDateTimeLocalValue(new Date());
-    Utils.hide('sgLista');
-    Utils.show('sgExpForm');
-  }
-  function cancelarSIGExpedido() {
-    currentSigExpId = null;
-    Utils.hide('sgExpForm');
-    Utils.show('sgLista');
-  }
-
-  async function registrarSIGExpedido() {
-    const t = el('sgExpInput').value;
-    const expedit_at = t ? new Date(t).toISOString() : new Date().toISOString();
-    if (!currentSigExpId) return Utils.setMsg('sgMsg', 'Nenhuma solicitação selecionada.', true);
-    Utils.setMsg('sgMsg', 'Registrando expedição…');
-    try {
-      const { error } = await sb.from('sigadaer').update({ expedit_at, status: 'EXPEDIDA' }).eq('id', currentSigExpId);
-      if (error) throw error;
-      Utils.setMsg('sgMsg', 'Expedição registrada.');
-      cancelarSIGExpedido();
-      await reloadLists();
-    } catch (e) {
-      Utils.setMsg('sgMsg', e.message || String(e), true);
-    }
-  }
-
-  function showSIGRecForm(id) {
-    currentSigRecId = id;
-    el('sgRecInput').value = Utils.toDateTimeLocalValue(new Date());
-    Utils.hide('sgLista');
-    Utils.show('sgRecForm');
-  }
-  function cancelarSIGRec() {
-    currentSigRecId = null;
-    Utils.hide('sgRecForm');
-    Utils.show('sgLista');
-  }
-
-  async function registrarSIGRecebido() {
-    const t = el('sgRecInput').value;
-    const received_at = t ? new Date(t).toISOString() : new Date().toISOString();
-    if (!currentSigRecId) return Utils.setMsg('sgMsg', 'Nenhuma solicitação selecionada.', true);
-    Utils.setMsg('sgMsg', 'Registrando recebimento…');
-    try {
-      const { error } = await sb.from('sigadaer').update({ received_at }).eq('id', currentSigRecId);
-      if (error) throw error;
-      Utils.setMsg('sgMsg', 'Recebimento registrado.');
-      cancelarSIGRec();
-      await reloadLists();
-    } catch (e) {
-      Utils.setMsg('sgMsg', e.message || String(e), true);
-    }
-  }
-
-  // ======== LISTAGENS ========
-  async function loadOpiniaoList(processId) {
-    const box = el('opLista');
-    if (!box) return;
-    box.innerHTML = '<div class="msg">Carregando…</div>';
-    try {
-      const { data, error } = await sb.from('internal_opinions')
-        .select('id,type,requested_at,received_at,finalized_at')
-        .eq('process_id', processId)
-        .order('requested_at', { ascending: false });
-      if (error) throw error;
-
-      if (!data || !data.length) {
-        box.innerHTML = '<div class="msg">Nenhum parecer encontrado.</div>';
-        return;
-      }
-
-      const table = document.createElement('table');
-      const thead = document.createElement('thead');
-      thead.innerHTML = '<tr><th>Tipo</th><th>Solicitado</th><th>Recebido</th><th>Finalizado</th><th>Ações</th></tr>';
-      table.appendChild(thead);
-
-      const tbody = document.createElement('tbody');
-      data.forEach(row => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${row.type || ''}</td>
-          <td>${row.requested_at ? Utils.fmtDateTime(row.requested_at) : ''}</td>
-          <td>${row.received_at ? Utils.fmtDateTime(row.received_at) : ''}</td>
-          <td>${row.finalized_at ? Utils.fmtDateTime(row.finalized_at) : ''}</td>
-          <td></td>
-        `;
-        const td = tr.querySelector('td:last-child');
-        if (!row.received_at) {
-          const btn = document.createElement('button');
-          btn.textContent = 'Marcar Recebido';
-          btn.addEventListener('click', () => showRecebOpiniaoForm(row.id));
-          td.appendChild(btn);
-        }
-        if (!row.finalized_at) {
-          const btnF = document.createElement('button');
-          btnF.textContent = 'Finalizar';
-          btnF.addEventListener('click', () => showFinOpiniaoForm(row.id));
-          td.appendChild(btnF);
-        }
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      box.innerHTML = '';
-      box.appendChild(table);
-    } catch (e) {
-      box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
     }
   }
 
@@ -470,35 +389,38 @@ window.Modules.processos = (() => {
 
       const table = document.createElement('table');
       const thead = document.createElement('thead');
-      thead.innerHTML = '<tr><th>Tipo</th><th>Solicitada</th><th>Lida</th><th>Ações</th></tr>';
+      thead.innerHTML = '<tr><th>Tipo</th><th>Solicitada</th><th>Lida</th><th>Status</th><th>Ações</th></tr>';
       table.appendChild(thead);
 
       const tbody = document.createElement('tbody');
       data.forEach(row => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${row.type || ''}</td>
+          <td>${row.type}</td>
           <td>${row.requested_at ? Utils.fmtDateTime(row.requested_at) : ''}</td>
           <td>${row.read_at ? Utils.fmtDateTime(row.read_at) : ''}</td>
-          <td></td>
+          <td>${row.read_at ? 'LIDA' : 'SOLICITADA'}</td>
+          <td>
+            ${row.read_at ? '' : `<button type="button" data-id="${row.id}" class="lidaNt">Marcar Lida</button>`}
+          </td>
         `;
-        const td = tr.querySelector('td:last-child');
-        if (!row.read_at) {
-          const btn = document.createElement('button');
-          btn.textContent = 'Marcar como lida';
-          btn.addEventListener('click', () => showNotifLidaForm(row.id));
-          td.appendChild(btn);
-        }
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
       box.innerHTML = '';
       box.appendChild(table);
+
+      Array.from(box.querySelectorAll('.lidaNt')).forEach(btn => {
+        btn.addEventListener('click', () => {
+          showNotifLidaForm(btn.getAttribute('data-id'));
+        });
+      });
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
     }
   }
 
+  // ======== SIGADAER ========
   async function loadSIGList(processId) {
     const box = el('sgLista');
     if (!box) return;
@@ -528,132 +450,135 @@ window.Modules.processos = (() => {
           <td>${row.requested_at ? Utils.fmtDateTime(row.requested_at) : ''}</td>
           <td>${row.expedit_at ? Utils.fmtDateTime(row.expedit_at) : ''}</td>
           <td>${row.received_at ? Utils.fmtDateTime(row.received_at) : ''}</td>
-          <td>${row.status || ''}</td>
-          <td></td>
+          <td>${row.status}</td>
+          <td>
+            ${row.expedit_at ? '' : `<button type="button" data-id="${row.id}" class="sgExp">Expedido</button>`}
+            ${row.received_at ? '' : `<button type="button" data-id="${row.id}" class="sgRec">Recebido</button>`}
+          </td>
         `;
-        const td = tr.querySelector('td:last-child');
-        if (!row.expedit_at) {
-          const btnE = document.createElement('button');
-          btnE.textContent = 'Marcar Expedida';
-          btnE.addEventListener('click', () => showSIGExpedidoForm(row.id));
-          td.appendChild(btnE);
-        }
-        if (!row.received_at) {
-          const btnR = document.createElement('button');
-          btnR.textContent = 'Marcar Recebido';
-          btnR.addEventListener('click', () => showSIGRecForm(row.id));
-          td.appendChild(btnR);
-        }
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
       box.innerHTML = '';
       box.appendChild(table);
+
+      Array.from(box.querySelectorAll('.sgExp')).forEach(btn => {
+        btn.addEventListener('click', () => {
+          currentSigExpId = btn.getAttribute('data-id');
+          el('sgExpInput').value = Utils.toDateTimeLocalValue(new Date());
+          Utils.hide('sgLista');
+          Utils.show('sgExpForm');
+        });
+      });
+
+      Array.from(box.querySelectorAll('.sgRec')).forEach(btn => {
+        btn.addEventListener('click', () => {
+          showSIGRecForm(btn.getAttribute('data-id'));
+        });
+      });
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
     }
   }
 
-  // ======== NUP nos formulários das abas ========
-  function syncNUP() {
-    const _op = el('opNUP'); if (_op) _op.value = currentNUP;
-    const _nt = el('ntNUP'); if (_nt) _nt.value = currentNUP;
-    const _sg = el('sgNUP'); if (_sg) _sg.value = currentNUP;
+  async function registrarSIGExpedido() {
+    const t = el('sgExpInput').value;
+    const expedit_at = t ? new Date(t).toISOString() : new Date().toISOString();
+    if (!currentSigExpId) return Utils.setMsg('sgMsg', 'Nenhuma solicitação selecionada.', true);
+    Utils.setMsg('sgMsg', 'Registrando expedição…');
+    try {
+      const { error } = await sb.from('sigadaer').update({ status: 'EXPEDIDO', expedit_at }).eq('id', currentSigExpId);
+      if (error) throw error;
+      Utils.setMsg('sgMsg', 'Expedição registrada.');
+      el('sgExpInput').value = '';
+      Utils.hide('sgExpForm');
+      Utils.show('sgLista');
+      await reloadLists();
+    } catch (e) {
+      Utils.setMsg('sgMsg', e.message || String(e), true);
+    }
   }
 
-  async function loadProcessList() {
-    const box = el('procLista');
-    if (!box) return;
-    box.innerHTML = '<div class="msg">Carregando…</div>';
+  function showSIGRecForm(id) {
+    currentSigRecId = id;
+    el('sgRecInput').value = Utils.toDateTimeLocalValue(new Date());
+    Utils.hide('sgLista');
+    Utils.show('sgRecForm');
+  }
+  function cancelarSIGRec() {
+    currentSigRecId = null;
+    Utils.hide('sgRecForm');
+    Utils.show('sgLista');
+  }
+
+  async function registrarSIGRecebido() {
+    const t = el('sgRecInput').value;
+    const received_at = t ? new Date(t).toISOString() : new Date().toISOString();
+    if (!currentSigRecId) return Utils.setMsg('sgMsg', 'Nenhuma solicitação selecionada.', true);
+    Utils.setMsg('sgMsg', 'Registrando recebimento…');
     try {
-      const { data, error } = await sb
-        .from('processes')
-        .select('id,nup,type,status,status_since,first_entry_date,obra_termino_date,obra_concluida')
-        .order('created_at', { ascending: false })
-        .limit(200);
+      const { error } = await sb.from('sigadaer').update({ status: 'RECEBIDO', received_at }).eq('id', currentSigRecId);
       if (error) throw error;
-
-      if (!data || !data.length) {
-        box.innerHTML = '<div class="msg">Nenhum processo encontrado.</div>';
-        return;
-      }
-
-      const table = document.createElement('table');
-      const thead = document.createElement('thead');
-      thead.innerHTML = '<tr><th>NUP</th><th>Tipo</th><th>Status</th><th>Desde</th><th>1ª entrada</th><th>Término obra</th><th>Obra concl.</th><th>Ações</th></tr>';
-      table.appendChild(thead);
-
-      const tbody = document.createElement('tbody');
-      data.forEach(p => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${p.nup || ''}</td>
-          <td>${p.type || ''}</td>
-          <td>${p.status || ''}</td>
-          <td>${p.status_since ? Utils.fmtDateTime(p.status_since) : ''}</td>
-          <td>${p.first_entry_date ? Utils.fmtDate(p.first_entry_date) : ''}</td>
-          <td>${p.obra_termino_date ? Utils.fmtDate(p.obra_termino_date) : ''}</td>
-          <td>${typeof p.obra_concluida === 'boolean' ? Utils.yesNo(p.obra_concluida) : ''}</td>
-          <td><button type="button">Selecionar</button></td>
-        `;
-        tr.querySelector('button').addEventListener('click', async () => {
-          currentProcId = p.id;
-          currentNUP = p.nup || '';
-          syncNUP();
-          el('procNUP').value = p.nup || '';
-          el('procTipo').value = p.type || '';
-          el('procStatus').value = p.status || '';
-          el('procStatusDate').value = Utils.toDateTimeLocalValue(p.status_since);
-          el('procEntrada').value = Utils.toDateInputValue(p.first_entry_date);
-          el('procObraTermino').value = Utils.toDateInputValue(p.obra_termino_date);
-          el('btnObraConcluida').classList.toggle('active', !!p.obra_concluida);
-          await reloadLists();
-          await loadHistory(p.id);
-        });
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      box.innerHTML = '';
-      box.appendChild(table);
+      Utils.setMsg('sgMsg', 'Recebimento registrado.');
+      cancelarSIGRec();
+      await reloadLists();
     } catch (e) {
-      box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
+      Utils.setMsg('sgMsg', e.message || String(e), true);
     }
   }
 
   async function reloadLists() {
+    if (!currentProcId) return;
     await Promise.all([
-      loadProcessList(),
-      currentProcId ? loadOpiniaoList(currentProcId) : Promise.resolve(),
-      currentProcId ? loadNotifList(currentProcId) : Promise.resolve(),
-      currentProcId ? loadSIGList(currentProcId) : Promise.resolve()
+      loadOpiniaoList(currentProcId),
+      loadNotifList(currentProcId),
+      loadSIGList(currentProcId),
     ]);
   }
 
-  function bindActions() {
-    if (el('btnSalvarProc')) el('btnSalvarProc').addEventListener('click', (ev) => { ev.preventDefault(); upsertProcess(); });
-    if (el('btnExcluirProc')) el('btnExcluirProc').addEventListener('click', (ev) => { ev.preventDefault(); deleteProcess(); });
-    if (el('btnLimparProc')) el('btnLimparProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); });
-    if (el('btnObraConcluida')) el('btnObraConcluida').addEventListener('click', (ev) => { ev.preventDefault(); toggleObraConcluida(); });
+  function bindEvents() {
+    // tabs
+    const buttons = Array.from(document.querySelectorAll('[data-tab]'));
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => showTab(btn.dataset.tab));
+    });
+    // Abre 'Processo' por padrão já com destaque
+    showTab('proc');
 
+    // Processo
+    if (el('btnObraConcluida')) el('btnObraConcluida').addEventListener('click', toggleObraConcluida);
+    if (el('btnSalvarProc')) el('btnSalvarProc').addEventListener('click', (ev) => { ev.preventDefault(); upsertProcess(); });
+    if (el('btnNovoProc')) el('btnNovoProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); });
+    bindProcFormTracking();
+
+    // Parecer
     if (el('btnCadOpiniao')) el('btnCadOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarOpiniao(); });
     if (el('btnSalvarOpRec')) el('btnSalvarOpRec').addEventListener('click', (ev) => { ev.preventDefault(); registrarRecebOpiniao(); });
     if (el('btnVoltarOpRec')) el('btnVoltarOpRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelarRecOpiniao(); });
     if (el('btnSalvarOpFin')) el('btnSalvarOpFin').addEventListener('click', (ev) => { ev.preventDefault(); finalizarOpiniao(); });
     if (el('btnVoltarOpFin')) el('btnVoltarOpFin').addEventListener('click', (ev) => { ev.preventDefault(); cancelarFinOpiniao(); });
 
+    // Notificação
     if (el('btnCadNotif')) el('btnCadNotif').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarNotif(); });
     if (el('btnSalvarNtLida')) el('btnSalvarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); marcarNotifLida(); });
     if (el('btnVoltarNtLida')) el('btnVoltarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); cancelarNotifLida(); });
 
+    // SIGADAER
     if (el('btnCadSIG')) el('btnCadSIG').addEventListener('click', async (ev) => {
       ev.preventDefault();
-      const numbers = el('sgNums')?.value?.trim() || null;
+      const type = el('sgTipo')?.value;
+      const rawNums = el('sgNums')?.value?.trim() || '';
+      // Extrai números inteiros do input (ex.: "123/2024; 456/2024" -> [123,2024,456,2024])
+      const numbers = rawNums ? (rawNums.match(/\d+/g)?.map(n => parseInt(n, 10)) || null) : null;
       const t = el('sgSolic')?.value;
       const requested_at = t ? new Date(t).toISOString() : new Date().toISOString();
       if (!currentProcId) return Utils.setMsg('sgMsg', 'Nenhum processo selecionado.', true);
       Utils.setMsg('sgMsg', 'Cadastrando…');
+      if (!window.getUser) throw new Error('Auth não inicializado.');
+      const u = await getUser();
+      if (!u) throw new Error('Sessão expirada. Faça login novamente.');
       try {
-        const payload = { process_id: currentProcId, numbers, requested_at, status: 'SOLICITADA' };
+        const payload = { process_id: currentProcId, type, numbers, requested_at, status: 'SOLICITADA', created_by: u.id };
         const { error } = await sb.from('sigadaer').insert(payload);
         if (error) throw error;
         Utils.setMsg('sgMsg', 'Solicitação cadastrada.');
@@ -663,18 +588,18 @@ window.Modules.processos = (() => {
       }
     });
     if (el('btnSalvarSgExp')) el('btnSalvarSgExp').addEventListener('click', (ev) => { ev.preventDefault(); registrarSIGExpedido(); });
-    if (el('btnVoltarSgExp')) el('btnVoltarSgExp').addEventListener('click', (ev) => { ev.preventDefault(); cancelarSIGExpedido(); });
+    if (el('btnVoltarSgExp')) el('btnVoltarSgExp').addEventListener('click', (ev) => { ev.preventDefault(); Utils.hide('sgExpForm'); Utils.show('sgLista'); });
     if (el('btnSalvarSgRec')) el('btnSalvarSgRec').addEventListener('click', (ev) => { ev.preventDefault(); registrarSIGRecebido(); });
     if (el('btnVoltarSgRec')) el('btnVoltarSgRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelarSIGRec(); });
   }
 
-  async function load() {
-    bindTabs();
-    bindProcFormTracking();
-    bindActions();
-    clearProcessForm();
-    await reloadLists();
+  async function init() {
+    bindEvents();
+    await loadProcessList();
   }
 
-  return { load };
+  return { init };
 })();
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.Modules?.processos?.init) window.Modules.processos.init();
+});
