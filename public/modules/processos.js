@@ -61,9 +61,8 @@ window.Modules.processos = (() => {
     ['procTipo','procStatus','procStatusDate','procEntrada','procObraTermino','procObs'].forEach(id => {
       const e = el(id); if (e) e.disabled = !on;
     });
-    ['btnObraConcluida','btnSalvarProc','btnNovoProc'].forEach(id => {
-      const b = el(id); if (b) b.disabled = !on;
-    });
+    ['btnObraConcluida','btnSalvarProc','btnNovoProc']
+      .forEach(id => { const b = el(id); if (b) b.disabled = !on; });
   }
   function setOtherTabsEnabled(on) {
     ['opiniao','notif','sig'].forEach(tab => {
@@ -146,6 +145,7 @@ window.Modules.processos = (() => {
 
         setProcFormEnabled(true);
         setOtherTabsEnabled(true);
+        bindProcFormTracking();
         if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true;
         if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
@@ -153,9 +153,11 @@ window.Modules.processos = (() => {
         await loadProcessList();
         await reloadLists();
       } else {
-        U.setMsg('procMsg', '');
         const ok = window.confirm('NUP não encontrado. Deseja criar um novo processo com este NUP?');
-        if (!ok) return clearProcessForm();
+        if (!ok) {
+          U.setMsg('procMsg', 'Busca cancelada.');
+          return clearProcessForm();
+        }
 
         currentProcId = null;
         currentNUP = nup;
@@ -166,10 +168,11 @@ window.Modules.processos = (() => {
         el('procEntrada').value = '';
         el('procObraTermino').value = '';
         if (el('procObs')) el('procObs').value = '';
-        const ob = el('btnObraConcluida'); if (ob) ob.classList.remove('active');
+        const ob2 = el('btnObraConcluida'); if (ob2) ob2.classList.remove('active');
 
         setProcFormEnabled(true);
         setOtherTabsEnabled(false);
+        bindProcFormTracking();
         if (el('btnSalvarProc')) el('btnSalvarProc').disabled = false;
         if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
@@ -231,7 +234,10 @@ window.Modules.processos = (() => {
       if (error) throw error;
 
       const rows = Array.isArray(data) ? [...data] : [];
-      if (currentProcId) rows.sort((a,b) => (a.id === currentProcId ? -1 : (b.id === currentProcId ? 1 : 0)));
+      if (currentProcId) {
+        const cur = String(currentProcId);
+        rows.sort((a, b) => (String(a.id) === cur ? -1 : (String(b.id) === cur ? 1 : 0)));
+      }
 
       const table = document.createElement('table');
       const thead = document.createElement('thead');
@@ -264,7 +270,7 @@ window.Modules.processos = (() => {
       box.querySelectorAll('.selProc').forEach(btn => {
         btn.addEventListener('click', async () => {
           const id = btn.getAttribute('data-id');
-          const row = rows.find(r => r.id === id);
+          const row = rows.find(r => String(r.id) === String(id));
           if (!row) return;
 
           currentProcId = row.id;
@@ -281,6 +287,7 @@ window.Modules.processos = (() => {
 
           setProcFormEnabled(true);
           setOtherTabsEnabled(true);
+          bindProcFormTracking();
           if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true;
           if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
