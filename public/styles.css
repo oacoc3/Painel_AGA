@@ -1,40 +1,91 @@
-/* ====== Ajustes específicos do módulo Processos ====== */
-
-/* 3 colunas: formulário estreito (rolável), lista larga, histórico */
-.split.processos {
-  grid-template-columns: 320px minmax(720px, 1fr) minmax(420px, 1fr);
-  gap: 12px;
+:root {
+  --bg: #f3f2ef;
+  --ink: #222;
+  --ink-soft: #666;
+  --line: #c9c6c0;
+  --brand: #0b5;
+  --warn: #b20;
+  --card: #fff;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans";
 }
 
-/* Faz a coluna do formulário rolar verticalmente sem cortar conteúdo */
-.split.processos > .card:first-child {
-  overflow-y: auto;
-}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 14px var(--sans); }
+.vh { height: 100vh; display: flex; flex-direction: column; }
 
-/* As áreas de tabela devem rolar só na vertical; nunca na horizontal */
-.table,
-.scrolly {
-  overflow-y: auto;
-  overflow-x: hidden; /* elimina scroll horizontal */
-}
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #faf9f7; }
+.foot { border-top: 1px solid var(--line); border-bottom: 0; }
 
-/* Lista de processos: ocupar 100% e evitar overflow horizontal */
-#procLista table {
-  table-layout: fixed;
-  width: 100%;
-}
-#procLista th, #procLista td {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.brand { display: flex; align-items: baseline; gap: 8px; font-family: var(--mono); font-size: 18px; }
+.brand .logo { color: var(--brand); }
+.build { color: var(--ink-soft); font-size: 14px; margin-left: 8px; }
 
-/* Larguras por coluna (percentuais) para caber sem scroll horizontal) */
-#procLista th:nth-child(1), #procLista td:nth-child(1) { width: 30%; } /* NUP */
-#procLista th:nth-child(2), #procLista td:nth-child(2) { width: 10%; } /* Tipo */
-#procLista th:nth-child(3), #procLista td:nth-child(3) { width: 15%; } /* Status */
-#procLista th:nth-child(4), #procLista td:nth-child(4) { width: 15%; } /* Desde */
-#procLista th:nth-child(5), #procLista td:nth-child(5) { width: 10%; } /* 1ª Entrada */
-#procLista th:nth-child(6), #procLista td:nth-child(6) { width: 10%; } /* Obra (término) */
-#procLista th:nth-child(7), #procLista td:nth-child(7) { width: 5%; }  /* Concluída */
-#procLista th:nth-child(8), #procLista td:nth-child(8) { width: 5%; }  /* Ações */
+.nav { display: flex; gap: 6px; }
+.nav button { flex: 1 1 0; min-width: 0; }
+.nav button.active,
+.tabs button.active { background: var(--brand); color: #fff; }
+.user { display: flex; gap: 8px; align-items: center; }
+
+.main { flex: 1; display: flex; overflow: hidden; }
+.view { flex: 1; padding: 12px; overflow: hidden; }
+.centered { display: grid; place-items: center; }
+
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px; min-width: 320px; max-width: 420px; width: 100%; }
+.panel h1 { font-family: var(--mono); margin-top: 0; }
+
+input, select, textarea, button { font: inherit; color: inherit; }
+label { display: flex; flex-direction: column; gap: 4px; }
+input, select, textarea { padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+textarea { min-height: 80px; resize: vertical; }
+
+button { padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: #fff; cursor: pointer; }
+button:hover { filter: brightness(0.98); }
+button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 100%; }
+.columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.prazo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; height: 100%; }
+.prazo-grid > .card,
+.prazo-grid > .prazo-col { height: 100%; }
+.prazo-col { display: flex; flex-direction: column; gap: 12px; height: 100%; }
+.prazo-col .card { flex: 1; }
+.admin-col { display: flex; flex-direction: column; gap: 12px; height: 100%; }
+.admin-col > .card:last-child { flex: 1; }
+.analysis-grid { display: grid; grid-template-columns: 1fr 3fr; gap: 12px; height: 100%; }
+.analysis-col { display: flex; flex-direction: column; gap: 12px; height: 100%; }
+
+/* Grade de 3 colunas (base) */
+.split { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; height: 100%; }
+.split > .card { min-width: 0; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; min-height: 0; }
+.card h2 { margin: 0 0 8px; font-family: var(--mono); }
+
+.tabs { display: flex; flex-direction: column; gap: 8px; }
+.tab-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
+.tab { display: none; }
+.row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; align-items: end; }
+.row.stretch { align-items: stretch; }
+.row .grow { grid-column: 1 / -1; }
+.actions { display: flex; gap: 8px; align-items: center; }
+
+.table { width: 100%; }
+.table table { width: 100%; border-collapse: collapse; }
+.table th, .table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.table th { font-family: var(--mono); font-weight: 600; }
+.table td .actions { display: flex; gap: 6px; }
+
+.mono { font-family: var(--mono); }
+.muted { color: var(--ink-soft); }
+
+.hidden { display: none !important; }
+.fill { width: 100%; }
+.right { text-align: right; }
+
+.badge { display: inline-block; padding: 2px 6px; border: 1px solid var(--line); border-radius: 999px; background: #fff; }
+.ok    { color: #0a0; }
+.warn  { color: #a60; }
+.err   { color: #900; }
+
+footer { padding: 8px 12px; background: #faf9f7; }
