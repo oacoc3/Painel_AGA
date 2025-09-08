@@ -72,7 +72,8 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 #tabNotif label, #tabNotif button,
 #tabSig label, #tabSig button { font-size: 12px; }
 
-.table { width: 100%; border-collapse: collapse; }
+.table { width: 100%; }
+.table table { width: 100%; border-collapse: collapse; }
 .table th, .table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
 .table th { font-family: var(--mono); font-weight: 600; }
 .table td .actions { display: flex; gap: 6px; }
