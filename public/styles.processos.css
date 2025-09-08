@@ -65,12 +65,18 @@
   overflow-y: auto;
 }
 
-/* Popup de processo (container genérico para diálogos relacionados a processo) */
-.proc-popup {
+  /* Popup de processo (container genérico para diálogos relacionados a processo) */
+  .proc-popup {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
+  }
+
+  /* Botões "Ver" iluminados quando ativos */
+  #procAcoes button.active {
+    background: var(--brand);
+    color: #fff;
+  }
 .proc-popup menu {
   display: flex;
   justify-content: flex-end;
