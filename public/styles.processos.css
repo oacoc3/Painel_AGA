@@ -37,14 +37,17 @@
 
 /* Larguras percentuais — somam ~100% para caber sem scroll horizontal */
 #procLista th:nth-child(1), #procLista td:nth-child(1) { width: 28%; } /* NUP */
-#procLista th:nth-child(2), #procLista td:nth-child(2) { width: 10%; } /* Tipo */
-#procLista th:nth-child(3), #procLista td:nth-child(3) { width: 14%; } /* Status */
-#procLista th:nth-child(4), #procLista td:nth-child(4) { width: 14%; } /* Desde */
-#procLista th:nth-child(5), #procLista td:nth-child(5) { width: 9%; }  /* 1ª Entrada */
+#procLista th:nth-child(2), #procLista td:nth-child(2) { width: 10%; } /* Tipo (abreviação de “tipo”) */
+#procLista th:nth-child(3), #procLista td:nth-child(3) { width: 14%; } /* Status (situação atual) */
+#procLista th:nth-child(4), #procLista td:nth-child(4) { width: 14%; } /* Desde (data de início do status) */
+#procLista th:nth-child(5), #procLista td:nth-child(5) { width: 9%; }  /* 1ª Entrada (primeira entrada regional) */
 #procLista th:nth-child(6), #procLista td:nth-child(6) { width: 9%; }  /* Obra (término) */
-#procLista th:nth-child(7), #procLista td:nth-child(7) { width: 5%; }  /* Concluída */
-#procLista th:nth-child(8), #procLista td:nth-child(8) { width: 5%; }  /* Ações */
-#procLista th:nth-child(9), #procLista td:nth-child(9) { width: 6%; }  /* Histórico */
+#procLista th:nth-child(7), #procLista td:nth-child(7) { width: 5%; }  /* Concluída (indicador de conclusão) */
+#procLista th:nth-child(8), #procLista td:nth-child(8) { width: 5%; }  /* Ações (botões) */
+#procLista th:nth-child(9), #procLista td:nth-child(9) { width: 6%; }  /* Histórico (atalho para histórico) */
+
+/* Linha selecionada na lista */
+#procLista tr.selected { background: #ffe; }
 
 /* Popup do histórico */
 .hist-popup {
@@ -53,4 +56,17 @@
 .hist-popup .table {
   max-height: 60vh;
   overflow-y: auto;
+}
+
+/* Popup de processo (container genérico para diálogos relacionados a processo) */
+.proc-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.proc-popup menu {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
 }
