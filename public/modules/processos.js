@@ -367,7 +367,6 @@ window.Modules.processos = (() => {
     dlg.showModal();
   }
 
-  // Exclusão de processo
   async function deleteProcess(procId) {
     if (!procId) return;
     try {
@@ -558,7 +557,7 @@ window.Modules.processos = (() => {
         { key: 'type', label: 'Tipo' },
         { key: 'requested_at', label: 'Solicitada em', value: r => U.fmtDateTime(r.requested_at) },
         { key: 'status', label: 'Status' },
-        { key: 'received_at', label: 'Recebida em', value: r => U.fmtDateTime(r.received_at) },
+        { key: 'received_at', label: 'Recebida em', value: r => U.fmtDateTime(r.receb_at || r.received_at) },
         {
           label: 'Ações',
           render: r => {
