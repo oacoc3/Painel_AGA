@@ -1,22 +1,20 @@
 /* public/modules/processos.js
- * Módulo Processos — fluxo de busca/cadastro/edição e controle de abas.
- * Requisitos atendidos:
+ * Módulo Processos — busca/cadastro/edição + controle de abas.
+ * Requisitos:
  *  - Ao abrir: somente NUP + Buscar habilitados
  *  - Buscar NUP:
  *      * se existe: preenche formulário, habilita demais abas, leva item ao topo da lista
  *      * se não existe: pergunta se deseja criar e habilita só a aba Processo até salvar
  *  - Selecionar linha na lista: carrega e habilita tudo
  *  - Botão Salvar só habilita quando algo muda; após salvar, volta a desabilitar
- *  - NÃO usa coluna "observations" no banco (evita erro de coluna inexistente)
+ *  - NÃO usa coluna "observations" no banco
  */
 
 window.Modules = window.Modules || {};
 window.Modules.processos = (() => {
-  // ---- Estado --------------------------------------------------------------
   let currentProcId = null;
   let currentNUP = '';
 
-  // ---- Utilidades locais ---------------------------------------------------
   const el = (id) => document.getElementById(id);
 
   const SafeUtils = {
@@ -45,7 +43,6 @@ window.Modules.processos = (() => {
     },
     toDateInputValue(isoDate) {
       if (!isoDate) return '';
-      // aceita 'YYYY-MM-DD' ou ISO completo
       if (/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate;
       const d = new Date(isoDate);
       if (Number.isNaN(d.getTime())) return '';
@@ -55,46 +52,37 @@ window.Modules.processos = (() => {
       if (!isoDateTime) return '';
       const d = new Date(isoDateTime);
       if (Number.isNaN(d.getTime())) return '';
-      // datetime-local espera sem 'Z' e sem segundos
-      const s = d.toISOString();
-      return s.slice(0, 16);
+      return d.toISOString().slice(0, 16); // yyyy-mm-ddThh:mm
     }
   };
-
-  // Se houver Utils global, preferi-lo; senão, usar SafeUtils
   const U = (window.Utils && typeof window.Utils.setMsg === 'function') ? window.Utils : SafeUtils;
 
-  // ---- Habilitação / visibilidade -----------------------------------------
   function setProcFormEnabled(on) {
-    const ids = ['procTipo','procStatus','procStatusDate','procEntrada','procObraTermino','procObs'];
-    ids.forEach(id => { const e = el(id); if (e) e.disabled = !on; });
-
-    const btns = ['btnObraConcluida','btnSalvarProc','btnNovoProc'];
-    btns.forEach(id => { const b = el(id); if (b) b.disabled = !on; });
+    ['procTipo','procStatus','procStatusDate','procEntrada','procObraTermino','procObs'].forEach(id => {
+      const e = el(id); if (e) e.disabled = !on;
+    });
+    ['btnObraConcluida','btnSalvarProc','btnNovoProc'].forEach(id => {
+      const b = el(id); if (b) b.disabled = !on;
+    });
   }
-
   function setOtherTabsEnabled(on) {
     ['opiniao','notif','sig'].forEach(tab => {
       const b = document.querySelector(`[data-tab="${tab}"]`);
       if (b) b.disabled = !on;
     });
   }
-
   function showTab(tab) {
     const ids = { proc: 'tabProc', opiniao: 'tabOpiniao', notif: 'tabNotif', sig: 'tabSig' };
     Object.entries(ids).forEach(([k, id]) => {
-      const box = el(id);
-      if (box) box.style.display = (k === tab) ? 'block' : 'none';
+      const box = el(id); if (box) box.style.display = (k === tab) ? 'block' : 'none';
     });
     Array.from(document.querySelectorAll('[data-tab]'))
       .forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
 
-    // Alterna lista da coluna do meio, se existirem contêineres específicos
     const maps = { proc: 'procLista', opiniao: 'opLista', notif: 'ntLista', sig: 'sgLista' };
     Object.values(maps).forEach(id => { const x = el(id); if (x) x.style.display = 'none'; });
     const visible = el(maps[tab]); if (visible) visible.style.display = 'block';
   }
-
   function clearProcessForm() {
     currentProcId = null;
     currentNUP = '';
@@ -113,11 +101,9 @@ window.Modules.processos = (() => {
     U.setMsg('procMsg', '');
     if (el('histProcesso')) el('histProcesso').innerHTML = '';
   }
-
   function bindProcFormTracking() {
     ['procTipo','procStatus','procStatusDate','procEntrada','procObraTermino','procObs'].forEach(id => {
-      const e = el(id);
-      if (!e) return;
+      const e = el(id); if (!e) return;
       ['input','change'].forEach(evt => {
         e.addEventListener(evt, () => {
           const btn = el('btnSalvarProc');
@@ -126,16 +112,12 @@ window.Modules.processos = (() => {
       });
     });
   }
-
   function toggleObraConcluida() {
-    const b = el('btnObraConcluida');
-    if (!b) return;
+    const b = el('btnObraConcluida'); if (!b) return;
     b.classList.toggle('active');
-    const save = el('btnSalvarProc');
-    if (save) save.disabled = false;
+    const save = el('btnSalvarProc'); if (save) save.disabled = false;
   }
 
-  // ---- Buscar / Salvar -----------------------------------------------------
   async function buscarProcesso() {
     const nup = (el('procNUP')?.value || '').trim();
     if (!nup) return U.setMsg('procMsg', 'Informe o NUP (Número Único de Protocolo).', true);
@@ -151,7 +133,6 @@ window.Modules.processos = (() => {
       if (error) throw error;
 
       if (data) {
-        // Encontrado → preenche e habilita tudo
         currentProcId = data.id;
         currentNUP = data.nup;
 
@@ -169,10 +150,9 @@ window.Modules.processos = (() => {
         if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
         U.setMsg('procMsg', 'Processo encontrado.');
-        await loadProcessList();   // leva para o topo
-        await reloadLists();       // carrega histórico/listas relacionadas (se existirem)
+        await loadProcessList();
+        await reloadLists();
       } else {
-        // Não encontrado → oferecer cadastro
         U.setMsg('procMsg', '');
         const ok = window.confirm('NUP não encontrado. Deseja criar um novo processo com este NUP?');
         if (!ok) return clearProcessForm();
@@ -189,7 +169,7 @@ window.Modules.processos = (() => {
         const ob = el('btnObraConcluida'); if (ob) ob.classList.remove('active');
 
         setProcFormEnabled(true);
-        setOtherTabsEnabled(false); // só após salvar
+        setOtherTabsEnabled(false);
         if (el('btnSalvarProc')) el('btnSalvarProc').disabled = false;
         if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
@@ -212,7 +192,7 @@ window.Modules.processos = (() => {
       first_entry_date: el('procEntrada')?.value ? new Date(el('procEntrada').value).toISOString().slice(0,10) : null,
       obra_termino_date: el('procObraTermino')?.value ? new Date(el('procObraTermino').value).toISOString().slice(0,10) : null,
       obra_concluida: !!el('btnObraConcluida')?.classList.contains('active')
-      // Observações removidas do payload (evita erro de coluna inexistente)
+      // (Sem "observations")
     };
 
     try {
@@ -221,7 +201,7 @@ window.Modules.processos = (() => {
         if (error) throw error;
         currentProcId = data.id;
         currentNUP = nup;
-        setOtherTabsEnabled(true); // demais abas liberadas após o cadastro
+        setOtherTabsEnabled(true);
         U.setMsg('procMsg', 'Processo cadastrado.');
       } else {
         const { error } = await sb.from('processes').update(payload).eq('id', currentProcId);
@@ -237,7 +217,6 @@ window.Modules.processos = (() => {
     }
   }
 
-  // ---- Lista de Processos --------------------------------------------------
   async function loadProcessList() {
     const box = el('procLista');
     if (!box) return;
@@ -252,11 +231,7 @@ window.Modules.processos = (() => {
       if (error) throw error;
 
       const rows = Array.isArray(data) ? [...data] : [];
-
-      // Mantém o processo atual no topo (se existir)
-      if (currentProcId) {
-        rows.sort((a,b) => (a.id === currentProcId ? -1 : (b.id === currentProcId ? 1 : 0)));
-      }
+      if (currentProcId) rows.sort((a,b) => (a.id === currentProcId ? -1 : (b.id === currentProcId ? 1 : 0)));
 
       const table = document.createElement('table');
       const thead = document.createElement('thead');
@@ -278,8 +253,7 @@ window.Modules.processos = (() => {
           <td>${r.first_entry_date ? U.fmtDate(r.first_entry_date) : ''}</td>
           <td>${r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : ''}</td>
           <td>${r.obra_concluida ? 'Sim' : 'Não'}</td>
-          <td><button type="button" class="selProc" data-id="${r.id}">Selecionar</button></td>
-        `;
+          <td><button type="button" class="selProc" data-id="${r.id}">Selecionar</button></td>`;
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
@@ -287,7 +261,6 @@ window.Modules.processos = (() => {
       box.innerHTML = '';
       box.appendChild(table);
 
-      // Selecionar → preenche e habilita
       box.querySelectorAll('.selProc').forEach(btn => {
         btn.addEventListener('click', async () => {
           const id = btn.getAttribute('data-id');
@@ -308,7 +281,7 @@ window.Modules.processos = (() => {
 
           setProcFormEnabled(true);
           setOtherTabsEnabled(true);
-          if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true; // só habilita ao editar
+          if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true;
           if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
           U.setMsg('procMsg', 'Processo selecionado.');
@@ -320,9 +293,6 @@ window.Modules.processos = (() => {
     }
   }
 
-  // ---- Outras listas / Histórico (fail-safe) --------------------------------
-  // Carrega histórico/listas relacionadas se tais funções existirem noutros módulos;
-  // caso contrário, apenas mantém a UI estável.
   async function reloadLists() {
     try {
       if (currentProcId) {
@@ -335,20 +305,16 @@ window.Modules.processos = (() => {
         if (el('histProcesso')) el('histProcesso').innerHTML = '';
       }
     } catch {
-      // Não deixa a UI quebrar se alguma dessas não existir
       if (el('histProcesso')) el('histProcesso').innerHTML = '';
     }
   }
 
-  // ---- Bindings / Init -----------------------------------------------------
   function bindEvents() {
-    // Abas
     Array.from(document.querySelectorAll('[data-tab]')).forEach(btn => {
       btn.addEventListener('click', () => showTab(btn.dataset.tab));
     });
     showTab('proc');
 
-    // Processo
     if (el('btnObraConcluida')) el('btnObraConcluida').addEventListener('click', toggleObraConcluida);
     if (el('btnSalvarProc')) el('btnSalvarProc').addEventListener('click', (ev) => { ev.preventDefault(); upsertProcess(); });
     if (el('btnNovoProc')) el('btnNovoProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); });
@@ -358,15 +324,13 @@ window.Modules.processos = (() => {
 
   async function init() {
     bindEvents();
-    clearProcessForm();   // deixa só NUP + Buscar ativos
+    clearProcessForm();     // apenas NUP + Buscar habilitados
     await loadProcessList();
-    // histórico vazio até selecionar/buscar
     if (el('histProcesso')) el('histProcesso').innerHTML = '';
   }
 
   return { init };
 })();
-
 document.addEventListener('DOMContentLoaded', () => {
   if (window.Modules?.processos?.init) window.Modules.processos.init();
 });
