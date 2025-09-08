@@ -320,6 +320,81 @@ window.Modules.processos = (() => {
     }
   }
 
+  async function loadOpiniaoList(procId) {
+    const box = el('opLista');
+    if (!box) return;
+    box.innerHTML = '<div class="msg">Carregando…</div>';
+    try {
+      const { data, error } = await sb
+        .from('internal_opinions')
+        .select('id,type,requested_at,status,received_at')
+        .eq('process_id', procId)
+        .order('requested_at', { ascending: false });
+      if (error) throw error;
+      const rows = Array.isArray(data) ? data : [];
+      Utils.renderTable(box, [
+        { key: 'type', label: 'Tipo' },
+        { key: 'requested_at', label: 'Solicitada em', value: r => U.fmtDateTime(r.requested_at) },
+        { key: 'status', label: 'Status' },
+        { key: 'received_at', label: 'Recebida em', value: r => U.fmtDateTime(r.received_at) }
+      ], rows);
+    } catch (e) {
+      box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
+    }
+  }
+
+  async function loadNotifList(procId) {
+    const box = el('ntLista');
+    if (!box) return;
+    box.innerHTML = '<div class="msg">Carregando…</div>';
+    try {
+      const { data, error } = await sb
+        .from('notifications')
+        .select('id,type,requested_at,status,read_at')
+        .eq('process_id', procId)
+        .order('requested_at', { ascending: false });
+      if (error) throw error;
+      const rows = Array.isArray(data) ? data : [];
+      Utils.renderTable(box, [
+        { key: 'type', label: 'Tipo' },
+        { key: 'requested_at', label: 'Solicitada em', value: r => U.fmtDateTime(r.requested_at) },
+        { key: 'status', label: 'Status' },
+        { key: 'read_at', label: 'Lida em', value: r => U.fmtDateTime(r.read_at) }
+      ], rows);
+    } catch (e) {
+      box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
+    }
+  }
+
+  async function loadSIGList(procId) {
+    const box = el('sgLista');
+    if (!box) return;
+    box.innerHTML = '<div class="msg">Carregando…</div>';
+    try {
+      const { data, error } = await sb
+        .from('sigadaer')
+        .select('id,numbers,type,requested_at,status,expedit_at,received_at')
+        .eq('process_id', procId)
+        .order('requested_at', { ascending: false });
+      if (error) throw error;
+      const rows = Array.isArray(data) ? data : [];
+      Utils.renderTable(box, [
+        {
+          key: 'numbers',
+          label: 'Números',
+          value: r => Array.isArray(r.numbers) ? r.numbers.map(n => String(n).padStart(6, '0')).join('; ') : ''
+        },
+        { key: 'type', label: 'Tipo' },
+        { key: 'requested_at', label: 'Solicitada em', value: r => U.fmtDateTime(r.requested_at) },
+        { key: 'status', label: 'Status' },
+        { key: 'expedit_at', label: 'Expedida em', value: r => U.fmtDateTime(r.expedit_at) },
+        { key: 'received_at', label: 'Recebida em', value: r => U.fmtDateTime(r.received_at) }
+      ], rows);
+    } catch (e) {
+      box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
+    }
+  }
+
   async function reloadLists() {
     try {
       if (currentProcId) {
