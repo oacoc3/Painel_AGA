@@ -14,12 +14,19 @@ window.Modules.admin = (() => {
       {
         label: '',
         render: (r) => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.textContent = 'Excluir';
-          btn.className = 'danger';
-          btn.addEventListener('click', () => onDeleteUser(r));
-          return btn;
+          const wrap = document.createElement('div');
+          const btnEdit = document.createElement('button');
+          btnEdit.type = 'button';
+          btnEdit.textContent = 'Editar';
+          btnEdit.addEventListener('click', () => onEditUser(r));
+          const btnDel = document.createElement('button');
+          btnDel.type = 'button';
+          btnDel.textContent = 'Excluir';
+          btnDel.className = 'danger';
+          btnDel.addEventListener('click', () => onDeleteUser(r));
+          wrap.appendChild(btnEdit);
+          wrap.appendChild(btnDel);
+          return wrap;
         }
       }
     ], data || []);
@@ -47,6 +54,37 @@ window.Modules.admin = (() => {
       return Utils.setMsg('adminMsg', msg, true);
     }
     Utils.setMsg('adminMsg', 'Usuário excluído.');
+    await loadUsers();
+  }
+
+  async function onEditUser(row) {
+    const id = row?.id;
+    if (!id) return;
+    const name = prompt('Nome', row.name || '')?.trim();
+    if (name === null) return;
+    const email = prompt('E-mail', row.email || '')?.trim();
+    if (email === null) return;
+    const role = prompt('Perfil', row.role || '')?.trim();
+    if (role === null) return;
+
+    Utils.setMsg('adminMsg', 'Atualizando usuário...');
+
+    const session = await getSession();
+    const token = session && session.access_token;
+    if (!token) {
+      return Utils.setMsg('adminMsg', 'Sessão inválida. Faça login novamente.', true);
+    }
+
+    const res = await Utils.callFn('update-user', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: { id, name, email, role }
+    });
+    if (!res.ok) {
+      const msg = (res.data && res.data.error) || 'Falha ao atualizar usuário.';
+      return Utils.setMsg('adminMsg', msg, true);
+    }
+    Utils.setMsg('adminMsg', 'Usuário atualizado.');
     await loadUsers();
   }
 
