@@ -395,6 +395,109 @@ window.Modules.processos = (() => {
     }
   }
 
+  // === Patch adicionado ===
+
+  function parseSigNumbers(text) {
+    if (!text) return [];
+    return text
+      .split(/[;,\s]+/)
+      .map(p => p.trim())
+      .filter(Boolean)
+      .map(p => {
+        const m = p.match(/^(\d{1,3})\/(\d{4})$/);
+        if (m) {
+          const num = parseInt(m[1], 10);
+          const year = parseInt(m[2].slice(-2), 10);
+          return year * 1000 + num;
+        }
+        const n = parseInt(p.replace(/\D/g, ''), 10);
+        return Number.isNaN(n) ? null : n;
+      })
+      .filter(n => n !== null);
+  }
+
+  async function cadOpiniao() {
+    if (!currentProcId) return U.setMsg('opMsg', 'Selecione um processo.', true);
+    const st = el('opStatus')?.value || 'PENDENTE';
+    const payload = {
+      process_id: currentProcId,
+      type: el('opTipo')?.value || 'OACO',
+      requested_at: el('opSolic')?.value ? new Date(el('opSolic').value).toISOString() : new Date().toISOString(),
+      status: { PENDENTE: 'SOLICITADO', RECEBIDO: 'RECEBIDO', FINALIZADO: 'RECEBIDO' }[st] || 'SOLICITADO',
+      received_at: (st === 'RECEBIDO' || st === 'FINALIZADO') && el('opRecInput')?.value
+        ? new Date(el('opRecInput').value).toISOString()
+        : null,
+      finalized_at: st === 'FINALIZADO' && el('opFinInput')?.value
+        ? new Date(el('opFinInput').value).toISOString()
+        : null
+    };
+    try {
+      const u = await getUser();
+      if (!u) return U.setMsg('opMsg', 'Sessão expirada.', true);
+      const { error } = await sb.from('internal_opinions').insert({ ...payload, created_by: u.id });
+      if (error) throw error;
+      U.setMsg('opMsg', 'Parecer cadastrado.');
+      if (el('opSolic')) el('opSolic').value = '';
+      if (el('opRecInput')) el('opRecInput').value = '';
+      if (el('opFinInput')) el('opFinInput').value = '';
+      await reloadLists();
+    } catch (e) {
+      U.setMsg('opMsg', e.message || String(e), true);
+    }
+  }
+
+  async function cadNotif() {
+    if (!currentProcId) return U.setMsg('ntMsg', 'Selecione um processo.', true);
+    const st = el('ntStatus')?.value || 'PENDENTE';
+    const payload = {
+      process_id: currentProcId,
+      type: el('ntTipo')?.value || 'ANAICA',
+      requested_at: el('ntSolic')?.value ? new Date(el('ntSolic').value).toISOString() : new Date().toISOString(),
+      status: st === 'LIDA' ? 'LIDA' : 'SOLICITADA',
+      read_at: st === 'LIDA' && el('ntLidaInput')?.value
+        ? new Date(el('ntLidaInput').value).toISOString()
+        : null
+    };
+    try {
+      const u = await getUser();
+      if (!u) return U.setMsg('ntMsg', 'Sessão expirada.', true);
+      const { error } = await sb.from('notifications').insert({ ...payload, created_by: u.id });
+      if (error) throw error;
+      U.setMsg('ntMsg', 'Notificação cadastrada.');
+      if (el('ntSolic')) el('ntSolic').value = '';
+      if (el('ntLidaInput')) el('ntLidaInput').value = '';
+      await reloadLists();
+    } catch (e) {
+      U.setMsg('ntMsg', e.message || String(e), true);
+    }
+  }
+
+  async function cadSig() {
+    if (!currentProcId) return U.setMsg('sgMsg', 'Selecione um processo.', true);
+    const numbers = parseSigNumbers(el('sgNums')?.value || '');
+    const payload = {
+      process_id: currentProcId,
+      type: el('sgTipo')?.value || 'COMAE',
+      requested_at: el('sgSolic')?.value ? new Date(el('sgSolic').value).toISOString() : new Date().toISOString(),
+      numbers,
+      status: 'SOLICITADO'
+    };
+    try {
+      const u = await getUser();
+      if (!u) return U.setMsg('sgMsg', 'Sessão expirada.', true);
+      const { error } = await sb.from('sigadaer').insert({ ...payload, created_by: u.id });
+      if (error) throw error;
+      U.setMsg('sgMsg', 'SIGADAER cadastrado.');
+      if (el('sgSolic')) el('sgSolic').value = '';
+      if (el('sgNums')) el('sgNums').value = '';
+      await reloadLists();
+    } catch (e) {
+      U.setMsg('sgMsg', e.message || String(e), true);
+    }
+  }
+
+  // === Fim do patch adicionado ===
+
   async function reloadLists() {
     try {
       if (currentProcId) {
@@ -422,6 +525,22 @@ window.Modules.processos = (() => {
     if (el('btnNovoProc')) el('btnNovoProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); });
     if (el('btnBuscarProc')) el('btnBuscarProc').addEventListener('click', (ev) => { ev.preventDefault(); buscarProcesso(); });
     if (el('procNUP')) el('procNUP').addEventListener('input', () => { currentNUP = el('procNUP').value.trim(); syncNupFields(); });
+
+    // Novos binds do patch
+    if (el('btnCadOpiniao')) el('btnCadOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); cadOpiniao(); });
+    if (el('btnCadNotif')) el('btnCadNotif').addEventListener('click', (ev) => { ev.preventDefault(); cadNotif(); });
+    if (el('btnCadSig')) el('btnCadSig').addEventListener('click', (ev) => { ev.preventDefault(); cadSig(); });
+
+    if (el('opStatus')) el('opStatus').addEventListener('change', () => {
+      const st = el('opStatus').value;
+      el('opRecForm')?.classList.toggle('hidden', st === 'PENDENTE');
+      el('opFinForm')?.classList.toggle('hidden', st !== 'FINALIZADO');
+    });
+    if (el('ntStatus')) el('ntStatus').addEventListener('change', () => {
+      const st = el('ntStatus').value;
+      el('ntLidaForm')?.classList.toggle('hidden', st !== 'LIDA');
+    });
+
     bindProcFormTracking();
   }
 
