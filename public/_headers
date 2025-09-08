@@ -1,4 +1,4 @@
-// public/_headers
+# security headers
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
