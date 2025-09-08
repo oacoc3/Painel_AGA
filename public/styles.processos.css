@@ -1,13 +1,12 @@
 /* ====== Ajustes específicos do módulo Processos ====== */
 
-/* 3 colunas: formulário estreito (rolável), lista larga, histórico */
+/* 2 colunas: formulário estreito (rolável) e lista larga */
 .split.processos {
   display: grid;
   /* Responsivo, sem overflow horizontal */
   grid-template-columns:
     clamp(240px, 26vw, 320px)
-    minmax(0, 1fr)
-    clamp(280px, 32vw, 420px);
+    minmax(0, 1fr);
   gap: 12px;
   height: 100%;
 }
@@ -37,11 +36,21 @@
 }
 
 /* Larguras percentuais — somam ~100% para caber sem scroll horizontal */
-#procLista th:nth-child(1), #procLista td:nth-child(1) { width: 30%; } /* NUP */
+#procLista th:nth-child(1), #procLista td:nth-child(1) { width: 28%; } /* NUP */
 #procLista th:nth-child(2), #procLista td:nth-child(2) { width: 10%; } /* Tipo */
-#procLista th:nth-child(3), #procLista td:nth-child(3) { width: 15%; } /* Status */
-#procLista th:nth-child(4), #procLista td:nth-child(4) { width: 15%; } /* Desde */
-#procLista th:nth-child(5), #procLista td:nth-child(5) { width: 10%; } /* 1ª Entrada */
-#procLista th:nth-child(6), #procLista td:nth-child(6) { width: 10%; } /* Obra (término) */
+#procLista th:nth-child(3), #procLista td:nth-child(3) { width: 14%; } /* Status */
+#procLista th:nth-child(4), #procLista td:nth-child(4) { width: 14%; } /* Desde */
+#procLista th:nth-child(5), #procLista td:nth-child(5) { width: 9%; }  /* 1ª Entrada */
+#procLista th:nth-child(6), #procLista td:nth-child(6) { width: 9%; }  /* Obra (término) */
 #procLista th:nth-child(7), #procLista td:nth-child(7) { width: 5%; }  /* Concluída */
 #procLista th:nth-child(8), #procLista td:nth-child(8) { width: 5%; }  /* Ações */
+#procLista th:nth-child(9), #procLista td:nth-child(9) { width: 6%; }  /* Histórico */
+
+/* Popup do histórico */
+.hist-popup {
+  padding: 16px;
+}
+.hist-popup .table {
+  max-height: 60vh;
+  overflow-y: auto;
+}
