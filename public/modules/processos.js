@@ -248,9 +248,12 @@ window.Modules.processos = (() => {
           obra_concluida: !!obraBtn?.classList.contains('active')
         };
         try {
+          // >>> Patch: associar created_by <<<
+          const u = await getUser();
+          if (!u) throw new Error('Sessão expirada.');
           const { data, error } = await sb
             .from('processes')
-            .insert(payload)
+            .insert({ ...payload, created_by: u.id })
             .select('id')
             .single();
           if (error) throw error;
@@ -419,9 +422,11 @@ window.Modules.processos = (() => {
       const tbody = document.createElement('tbody');
       rows.forEach(r => {
         const tr = document.createElement('tr');
-        if (String(r.id) === String(currentProcId)) tr.classList.add('selected');
-        const stCls = currentProcId ? 'editStatus editable' : '';
-        const obCls = currentProcId ? 'editObra editable' : '';
+        // >>> Patch: apenas a linha selecionada fica "editável"
+        const isCurrent = String(r.id) === String(currentProcId);
+        if (isCurrent) tr.classList.add('selected');
+        const stCls = isCurrent ? 'editStatus editable' : '';
+        const obCls = isCurrent ? 'editObra editable' : '';
         tr.innerHTML = `
           <td>${r.nup}</td>
           <td>${r.type || ''}</td>
