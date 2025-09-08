@@ -60,6 +60,19 @@ window.Modules.processos = (() => {
   };
   const U = (window.Utils && typeof window.Utils.setMsg === 'function') ? window.Utils : SafeUtils;
 
+  // === novos toggles do patch ===
+  function toggleProcFields(on) {
+    const box = el('procCampos');
+    if (box) box.classList.toggle('hidden', !on);
+  }
+  function toggleOtherTabsVisible(on) {
+    ['tabBtnOpiniao','tabBtnNotif','tabBtnSig'].forEach(id => {
+      const b = el(id);
+      if (b) b.classList.toggle('hidden', !on);
+    });
+  }
+  // ===============================
+
   function setProcFormEnabled(on) {
     ['procTipo','procStatus','procStatusDate','procEntrada','procObraTermino','procObs'].forEach(id => {
       const e = el(id); if (e) e.disabled = !on;
@@ -111,6 +124,8 @@ window.Modules.processos = (() => {
 
     setProcFormEnabled(false);
     setOtherTabsEnabled(false);
+    toggleProcFields(false);
+    toggleOtherTabsVisible(false);
     U.setMsg('procMsg', '');
   }
 
@@ -161,6 +176,8 @@ window.Modules.processos = (() => {
 
         setProcFormEnabled(true);
         setOtherTabsEnabled(true);
+        toggleProcFields(true);
+        toggleOtherTabsVisible(true);
         bindProcFormTracking();
         if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true;
         if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
@@ -169,35 +186,81 @@ window.Modules.processos = (() => {
         await loadProcessList();
         await reloadLists();
       } else {
-        const ok = window.confirm('NUP não encontrado. Deseja criar um novo processo com este NUP?');
-        if (!ok) {
-          U.setMsg('procMsg', 'Busca cancelada.');
-          return clearProcessForm();
-        }
-
-        currentProcId = null;
-        currentNUP = nup;
-        syncNupFields();
-
-        el('procTipo').value = 'PDIR';
-        el('procStatus').value = 'ANATEC-PRE';
-        el('procStatusDate').value = '';
-        el('procEntrada').value = '';
-        el('procObraTermino').value = '';
-        if (el('procObs')) el('procObs').value = '';
-        const ob2 = el('btnObraConcluida'); if (ob2) ob2.classList.remove('active');
-
-        setProcFormEnabled(true);
-        setOtherTabsEnabled(false);
-        bindProcFormTracking();
-        if (el('btnSalvarProc')) el('btnSalvarProc').disabled = false;
-        if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
-
-        U.setMsg('procMsg', 'Preencha os campos e clique em Salvar para cadastrar.');
+        // novo fluxo: popup para cadastrar processo
+        await showNovoProcessoPopup(nup);
       }
     } catch (e) {
       U.setMsg('procMsg', e.message || String(e), true);
     }
+  }
+
+  // Popup de “Novo Processo” quando NUP não existe
+  async function showNovoProcessoPopup(nup) {
+    return new Promise(resolve => {
+      const dlg = document.createElement('dialog');
+      dlg.innerHTML = `
+        <form method="dialog" class="proc-popup">
+          <h3>Novo Processo ${nup}</h3>
+          <label>Tipo
+            <select id="npTipo">
+              <option>PDIR</option><option>Inscrição</option><option>Alteração</option><option>Exploração</option><option>OPEA</option>
+            </select>
+          </label>
+          <label>Status
+            <select id="npStatus">
+              <option>ANATEC-PRE</option><option>ANATEC</option><option>ANADOC</option><option>ANAICA</option><option>DIPEJ</option><option>ICA-PUB</option><option>OPEA</option><option>JJAER</option><option>DADOS</option><option>ARQ</option>
+            </select>
+          </label>
+          <label>Desde <input type="datetime-local" id="npStatusDate"></label>
+          <label>1ª entrada <input type="date" id="npEntrada"></label>
+          <label>Término da obra <input type="date" id="npObraTermino"></label>
+          <button type="button" id="npObraConcluida">Obra concluída</button>
+          <menu>
+            <button value="cancel">Cancelar</button>
+            <button id="npSalvar" value="default">Salvar</button>
+          </menu>
+        </form>`;
+      document.body.appendChild(dlg);
+      const obraBtn = dlg.querySelector('#npObraConcluida');
+      const obraTerm = dlg.querySelector('#npObraTermino');
+      obraBtn?.addEventListener('click', () => {
+        obraBtn.classList.toggle('active');
+        if (obraTerm) obraTerm.disabled = obraBtn.classList.contains('active');
+      });
+      dlg.addEventListener('close', () => {
+        dlg.remove();
+        if (!currentProcId) clearProcessForm();
+        resolve();
+      });
+      dlg.querySelector('#npSalvar')?.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        const payload = {
+          nup,
+          type: dlg.querySelector('#npTipo')?.value || 'PDIR',
+          status: dlg.querySelector('#npStatus')?.value || 'ANATEC-PRE',
+          status_since: dlg.querySelector('#npStatusDate')?.value ? new Date(dlg.querySelector('#npStatusDate').value).toISOString() : null,
+          first_entry_date: dlg.querySelector('#npEntrada')?.value ? new Date(dlg.querySelector('#npEntrada').value).toISOString().slice(0,10) : null,
+          obra_termino_date: dlg.querySelector('#npObraTermino')?.value ? new Date(dlg.querySelector('#npObraTermino').value).toISOString().slice(0,10) : null,
+          obra_concluida: !!obraBtn?.classList.contains('active')
+        };
+        try {
+          const { data, error } = await sb
+            .from('processes')
+            .insert(payload)
+            .select('id')
+            .single();
+          if (error) throw error;
+          currentProcId = data.id;
+          currentNUP = nup;
+          el('procNUP').value = nup;
+          dlg.close();
+          await buscarProcesso();
+        } catch(e) {
+          alert(e.message || e);
+        }
+      });
+      dlg.showModal();
+    });
   }
 
   async function upsertProcess() {
@@ -272,6 +335,7 @@ window.Modules.processos = (() => {
       const tbody = document.createElement('tbody');
       rows.forEach(r => {
         const tr = document.createElement('tr');
+        if (String(r.id) === String(currentProcId)) tr.classList.add('selected');
         tr.innerHTML = `
           <td>${r.nup}</td>
           <td>${r.type || ''}</td>
@@ -310,12 +374,15 @@ window.Modules.processos = (() => {
 
           setProcFormEnabled(true);
           setOtherTabsEnabled(true);
+          toggleProcFields(true);
+          toggleOtherTabsVisible(true);
           bindProcFormTracking();
           if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true;
           if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
           U.setMsg('procMsg', 'Processo selecionado.');
           await reloadLists();
+          await loadProcessList();
         });
       });
 
@@ -784,7 +851,7 @@ window.Modules.processos = (() => {
     if (el('btnBuscarProc')) el('btnBuscarProc').addEventListener('click', (ev) => { ev.preventDefault(); buscarProcesso(); });
     if (el('procNUP')) el('procNUP').addEventListener('input', () => { currentNUP = el('procNUP').value.trim(); syncNupFields(); });
 
-    // Novos binds do patch
+    // binds do patch
     if (el('btnCadOpiniao')) el('btnCadOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); cadOpiniao(); });
     if (el('btnCadNotif')) el('btnCadNotif').addEventListener('click', (ev) => { ev.preventDefault(); cadNotif(); });
     if (el('btnCadSig')) el('btnCadSig').addEventListener('click', (ev) => { ev.preventDefault(); cadSig(); });
