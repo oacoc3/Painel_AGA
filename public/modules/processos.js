@@ -395,6 +395,50 @@ window.Modules.processos = (() => {
     }
   }
 
+    function formatHistoryDetails(det) {
+    if (!det) return '';
+    try {
+      const obj = typeof det === 'string' ? JSON.parse(det) : det;
+      return Object.entries(obj)
+        .map(([k, v]) => {
+          if (v == null) return null;
+          return `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`;
+        })
+        .filter(Boolean)
+        .join('; ');
+    } catch {
+      return typeof det === 'string' ? det : JSON.stringify(det);
+    }
+  }
+
+  async function loadHistory(procId) {
+    const box = el('histProcesso');
+    if (!box) return;
+    box.innerHTML = '<div class="msg">Carregando…</div>';
+    try {
+      const { data, error } = await sb
+        .from('history')
+        .select('id,action,details,user_email,created_at')
+        .eq('process_id', procId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const rows = Array.isArray(data)
+        ? data.map(r => ({
+            ...r,
+            details_text: formatHistoryDetails(r.details)
+          }))
+        : [];
+      Utils.renderTable(box, [
+        { key: 'created_at', label: 'Data', value: r => U.fmtDateTime(r.created_at) },
+        { key: 'action', label: 'Ação' },
+        { key: 'user_email', label: 'Usuário', value: r => r.user_email || '' },
+        { key: 'details_text', label: 'Detalhes' }
+      ], rows);
+    } catch (e) {
+      box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
+    }
+  }
+
   // === Patch adicionado ===
 
   function parseSigNumbers(text) {
