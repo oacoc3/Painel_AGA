@@ -7,8 +7,8 @@
  *      * se não existe: pergunta se deseja criar e habilita só a aba Processo até salvar
  *  - Selecionar linha na lista: carrega e habilita tudo
  *  - Botão Salvar só habilita quando algo muda; após salvar, volta a desabilitar
- *  - NÃO usa coluna "observations" no banco
- */
+ *  - Observações armazenadas em tabela separada (process_observations)
+*/
 
 window.Modules = window.Modules || {};
 window.Modules.processos = (() => {
@@ -367,6 +367,19 @@ window.Modules.processos = (() => {
     dlg.showModal();
   }
 
+  // Exclusão de processo
+  async function deleteProcess(procId) {
+    if (!procId) return;
+    try {
+      const { error } = await sb.from('processes').delete().eq('id', procId);
+      if (error) throw error;
+      if (String(currentProcId) === String(procId)) clearProcessForm();
+      await loadProcessList();
+    } catch (e) {
+      alert(e.message || e);
+    }
+  }
+
   // === novo helper para seleção da linha ===
   async function selectProcess(row) {
     if (!row) return;
@@ -403,14 +416,16 @@ window.Modules.processos = (() => {
 
       const rows = Array.isArray(data) ? [...data] : [];
       const ids = rows.map(r => r.id);
-      const [op, nt, sg] = await Promise.all([
+      const [op, nt, sg, ob] = await Promise.all([
         sb.from('internal_opinions').select('process_id').in('process_id', ids),
         sb.from('notifications').select('process_id').in('process_id', ids),
-        sb.from('sigadaer').select('process_id').in('process_id', ids)
+        sb.from('sigadaer').select('process_id').in('process_id', ids),
+        sb.from('process_observations').select('process_id').in('process_id', ids)
       ]);
       const opSet = new Set((op.data || []).map(o => o.process_id));
       const ntSet = new Set((nt.data || []).map(o => o.process_id));
       const sgSet = new Set((sg.data || []).map(o => o.process_id));
+      const obSet = new Set((ob.data || []).map(o => o.process_id));
 
       if (currentProcId) {
         const cur = String(currentProcId);
@@ -421,8 +436,8 @@ window.Modules.processos = (() => {
       const thead = document.createElement('thead');
       thead.innerHTML = `
         <tr>
-          <th></th><th>NUP</th><th>Tipo</th><th>1ª Entrada DO-AGA</th>
-          <th>Status</th><th>Término de Obra</th><th></th><th></th><th></th>
+          <th>Histórico</th><th>NUP</th><th>Tipo</th><th>1ª Entrada DO-AGA</th>
+          <th>Status</th><th>Término de Obra</th><th>Obs.</th><th></th><th></th><th></th><th></th>
         </tr>`;
       table.appendChild(thead);
 
@@ -434,20 +449,23 @@ window.Modules.processos = (() => {
         const hasOp = opSet.has(r.id);
         const hasNt = ntSet.has(r.id);
         const hasSg = sgSet.has(r.id);
+        const hasOb = obSet.has(r.id);
         const stTxt = `${r.status || ''}${r.status_since ? '<br><small>' + U.fmtDateTime(r.status_since) + '</small>' : ''}`;
         const stBtn = isCurrent ? `<button type="button" class="editBtn editStatus">Editar</button>` : '';
         const obTxt = r.obra_concluida ? 'Concluída' : (r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : '');
         const obBtn = isCurrent ? `<button type="button" class="editBtn editObra">Editar</button>` : '';
         tr.innerHTML = `
-          <td><button type="button" class="histProc" title="Histórico">📄🔍🕒</button></td>
+          <td><button type="button" class="histProc" title="Histórico">Histórico</button></td>
           <td>${r.nup}</td>
           <td>${r.type || ''}</td>
           <td>${r.first_entry_date ? U.fmtDateTime(r.first_entry_date) : ''}</td>
           <td>${stTxt} ${stBtn}</td>
           <td>${obTxt} ${obBtn}</td>
+          <td><button type="button" class="obsIcon docIcon ${hasOb ? 'on' : 'off'}" title="Observações">TXT</button></td>
           <td><button type="button" class="opinIcon docIcon ${hasOp ? 'on' : 'off'}" title="Pareceres Internos">P</button></td>
           <td><button type="button" class="notifIcon docIcon ${hasNt ? 'on' : 'off'}" title="Notificações">N</button></td>
-          <td><button type="button" class="sigIcon docIcon ${hasSg ? 'on' : 'off'}" title="SIGADAER">S</button></td>`;
+          <td><button type="button" class="sigIcon docIcon ${hasSg ? 'on' : 'off'}" title="SIGADAER">S</button></td>
+          <td><button type="button" class="delProc">Excluir</button></td>`;
 
         // clique na linha seleciona o processo (exceto quando clicar em um botão)
         tr.addEventListener('click', async (e) => {
@@ -457,6 +475,11 @@ window.Modules.processos = (() => {
         tr.querySelector('.histProc')?.addEventListener('click', (e) => {
           e.stopPropagation();
           showHistoryPopup(r.id);
+        });
+        tr.querySelector('.obsIcon')?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await selectProcess(r);
+          showObsPopup(r.id);
         });
         tr.querySelector('.opinIcon')?.addEventListener('click', async (e) => {
           e.stopPropagation();
@@ -473,6 +496,11 @@ window.Modules.processos = (() => {
           await selectProcess(r);
           showSigPopup(r.id);
         });
+        tr.querySelector('.delProc')?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const ok = window.confirm('Deseja realmente excluir?');
+          if (ok) await deleteProcess(r.id);
+        });
         tr.querySelector('.editStatus')?.addEventListener('click', (e) => {
           e.stopPropagation();
           showStatusEditPopup(r.id, r.status || '', r.status_since || '');
@@ -488,6 +516,27 @@ window.Modules.processos = (() => {
 
       box.innerHTML = '';
       box.appendChild(table);
+    } catch (e) {
+      box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
+    }
+  }
+
+  async function loadObsList(procId, targetId = 'obsLista') {
+    const box = el(targetId);
+    if (!box) return;
+    box.innerHTML = '<div class="msg">Carregando…</div>';
+    try {
+      const { data, error } = await sb
+        .from('process_observations')
+        .select('id,text,created_at')
+        .eq('process_id', procId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const rows = Array.isArray(data) ? data : [];
+      Utils.renderTable(box, [
+        { key: 'created_at', label: 'Data', value: r => U.fmtDateTime(r.created_at) },
+        { key: 'text', label: 'Observação' }
+      ], rows);
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
     }
@@ -661,6 +710,47 @@ window.Modules.processos = (() => {
     dlg.querySelector('#sgNew').addEventListener('click', () => showCadSigForm(procId));
     dlg.showModal();
     await loadSIGList(procId, 'sgListaPop');
+  }
+
+  async function showObsPopup(procId = currentProcId) {
+    if (!procId) return;
+    popupProcId = procId;
+    const dlg = document.createElement('dialog');
+    dlg.className = 'hist-popup';
+    dlg.innerHTML = '<div id="obsListaPop" class="table scrolly">Carregando…</div><div id="obsForm" class="hidden"><textarea id="obsTexto" rows="3"></textarea></div><menu><button type="button" id="obsNova">Nova</button><button type="button" id="obsSalvar" disabled>Salvar</button><button type="button" id="obsFechar">Cancelar</button></menu><div id="obsMsg" class="msg"></div>';
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => { dlg.remove(); popupProcId = null; });
+    dlg.querySelector('#obsFechar').addEventListener('click', () => dlg.close());
+    dlg.querySelector('#obsNova').addEventListener('click', () => {
+      const box = dlg.querySelector('#obsForm');
+      box?.classList.remove('hidden');
+      const txt = dlg.querySelector('#obsTexto');
+      if (txt) txt.value = '';
+      dlg.querySelector('#obsSalvar')?.removeAttribute('disabled');
+    });
+    dlg.querySelector('#obsSalvar').addEventListener('click', async ev => {
+      ev.preventDefault();
+      await salvarObs(procId, dlg);
+    });
+    dlg.showModal();
+    await loadObsList(procId, 'obsListaPop');
+  }
+
+  async function salvarObs(procId, dlg) {
+    const txt = dlg.querySelector('#obsTexto')?.value.trim();
+    if (!txt) return;
+    try {
+      const { error } = await sb
+        .from('process_observations')
+        .insert({ process_id: procId, text: txt });
+      if (error) throw error;
+      dlg.querySelector('#obsForm')?.classList.add('hidden');
+      dlg.querySelector('#obsSalvar')?.setAttribute('disabled', 'true');
+      await loadObsList(procId, 'obsListaPop');
+      await loadProcessList();
+    } catch (e) {
+      U.setMsg('obsMsg', e.message || String(e), true);
+    }
   }
 
   function formatHistoryDetails(det) {
