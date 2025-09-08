@@ -421,7 +421,7 @@ window.Modules.processos = (() => {
     const st = el('opStatus')?.value || 'PENDENTE';
     const payload = {
       process_id: currentProcId,
-      type: el('opTipo')?.value || 'OACO',
+      type: el('opTipo')?.value || 'ATM',
       requested_at: el('opSolic')?.value ? new Date(el('opSolic').value).toISOString() : new Date().toISOString(),
       status: { PENDENTE: 'SOLICITADO', RECEBIDO: 'RECEBIDO', FINALIZADO: 'RECEBIDO' }[st] || 'SOLICITADO',
       received_at: (st === 'RECEBIDO' || st === 'FINALIZADO') && el('opRecInput')?.value
@@ -451,7 +451,7 @@ window.Modules.processos = (() => {
     const st = el('ntStatus')?.value || 'PENDENTE';
     const payload = {
       process_id: currentProcId,
-      type: el('ntTipo')?.value || 'ANAICA',
+       type: el('ntTipo')?.value || 'FAV',
       requested_at: el('ntSolic')?.value ? new Date(el('ntSolic').value).toISOString() : new Date().toISOString(),
       status: st === 'LIDA' ? 'LIDA' : 'SOLICITADA',
       read_at: st === 'LIDA' && el('ntLidaInput')?.value
