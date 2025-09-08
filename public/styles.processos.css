@@ -38,18 +38,17 @@
 }
 
 /* Larguras por coluna (somam ~100% e evitam scroll horizontal)
-   1: Editar | 2: Histórico | 3: NUP | 4: Tipo | 5: 1ª Entrada
-   6: Status + data | 7: Término de obra | 8: Pareceres | 9: Notificações | 10: SIGADAER */
-#procLista th:nth-child(1),  #procLista td:nth-child(1)  { width: 4%;  text-align: center; } /* Editar */
-#procLista th:nth-child(2),  #procLista td:nth-child(2)  { width: 4%;  text-align: center; } /* Histórico */
-#procLista th:nth-child(3),  #procLista td:nth-child(3)  { width: 18%; }                     /* NUP */
-#procLista th:nth-child(4),  #procLista td:nth-child(4)  { width: 10%; }                     /* Tipo */
-#procLista th:nth-child(5),  #procLista td:nth-child(5)  { width: 16%; }                     /* 1ª Entrada */
-#procLista th:nth-child(6),  #procLista td:nth-child(6)  { width: 18%; }                     /* Status + data */
-#procLista th:nth-child(7),  #procLista td:nth-child(7)  { width: 14%; }                     /* Término de obra */
-#procLista th:nth-child(8),  #procLista td:nth-child(8)  { width: 6%;  text-align: center; } /* Pareceres */
-#procLista th:nth-child(9),  #procLista td:nth-child(9)  { width: 6%;  text-align: center; } /* Notificações */
-#procLista th:nth-child(10), #procLista td:nth-child(10) { width: 6%;  text-align: center; } /* SIGADAER */
+   1: Histórico | 2: NUP | 3: Tipo | 4: 1ª Entrada
+   5: Status + data | 6: Término de obra | 7: Pareceres | 8: Notificações | 9: SIGADAER */
+#procLista th:nth-child(1),  #procLista td:nth-child(1)  { width: 4%;  text-align: center; } /* Histórico */
+#procLista th:nth-child(2),  #procLista td:nth-child(2)  { width: 18%; }                     /* NUP */
+#procLista th:nth-child(3),  #procLista td:nth-child(3)  { width: 10%; }                     /* Tipo */
+#procLista th:nth-child(4),  #procLista td:nth-child(4)  { width: 16%; }                     /* 1ª Entrada */
+#procLista th:nth-child(5),  #procLista td:nth-child(5)  { width: 18%; }                     /* Status + data */
+#procLista th:nth-child(6),  #procLista td:nth-child(6)  { width: 14%; }                     /* Término de obra */
+#procLista th:nth-child(7),  #procLista td:nth-child(7)  { width: 6%;  text-align: center; } /* Pareceres */
+#procLista th:nth-child(8),  #procLista td:nth-child(8)  { width: 6%;  text-align: center; } /* Notificações */
+#procLista th:nth-child(9),  #procLista td:nth-child(9)  { width: 6%;  text-align: center; } /* SIGADAER */
 
 /* Linha selecionada na lista */
 #procLista tr.selected { background: #ffe; }
@@ -85,8 +84,7 @@
   cursor: pointer;
 }
 
-/* Ícones/botões de seleção e histórico */
-#procLista .selProc,
+/* Ícones/botões de histórico */
 #procLista .histProc {
   background: none;
   border: none;
