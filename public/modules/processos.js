@@ -413,6 +413,16 @@ window.Modules.processos = (() => {
       if (error) throw error;
 
       const rows = Array.isArray(data) ? [...data] : [];
+      const ids = rows.map(r => r.id);
+      const [op, nt, sg] = await Promise.all([
+        sb.from('internal_opinions').select('process_id').in('process_id', ids),
+        sb.from('notifications').select('process_id').in('process_id', ids),
+        sb.from('sigadaer').select('process_id').in('process_id', ids)
+      ]);
+      const opSet = new Set((op.data || []).map(o => o.process_id));
+      const ntSet = new Set((nt.data || []).map(o => o.process_id));
+      const sgSet = new Set((sg.data || []).map(o => o.process_id));
+
       if (currentProcId) {
         const cur = String(currentProcId);
         rows.sort((a, b) => (String(a.id) === cur ? -1 : (String(b.id) === cur ? 1 : 0)));
@@ -422,8 +432,8 @@ window.Modules.processos = (() => {
       const thead = document.createElement('thead');
       thead.innerHTML = `
         <tr>
-          <th>NUP</th><th>Tipo</th><th>Status</th><th>Desde</th>
-          <th>1ª Entrada</th><th>Obra (término)</th><th>Concluída</th><th>Ações</th><th>Histórico</th>
+          <th></th><th></th><th>NUP</th><th>Tipo</th><th>1ª Entrada na DO-AGA</th>
+          <th>Status</th><th>Término de Obra</th><th>P</th><th>N</th><th>S</th>
         </tr>`;
       table.appendChild(thead);
 
@@ -434,16 +444,20 @@ window.Modules.processos = (() => {
         if (isCurrent) tr.classList.add('selected');
         const stCls = isCurrent ? 'editStatus editable' : '';
         const obCls = isCurrent ? 'editObra editable' : '';
+        const hasOp = opSet.has(r.id);
+        const hasNt = ntSet.has(r.id);
+        const hasSg = sgSet.has(r.id);
         tr.innerHTML = `
+          <td><button type="button" class="selProc" data-id="${r.id}" title="Editar">✏️</button></td>
+          <td><button type="button" class="histProc" data-id="${r.id}" title="Histórico">H</button></td>
           <td>${r.nup}</td>
           <td>${r.type || ''}</td>
-          <td class="${stCls}" data-id="${r.id}" data-status="${r.status || ''}" data-status-date="${r.status_since || ''}">${r.status || ''}</td>
-          <td>${r.status_since ? U.fmtDateTime(r.status_since) : ''}</td>
-          <td>${r.first_entry_date ? U.fmtDate(r.first_entry_date) : ''}</td>
-          <td class="${obCls}" data-id="${r.id}" data-obra="${r.obra_termino_date || ''}" data-conc="${r.obra_concluida ? '1' : '0'}">${r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : ''}</td>
-          <td>${r.obra_concluida ? 'Sim' : 'Não'}</td>
-          <td><button type="button" class="selProc" data-id="${r.id}">Selecionar</button></td>
-          <td><button type="button" class="histProc" data-id="${r.id}" title="Histórico">🕒</button></td>`;
+          <td>${r.first_entry_date ? U.fmtDateTime(r.first_entry_date) : ''}</td>
+          <td class="${stCls}" data-id="${r.id}" data-status="${r.status || ''}" data-status-date="${r.status_since || ''}">${r.status || ''}${r.status_since ? '<br><small>' + U.fmtDateTime(r.status_since) + '</small>' : ''}</td>
+          <td class="${obCls}" data-id="${r.id}" data-obra="${r.obra_termino_date || ''}" data-conc="${r.obra_concluida ? '1' : '0'}">${r.obra_concluida ? 'Concluída' : (r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : '')}</td>
+          <td><button type="button" class="opinIcon docIcon ${hasOp ? 'on' : 'off'}" data-id="${r.id}" title="Pareceres Internos">P</button></td>
+          <td><button type="button" class="notifIcon docIcon ${hasNt ? 'on' : 'off'}" data-id="${r.id}" title="Notificações">N</button></td>
+          <td><button type="button" class="sigIcon docIcon ${hasSg ? 'on' : 'off'}" data-id="${r.id}" title="SIGADAER">S</button></td>`;
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
@@ -499,6 +513,15 @@ window.Modules.processos = (() => {
           const id = btn.getAttribute('data-id');
           showHistoryPopup(id);
         });
+      });
+      box.querySelectorAll('.opinIcon').forEach(btn => {
+        btn.addEventListener('click', () => showOpiniaoPopup(btn.dataset.id));
+      });
+      box.querySelectorAll('.notifIcon').forEach(btn => {
+        btn.addEventListener('click', () => showNotifPopup(btn.dataset.id));
+      });
+      box.querySelectorAll('.sigIcon').forEach(btn => {
+        btn.addEventListener('click', () => showSigPopup(btn.dataset.id));
       });
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
@@ -633,8 +656,8 @@ window.Modules.processos = (() => {
     }
   }
 
-  async function showOpiniaoPopup() {
-    if (!currentProcId) return;
+  async function showOpiniaoPopup(procId = currentProcId) {
+    if (!procId) return;
     const dlg = document.createElement('dialog');
     dlg.className = 'hist-popup';
     dlg.innerHTML = '<div id="opListaPop" class="table scrolly">Carregando…</div><button type="button" id="opClose">Fechar</button>';
@@ -642,11 +665,11 @@ window.Modules.processos = (() => {
     dlg.addEventListener('close', () => dlg.remove());
     dlg.querySelector('#opClose').addEventListener('click', () => dlg.close());
     dlg.showModal();
-    await loadOpiniaoList(currentProcId, 'opListaPop');
+    await loadOpiniaoList(procId, 'opListaPop');
   }
 
-  async function showNotifPopup() {
-    if (!currentProcId) return;
+  async function showNotifPopup(procId = currentProcId) {
+    if (!procId) return;
     const dlg = document.createElement('dialog');
     dlg.className = 'hist-popup';
     dlg.innerHTML = '<div id="ntListaPop" class="table scrolly">Carregando…</div><button type="button" id="ntClose">Fechar</button>';
@@ -654,11 +677,11 @@ window.Modules.processos = (() => {
     dlg.addEventListener('close', () => dlg.remove());
     dlg.querySelector('#ntClose').addEventListener('click', () => dlg.close());
     dlg.showModal();
-    await loadNotifList(currentProcId, 'ntListaPop');
+    await loadNotifList(procId, 'ntListaPop');
   }
 
-  async function showSigPopup() {
-    if (!currentProcId) return;
+  async function showSigPopup(procId = currentProcId) {
+    if (!procId) return;
     const dlg = document.createElement('dialog');
     dlg.className = 'hist-popup';
     dlg.innerHTML = '<div id="sgListaPop" class="table scrolly">Carregando…</div><button type="button" id="sgClose">Fechar</button>';
@@ -666,7 +689,7 @@ window.Modules.processos = (() => {
     dlg.addEventListener('close', () => dlg.remove());
     dlg.querySelector('#sgClose').addEventListener('click', () => dlg.close());
     dlg.showModal();
-    await loadSIGList(currentProcId, 'sgListaPop');
+    await loadSIGList(procId, 'sgListaPop');
   }
 
   function formatHistoryDetails(det) {
