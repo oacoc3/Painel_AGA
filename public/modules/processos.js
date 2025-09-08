@@ -336,8 +336,5 @@ window.Modules.processos = (() => {
     if (el('histProcesso')) el('histProcesso').innerHTML = '';
   }
 
-  return { init };
+  return { init, reloadLists };
 })();
-document.addEventListener('DOMContentLoaded', () => {
-  if (window.Modules?.processos?.init) window.Modules.processos.init();
-});
