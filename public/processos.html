@@ -23,7 +23,7 @@
 </head>
 <body data-route="processos">
   <div id="app" class="vh">
-<header class="bar">
+    <header class="bar">
       <div class="brand">
         <span class="logo">■</span>
         <strong>Painel DO-AGA</strong>
@@ -38,11 +38,14 @@
         <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
       </nav>
       <div id="userBox" class="user hidden">
+        <span id="userName"></span>
+        <small id="userRole"></small>
         <button id="btnLogout" class="danger" type="button">Sair</button>
       </div>
     </header>
-<main class="main">
-<section id="viewProcessos" class="view">
+
+    <main class="main">
+      <section id="viewProcessos" class="view">
         <div class="split">
           <div class="card">
             <h2>Cadastro / Atualização</h2>
@@ -71,12 +74,14 @@
                 <div class="row">
                   <label>Status
                     <select id="procStatus">
-                    <option>CONFEC</option><option>REV-OACO</option><option>APROV</option><option>ICA-PUB</option><option>EDICAO</option><option>AGD-LEIT</option>
-                      <option>ANADOC</option><option>ANATEC-PRE</option><option>ANATEC</option>
-                    <option>ANAICA</option><option>SOB-DOC</option><option>SOB-TEC</option>
-                    <option>SOB-PDIR</option><option>SOB-EXPL</option><option>ARQ</option>
-                  </select>
-                          </label>
+                      <option>ANATEC-PRE</option>
+                      <option>ANATEC</option>
+                      <option>ANADOC</option>
+                      <option>ANAICA</option>
+                      <option>ANAFIN</option>
+                      <option>CANCELADO</option>
+                    </select>
+                  </label>
                   <label>Data/Hora status
                     <input type="datetime-local" id="procStatusDate">
                   </label>
@@ -95,6 +100,7 @@
                 <div id="procMsg" class="msg"></div>
               </form>
             </div>
+
             <div id="tabOpiniao" class="tab">
               <form id="formOpiniao" data-ajax>
                 <div class="row">
@@ -109,6 +115,7 @@
                 </div>
                 <hr/>
                 <div id="opLista" class="table scrolly"></div>
+
                 <div id="opRecForm" class="">
                   <label>Recebido em <input type="datetime-local" id="opRecInput"></label>
                   <div class="row actions">
@@ -116,9 +123,17 @@
                     <button id="btnVoltarOpRec" type="button">Voltar</button>
                   </div>
                 </div>
+                <div id="opFinForm" class="">
+                  <label>Finalizado em <input type="datetime-local" id="opFinInput"></label>
+                  <div class="row actions">
+                    <button id="btnSalvarOpFin" type="button">Salvar</button>
+                    <button id="btnVoltarOpFin" type="button">Voltar</button>
+                  </div>
+                </div>
                 <div id="opMsg" class="msg"></div>
               </form>
             </div>
+
             <div id="tabNotif" class="tab">
               <form id="formNotif" data-ajax>
                 <div class="row">
@@ -137,6 +152,7 @@
                 </div>
                 <hr/>
                 <div id="ntLista" class="table scrolly"></div>
+
                 <div id="ntLidaForm" class="">
                   <label>Lida em <input type="datetime-local" id="ntLidaInput"></label>
                   <div class="row actions">
@@ -147,27 +163,20 @@
                 <div id="ntMsg" class="msg"></div>
               </form>
             </div>
+
             <div id="tabSig" class="tab">
               <form id="formSig" data-ajax>
                 <div class="row">
                   <label>NUP <input id="sgNUP" required readonly></label>
-                  <label>Tipo
-                    <select id="sgTipo">
-                      <option>COMAE</option><option>COMPREP</option><option>COMGAP</option>
-                      <option>GABAER</option><option>SAC</option><option>ANAC</option>
-                      <option>OPR_AD</option><option>PREF</option><option>GOV</option><option>OUTRO</option>
-                    </select>
-                  </label>
+                  <label>Números <input id="sgNums" placeholder="Ex.: 123/2024; 456/2024"></label>
                 </div>
-                <div class="row">
+                <div class="row stretch">
                   <label>Solicitado em <input type="datetime-local" id="sgSolic"></label>
-                  <label>Nº SIGADAER
-                    <input id="sgNum" pattern="\d{6}" maxlength="6" placeholder="123456">
-                  </label>
+                  <button id="btnCadSIG" type="button">Cadastrar</button>
                 </div>
-                <button id="btnCadSig" type="button">Cadastrar</button>
                 <hr/>
                 <div id="sgLista" class="table scrolly"></div>
+
                 <div id="sgExpForm" class="">
                   <label>Expedido em <input type="datetime-local" id="sgExpInput"></label>
                   <div class="row actions">
@@ -189,18 +198,18 @@
 
           <div class="card">
             <h2>Lista de Processos</h2>
-            <div id="listaProcessos" class="table scrolly"></div>
+            <div id="procLista" class="table scrolly"></div>
           </div>
 
           <div class="card">
             <h2>Histórico (Auditoria)</h2>
-            <div id="histProcesso" class="table scrolly"></div>
+            <div id="procHistory" class="table scrolly"></div>
           </div>
         </div>
       </section>
-</main>
+    </main>
 
-<footer class="bar foot">
+    <footer class="bar foot">
       <span>Retro-UI</span>
       <span>© DO-AGA</span>
       <span id="footBuild"></span>
