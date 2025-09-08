@@ -14,6 +14,9 @@ window.Modules = window.Modules || {};
 window.Modules.processos = (() => {
   let currentProcId = null;
   let currentNUP = '';
+  let editingOpId = null;
+  let editingNtId = null;
+  let editingSgId = null;
 
   const el = (id) => document.getElementById(id);
 
@@ -336,7 +339,27 @@ window.Modules.processos = (() => {
         { key: 'type', label: 'Tipo' },
         { key: 'requested_at', label: 'Solicitada em', value: r => U.fmtDateTime(r.requested_at) },
         { key: 'status', label: 'Status' },
-        { key: 'received_at', label: 'Recebida em', value: r => U.fmtDateTime(r.received_at) }
+        { key: 'received_at', label: 'Recebida em', value: r => U.fmtDateTime(r.received_at) },
+        {
+          label: 'Ações',
+          render: r => {
+            if (r.status === 'SOLICITADO') {
+              const b = document.createElement('button');
+              b.type = 'button';
+              b.textContent = 'Recebido';
+              b.addEventListener('click', () => showOpRecForm(r.id));
+              return b;
+            }
+            if (r.status === 'RECEBIDO') {
+              const b = document.createElement('button');
+              b.type = 'button';
+              b.textContent = 'Finalizado';
+              b.addEventListener('click', () => showOpFinForm(r.id));
+              return b;
+            }
+            return '';
+          }
+        }
       ], rows);
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
@@ -359,7 +382,20 @@ window.Modules.processos = (() => {
         { key: 'type', label: 'Tipo' },
         { key: 'requested_at', label: 'Solicitada em', value: r => U.fmtDateTime(r.requested_at) },
         { key: 'status', label: 'Status' },
-        { key: 'read_at', label: 'Lida em', value: r => U.fmtDateTime(r.read_at) }
+        { key: 'read_at', label: 'Lida em', value: r => U.fmtDateTime(r.read_at) },
+        {
+          label: 'Ações',
+          render: r => {
+            if (r.status !== 'LIDA') {
+              const b = document.createElement('button');
+              b.type = 'button';
+              b.textContent = 'Lida';
+              b.addEventListener('click', () => showNtLidaForm(r.id));
+              return b;
+            }
+            return '';
+          }
+        }
       ], rows);
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
@@ -388,14 +424,34 @@ window.Modules.processos = (() => {
         { key: 'requested_at', label: 'Solicitada em', value: r => U.fmtDateTime(r.requested_at) },
         { key: 'status', label: 'Status' },
         { key: 'expedit_at', label: 'Expedida em', value: r => U.fmtDateTime(r.expedit_at) },
-        { key: 'received_at', label: 'Recebida em', value: r => U.fmtDateTime(r.received_at) }
+        { key: 'received_at', label: 'Recebida em', value: r => U.fmtDateTime(r.recebido_at || r.received_at) },
+        {
+          label: 'Ações',
+          render: r => {
+            if (r.status === 'SOLICITADO') {
+              const b = document.createElement('button');
+              b.type = 'button';
+              b.textContent = 'Expedido';
+              b.addEventListener('click', () => showSgExpForm(r.id));
+              return b;
+            }
+            if (r.status === 'EXPEDIDO') {
+              const b = document.createElement('button');
+              b.type = 'button';
+              b.textContent = 'Recebido';
+              b.addEventListener('click', () => showSgRecForm(r.id));
+              return b;
+            }
+            return '';
+          }
+        }
       ], rows);
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
     }
   }
 
-    function formatHistoryDetails(det) {
+  function formatHistoryDetails(det) {
     if (!det) return '';
     try {
       const obj = typeof det === 'string' ? JSON.parse(det) : det;
@@ -495,7 +551,7 @@ window.Modules.processos = (() => {
     const st = el('ntStatus')?.value || 'PENDENTE';
     const payload = {
       process_id: currentProcId,
-       type: el('ntTipo')?.value || 'FAV',
+      type: el('ntTipo')?.value || 'FAV',
       requested_at: el('ntSolic')?.value ? new Date(el('ntSolic').value).toISOString() : new Date().toISOString(),
       status: st === 'LIDA' ? 'LIDA' : 'SOLICITADA',
       read_at: st === 'LIDA' && el('ntLidaInput')?.value
@@ -540,6 +596,148 @@ window.Modules.processos = (() => {
     }
   }
 
+  // === Ações de atualização de status ===
+
+  function showOpRecForm(id) {
+    editingOpId = id;
+    el('opRecForm')?.classList.remove('hidden');
+  }
+
+  function showOpFinForm(id) {
+    editingOpId = id;
+    el('opFinForm')?.classList.remove('hidden');
+  }
+
+  function cancelOpRec() {
+    el('opRecForm')?.classList.add('hidden');
+    if (el('opRecInput')) el('opRecInput').value = '';
+    editingOpId = null;
+  }
+
+  function cancelOpFin() {
+    el('opFinForm')?.classList.add('hidden');
+    if (el('opFinInput')) el('opFinInput').value = '';
+    editingOpId = null;
+  }
+
+  async function salvarOpRec() {
+    if (!editingOpId) return;
+    const dt = el('opRecInput')?.value ? new Date(el('opRecInput').value).toISOString() : new Date().toISOString();
+    try {
+      const { error } = await sb
+        .from('internal_opinions')
+        .update({ status: 'RECEBIDO', received_at: dt })
+        .eq('id', editingOpId);
+      if (error) throw error;
+      U.setMsg('opMsg', 'Recebimento registrado.');
+      cancelOpRec();
+      await reloadLists();
+    } catch (e) {
+      U.setMsg('opMsg', e.message || String(e), true);
+    }
+  }
+
+  async function salvarOpFin() {
+    if (!editingOpId) return;
+    const dt = el('opFinInput')?.value ? new Date(el('opFinInput').value).toISOString() : new Date().toISOString();
+    try {
+      const { error } = await sb
+        .from('internal_opinions')
+        .update({ status: 'FINALIZADO', finalized_at: dt })
+        .eq('id', editingOpId);
+      if (error) throw error;
+      U.setMsg('opMsg', 'Parecer finalizado.');
+      cancelOpFin();
+      await reloadLists();
+    } catch (e) {
+      U.setMsg('opMsg', e.message || String(e), true);
+    }
+  }
+
+  function showNtLidaForm(id) {
+    editingNtId = id;
+    el('ntLidaForm')?.classList.remove('hidden');
+  }
+
+  function cancelNtLida() {
+    el('ntLidaForm')?.classList.add('hidden');
+    if (el('ntLidaInput')) el('ntLidaInput').value = '';
+    editingNtId = null;
+  }
+
+  async function salvarNtLida() {
+    if (!editingNtId) return;
+    const dt = el('ntLidaInput')?.value ? new Date(el('ntLidaInput').value).toISOString() : new Date().toISOString();
+    try {
+      const { error } = await sb
+        .from('notifications')
+        .update({ status: 'LIDA', read_at: dt })
+        .eq('id', editingNtId);
+      if (error) throw error;
+      U.setMsg('ntMsg', 'Leitura registrada.');
+      cancelNtLida();
+      await reloadLists();
+    } catch (e) {
+      U.setMsg('ntMsg', e.message || String(e), true);
+    }
+  }
+
+  function showSgExpForm(id) {
+    editingSgId = id;
+    el('sgExpForm')?.classList.remove('hidden');
+  }
+
+  function showSgRecForm(id) {
+    editingSgId = id;
+    el('sgRecForm')?.classList.remove('hidden');
+  }
+
+  function cancelSgExp() {
+    el('sgExpForm')?.classList.add('hidden');
+    if (el('sgExpInput')) el('sgExpInput').value = '';
+    editingSgId = null;
+  }
+
+  function cancelSgRec() {
+    el('sgRecForm')?.classList.add('hidden');
+    if (el('sgRecInput')) el('sgRecInput').value = '';
+    editingSgId = null;
+  }
+
+  async function salvarSgExp() {
+    if (!editingSgId) return;
+    const dt = el('sgExpInput')?.value ? new Date(el('sgExpInput').value).toISOString() : new Date().toISOString();
+    try {
+      const { error } = await sb
+        .from('sigadaer')
+        .update({ status: 'EXPEDIDO', expedit_at: dt })
+        .eq('id', editingSgId);
+      if (error) throw error;
+      U.setMsg('sgMsg', 'Expedição registrada.');
+      cancelSgExp();
+      await reloadLists();
+    } catch (e) {
+      U.setMsg('sgMsg', e.message || String(e), true);
+    }
+  }
+
+  async function salvarSgRec() {
+    if (!editingSgId) return;
+    const dt = el('sgRecInput')?.value ? new Date(el('sgRecInput').value).toISOString() : new Date().toISOString();
+    try {
+      const { error } = await sb
+        .from('sigadaer')
+        .update({ status: 'RECEBIDO', received_at: dt })
+        .eq('id', editingSgId);
+      if (error) throw error;
+      U.setMsg('sgMsg', 'Recebimento registrado.');
+      cancelSgRec();
+      await reloadLists();
+    } catch (e) {
+      U.setMsg('sgMsg', e.message || String(e), true);
+    }
+  }
+
   // === Fim do patch adicionado ===
 
   async function reloadLists() {
@@ -574,6 +772,19 @@ window.Modules.processos = (() => {
     if (el('btnCadOpiniao')) el('btnCadOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); cadOpiniao(); });
     if (el('btnCadNotif')) el('btnCadNotif').addEventListener('click', (ev) => { ev.preventDefault(); cadNotif(); });
     if (el('btnCadSig')) el('btnCadSig').addEventListener('click', (ev) => { ev.preventDefault(); cadSig(); });
+
+    if (el('btnSalvarOpRec')) el('btnSalvarOpRec').addEventListener('click', (ev) => { ev.preventDefault(); salvarOpRec(); });
+    if (el('btnVoltarOpRec')) el('btnVoltarOpRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelOpRec(); });
+    if (el('btnSalvarOpFin')) el('btnSalvarOpFin').addEventListener('click', (ev) => { ev.preventDefault(); salvarOpFin(); });
+    if (el('btnVoltarOpFin')) el('btnVoltarOpFin').addEventListener('click', (ev) => { ev.preventDefault(); cancelOpFin(); });
+
+    if (el('btnSalvarNtLida')) el('btnSalvarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); salvarNtLida(); });
+    if (el('btnVoltarNtLida')) el('btnVoltarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); cancelNtLida(); });
+
+    if (el('btnSalvarSgExp')) el('btnSalvarSgExp').addEventListener('click', (ev) => { ev.preventDefault(); salvarSgExp(); });
+    if (el('btnVoltarSgExp')) el('btnVoltarSgExp').addEventListener('click', (ev) => { ev.preventDefault(); cancelSgExp(); });
+    if (el('btnSalvarSgRec')) el('btnSalvarSgRec').addEventListener('click', (ev) => { ev.preventDefault(); salvarSgRec(); });
+    if (el('btnVoltarSgRec')) el('btnVoltarSgRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelSgRec(); });
 
     if (el('opStatus')) el('opStatus').addEventListener('change', () => {
       const st = el('opStatus').value;
