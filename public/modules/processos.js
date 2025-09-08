@@ -112,7 +112,6 @@ window.Modules.processos = (() => {
     setProcFormEnabled(false);
     setOtherTabsEnabled(false);
     U.setMsg('procMsg', '');
-    if (el('histProcesso')) el('histProcesso').innerHTML = '';
   }
 
   function bindProcFormTracking() {
@@ -266,7 +265,7 @@ window.Modules.processos = (() => {
       thead.innerHTML = `
         <tr>
           <th>NUP</th><th>Tipo</th><th>Status</th><th>Desde</th>
-          <th>1ª Entrada</th><th>Obra (término)</th><th>Concluída</th><th>Ações</th>
+          <th>1ª Entrada</th><th>Obra (término)</th><th>Concluída</th><th>Ações</th><th>Histórico</th>
         </tr>`;
       table.appendChild(thead);
 
@@ -281,7 +280,8 @@ window.Modules.processos = (() => {
           <td>${r.first_entry_date ? U.fmtDate(r.first_entry_date) : ''}</td>
           <td>${r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : ''}</td>
           <td>${r.obra_concluida ? 'Sim' : 'Não'}</td>
-          <td><button type="button" class="selProc" data-id="${r.id}">Selecionar</button></td>`;
+          <td><button type="button" class="selProc" data-id="${r.id}">Selecionar</button></td>
+          <td><button type="button" class="histProc" data-id="${r.id}" title="Histórico">🕒</button></td>`;
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
@@ -316,6 +316,13 @@ window.Modules.processos = (() => {
 
           U.setMsg('procMsg', 'Processo selecionado.');
           await reloadLists();
+        });
+      });
+
+      box.querySelectorAll('.histProc').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-id');
+          showHistoryPopup(id);
         });
       });
     } catch (e) {
@@ -467,10 +474,14 @@ window.Modules.processos = (() => {
     }
   }
 
-  async function loadHistory(procId) {
-    const box = el('histProcesso');
-    if (!box) return;
-    box.innerHTML = '<div class="msg">Carregando…</div>';
+  async function showHistoryPopup(procId) {
+    if (!procId) return;
+    const dlg = document.createElement('dialog');
+    dlg.className = 'hist-popup';
+    dlg.innerHTML = '<div class="msg">Carregando…</div>';
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.showModal();
     try {
       const { data, error } = await sb
         .from('history')
@@ -484,14 +495,23 @@ window.Modules.processos = (() => {
             details_text: formatHistoryDetails(r.details)
           }))
         : [];
-      Utils.renderTable(box, [
+      const content = document.createElement('div');
+      content.className = 'table scrolly';
+      Utils.renderTable(content, [
         { key: 'created_at', label: 'Data', value: r => U.fmtDateTime(r.created_at) },
         { key: 'action', label: 'Ação' },
         { key: 'user_email', label: 'Usuário', value: r => r.user_email || '' },
         { key: 'details_text', label: 'Detalhes' }
       ], rows);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'Fechar';
+      btn.addEventListener('click', () => dlg.close());
+      dlg.innerHTML = '';
+      dlg.appendChild(content);
+      dlg.appendChild(btn);
     } catch (e) {
-      box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
+      dlg.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
     }
   }
 
@@ -746,13 +766,9 @@ window.Modules.processos = (() => {
         if (typeof loadOpiniaoList === 'function') await loadOpiniaoList(currentProcId);
         if (typeof loadNotifList   === 'function') await loadNotifList(currentProcId);
         if (typeof loadSIGList     === 'function') await loadSIGList(currentProcId);
-        if (typeof loadHistory     === 'function') await loadHistory(currentProcId);
-        else if (el('histProcesso')) el('histProcesso').innerHTML = '';
-      } else {
-        if (el('histProcesso')) el('histProcesso').innerHTML = '';
       }
     } catch {
-      if (el('histProcesso')) el('histProcesso').innerHTML = '';
+      // ignore
     }
   }
 
@@ -803,7 +819,6 @@ window.Modules.processos = (() => {
     bindEvents();
     clearProcessForm();     // apenas NUP + Buscar habilitados
     await loadProcessList();
-    if (el('histProcesso')) el('histProcesso').innerHTML = '';
   }
 
   return { init, reloadLists };
