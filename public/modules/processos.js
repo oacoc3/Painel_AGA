@@ -7,22 +7,26 @@ window.Modules.processos = (() => {
   let currentNotifLidaId = null;
   let currentSigExpId = null;
   let currentSigRecId = null;
+
   function bindTabs() {
     // Abas do cartão esquerdo
     const buttons = $$('.tabs button');
+    const showTab = (tab) => {
+      ['tabProc','tabOpiniao','tabNotif','tabSig'].forEach(id => Utils.hide(id));
+      Utils.show(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
+      // destaca botão ativo
+      buttons.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    };
     buttons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tab = btn.dataset.tab;
-        ['tabProc','tabOpiniao','tabNotif','tabSig'].forEach(id => Utils.hide(id));
-        Utils.show(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
-      });
+      btn.addEventListener('click', () => showTab(btn.dataset.tab));
     });
-    // Abre processo por padrão
-    Utils.show('tabProc');
+    // Abre 'Processo' por padrão já com destaque
+    showTab('proc');
   }
 
   function toggleObraConcluida() {
     el('btnObraConcluida').classList.toggle('active');
+    el('btnSalvarProc').disabled = false;
   }
 
   function clearProcessForm() {
@@ -77,15 +81,14 @@ window.Modules.processos = (() => {
       if (!u) throw new Error('Sessão expirada. Faça login novamente.');
 
       if (!currentProcId) {
-        // Novo
         const payload = {
           nup, type, status,
+          status_since: statusSinceInput ? new Date(statusSinceInput).toISOString() : null,
+          first_entry_date: firstEntry,
           obra_termino_date: obraTerm,
           obra_concluida: obraConcl,
-          first_entry_date: firstEntry,
-          created_by: u.id
+          observations: crea
         };
-        if (statusSinceInput) payload.status_since = new Date(statusSinceInput).toISOString();
         const { data, error } = await sb.from('processes').insert(payload).select('id').maybeSingle();
         if (error) throw error;
         currentProcId = data?.id || null;
@@ -93,9 +96,9 @@ window.Modules.processos = (() => {
         syncNUP();
         Utils.setMsg('procMsg', 'Processo cadastrado.');
       } else {
-        // Atualização
         const payload = {
-          type, status,
+          nup, type, status,
+          observations: crea,
           obra_termino_date: obraTerm,
           obra_concluida: obraConcl,
           first_entry_date: firstEntry
@@ -128,28 +131,11 @@ window.Modules.processos = (() => {
     }
   }
 
-  async function fetchProcessByNUP(nup) {
-    const { data, error } = await sb
-      .from('processes')
-      .select('id,nup,type,status,status_since,first_entry_date,obra_termino_date,obra_concluida')
-      .eq('nup', nup)
-      .maybeSingle();
-    if (error) throw error;
-    return data || null;
-  }
-
-  // ======== HISTÓRICO (formatação legível) ========
   function describeHistoryItem(item) {
-    const ts = item.created_at ? Utils.fmtDateTime(new Date(item.created_at)) : '';
-    const who = item.user_email || item.user_id || '';
-    const act = (item.action || '').toUpperCase();
-
-    // details pode vir como string ou objeto
-    let d = item.details;
-    if (typeof d === 'string') {
-      try { d = JSON.parse(d); } catch { /* deixa como está */ }
-    }
-    d = d || {};
+    const ts = Utils.fmtDateTime(item.created_at);
+    const who = item.by_name || item.by_email || (item.by_user_id ? item.by_user_id.slice(0,8) : '—');
+    const act = item.action || '—';
+    const d = item.data || {};
 
     // Heurísticas para identificar a origem do registro
     const isProcess   = 'nup' in d && 'type' in d && 'status' in d;
@@ -183,20 +169,18 @@ window.Modules.processos = (() => {
       partes.push(estado + (quando ? ` em ${Utils.fmtDateTime(quando)}` : ''));
       resumo = partes.join(' — ');
     } else if (isNotif) {
-      const estado = d.read_at ? 'LIDA' : (d.status || 'SOLICITADA');
       const quando = d.read_at || d.requested_at;
       const partes = [];
       if (d.type) partes.push(`Notificação ${d.type}`);
-      partes.push(estado + (quando ? ` em ${Utils.fmtDateTime(quando)}` : ''));
+      partes.push((d.read_at ? 'LIDA' : 'SOLICITADA') + (quando ? ` em ${Utils.fmtDateTime(quando)}` : ''));
       resumo = partes.join(' — ');
     } else if (isSIG) {
-      const estado = d.received_at ? 'RECEBIDA' : (d.expedit_at ? 'EXPEDIDA' : (d.status || 'SOLICITADA'));
-      const quando = d.received_at || d.expedit_at || d.requested_at;
-      const nums = Array.isArray(d.numbers) && d.numbers.length ? ` Nº ${d.numbers.join(', ')}` : '';
-      const tipo = d.type ? ` ${d.type}` : '';
-      resumo = `SIGADAER${tipo}${nums} — ${estado}${quando ? ` em ${Utils.fmtDateTime(quando)}` : ''}`;
+      const partes = [];
+      if (d.numbers) partes.push(`SIGADAER (${d.numbers})`);
+      if (d.status === 'EXPEDIDA' || d.expedit_at) partes.push(`EXPEDIDA em ${Utils.fmtDateTime(d.expedit_at || d.requested_at)}`);
+      if (d.received_at) partes.push(`RECEBIDA em ${Utils.fmtDateTime(d.received_at)}`);
+      resumo = partes.join(' — ');
     } else {
-      // Fallback: mostra o JSON de forma compacta para não poluir
       try {
         resumo = JSON.stringify(d);
       } catch {
@@ -236,36 +220,13 @@ window.Modules.processos = (() => {
     }
   }
 
-  // ======== OPINIÃO INTERNA ========
-  function showOpiniaoRecForm(id) {
-    currentOpiniaoRecId = id;
-    el('opRecInput').value = Utils.toDateTimeLocalValue(new Date());
-    Utils.hide('opLista');
-    Utils.show('opRecForm');
-  }
-  function cancelarRecOpiniao() {
-    currentOpiniaoRecId = null;
-    Utils.hide('opRecForm');
-    Utils.show('opLista');
-  }
-
-  function showOpiniaoFinForm(id) {
-    currentOpiniaoRecId = id;
-    el('opFinInput').value = Utils.toDateTimeLocalValue(new Date());
-    Utils.hide('opLista');
-    Utils.show('opFinForm');
-  }
-  function cancelarFinOpiniao() {
-    currentOpiniaoRecId = null;
-    Utils.hide('opFinForm');
-    Utils.show('opLista');
-  }
-
+  // ======== OPINIÕES INTERNAS ========
   async function cadastrarOpiniao() {
-    const type = el('opTipo').value;
-    const requested_at = el('opSolic').value ? new Date(el('opSolic').value).toISOString() : new Date().toISOString();
-    if (!currentProcId) return Utils.setMsg('opMsg', 'Selecione ou cadastre um processo primeiro.', true);
-    Utils.setMsg('opMsg', 'Cadastrando parecer…');
+    const type = el('opTipo')?.value;
+    const t = el('opSolic')?.value;
+    const requested_at = t ? new Date(t).toISOString() : new Date().toISOString();
+    if (!currentProcId) return Utils.setMsg('opMsg', 'Nenhum processo selecionado.', true);
+    Utils.setMsg('opMsg', 'Cadastrando…');
     try {
       const payload = { process_id: currentProcId, type, requested_at };
       const { error } = await sb.from('internal_opinions').insert(payload);
@@ -275,6 +236,18 @@ window.Modules.processos = (() => {
     } catch (e) {
       Utils.setMsg('opMsg', e.message || String(e), true);
     }
+  }
+
+  function showRecebOpiniaoForm(id) {
+    currentOpiniaoRecId = id;
+    el('opRecInput').value = Utils.toDateTimeLocalValue(new Date());
+    Utils.hide('opLista');
+    Utils.show('opRecForm');
+  }
+  function cancelarRecOpiniao() {
+    currentOpiniaoRecId = null;
+    Utils.hide('opRecForm');
+    Utils.show('opLista');
   }
 
   async function registrarRecebOpiniao() {
@@ -293,15 +266,27 @@ window.Modules.processos = (() => {
     }
   }
 
+  function showFinOpiniaoForm(id) {
+    currentOpiniaoRecId = id;
+    el('opFinInput').value = Utils.toDateTimeLocalValue(new Date());
+    Utils.hide('opLista');
+    Utils.show('opFinForm');
+  }
+  function cancelarFinOpiniao() {
+    currentOpiniaoRecId = null;
+    Utils.hide('opFinForm');
+    Utils.show('opLista');
+  }
+
   async function finalizarOpiniao() {
     const t = el('opFinInput').value;
     const finalized_at = t ? new Date(t).toISOString() : new Date().toISOString();
     if (!currentOpiniaoRecId) return Utils.setMsg('opMsg', 'Nenhuma solicitação selecionada.', true);
-    Utils.setMsg('opMsg', 'Finalizando parecer…');
+    Utils.setMsg('opMsg', 'Registrando finalização…');
     try {
       const { error } = await sb.from('internal_opinions').update({ finalized_at }).eq('id', currentOpiniaoRecId);
       if (error) throw error;
-      Utils.setMsg('opMsg', 'Parecer finalizado.');
+      Utils.setMsg('opMsg', 'Finalização registrada.');
       cancelarFinOpiniao();
       await reloadLists();
     } catch (e) {
@@ -310,6 +295,23 @@ window.Modules.processos = (() => {
   }
 
   // ======== NOTIFICAÇÕES ========
+  async function cadastrarNotif() {
+    const type = el('ntTipo')?.value;
+    const t = el('ntSolic')?.value;
+    const requested_at = t ? new Date(t).toISOString() : new Date().toISOString();
+    if (!currentProcId) return Utils.setMsg('ntMsg', 'Nenhum processo selecionado.', true);
+    Utils.setMsg('ntMsg', 'Cadastrando…');
+    try {
+      const payload = { process_id: currentProcId, type, requested_at };
+      const { error } = await sb.from('notifications').insert(payload);
+      if (error) throw error;
+      Utils.setMsg('ntMsg', 'Notificação cadastrada.');
+      await reloadLists();
+    } catch (e) {
+      Utils.setMsg('ntMsg', e.message || String(e), true);
+    }
+  }
+
   function showNotifLidaForm(id) {
     currentNotifLidaId = id;
     el('ntLidaInput').value = Utils.toDateTimeLocalValue(new Date());
@@ -320,22 +322,6 @@ window.Modules.processos = (() => {
     currentNotifLidaId = null;
     Utils.hide('ntLidaForm');
     Utils.show('ntLista');
-  }
-
-  async function cadastrarNotif() {
-    const type = el('ntTipo').value;
-    const requested_at = el('ntSolic').value ? new Date(el('ntSolic').value).toISOString() : new Date().toISOString();
-    if (!currentProcId) return Utils.setMsg('ntMsg', 'Selecione ou cadastre um processo primeiro.', true);
-    Utils.setMsg('ntMsg', 'Cadastrando notificação…');
-    try {
-      const payload = { process_id: currentProcId, type, requested_at };
-      const { error } = await sb.from('notifications').insert(payload);
-      if (error) throw error;
-      Utils.setMsg('ntMsg', 'Notificação cadastrada (status SOLICITADA).');
-      await reloadLists();
-    } catch (e) {
-      Utils.setMsg('ntMsg', e.message || String(e), true);
-    }
   }
 
   async function marcarNotifLida() {
@@ -366,6 +352,23 @@ window.Modules.processos = (() => {
     Utils.hide('sgExpForm');
     Utils.show('sgLista');
   }
+
+  async function registrarSIGExpedido() {
+    const t = el('sgExpInput').value;
+    const expedit_at = t ? new Date(t).toISOString() : new Date().toISOString();
+    if (!currentSigExpId) return Utils.setMsg('sgMsg', 'Nenhuma solicitação selecionada.', true);
+    Utils.setMsg('sgMsg', 'Registrando expedição…');
+    try {
+      const { error } = await sb.from('sigadaer').update({ expedit_at, status: 'EXPEDIDA' }).eq('id', currentSigExpId);
+      if (error) throw error;
+      Utils.setMsg('sgMsg', 'Expedição registrada.');
+      cancelarSIGExpedido();
+      await reloadLists();
+    } catch (e) {
+      Utils.setMsg('sgMsg', e.message || String(e), true);
+    }
+  }
+
   function showSIGRecForm(id) {
     currentSigRecId = id;
     el('sgRecInput').value = Utils.toDateTimeLocalValue(new Date());
@@ -376,40 +379,6 @@ window.Modules.processos = (() => {
     currentSigRecId = null;
     Utils.hide('sgRecForm');
     Utils.show('sgLista');
-  }
-
-  async function cadastrarSIG() {
-    const type = el('sgTipo').value;
-    const requested_at = el('sgSolic').value ? new Date(el('sgSolic').value).toISOString() : new Date().toISOString();
-    const num = el('sgNum').value?.trim();
-    if (!currentProcId) return Utils.setMsg('sgMsg', 'Selecione ou cadastre um processo primeiro.', true);
-    Utils.setMsg('sgMsg', 'Cadastrando SIGADAER…');
-    try {
-      const payload = { process_id: currentProcId, type, requested_at };
-      if (num) payload.numbers = [num];
-      const { error } = await sb.from('sigadaer').insert(payload);
-      if (error) throw error;
-      Utils.setMsg('sgMsg', 'SIGADAER cadastrado (status SOLICITADO).');
-      await reloadLists();
-    } catch (e) {
-      Utils.setMsg('sgMsg', e.message || String(e), true);
-    }
-  }
-
-  async function registrarSIGExpedido() {
-    const t = el('sgExpInput').value;
-    const expedit_at = t ? new Date(t).toISOString() : new Date().toISOString();
-    if (!currentSigExpId) return Utils.setMsg('sgMsg', 'Nenhuma solicitação selecionada.', true);
-    Utils.setMsg('sgMsg', 'Registrando expedição…');
-    try {
-      const { error } = await sb.from('sigadaer').update({ expedit_at }).eq('id', currentSigExpId);
-      if (error) throw error;
-      Utils.setMsg('sgMsg', 'Expedição registrada.');
-      cancelarSIGExpedido();
-      await reloadLists();
-    } catch (e) {
-      Utils.setMsg('sgMsg', e.message || String(e), true);
-    }
   }
 
   async function registrarSIGRecebido() {
@@ -449,6 +418,7 @@ window.Modules.processos = (() => {
       const thead = document.createElement('thead');
       thead.innerHTML = '<tr><th>Tipo</th><th>Solicitado</th><th>Recebido</th><th>Finalizado</th><th>Ações</th></tr>';
       table.appendChild(thead);
+
       const tbody = document.createElement('tbody');
       data.forEach(row => {
         const tr = document.createElement('tr');
@@ -461,15 +431,15 @@ window.Modules.processos = (() => {
         `;
         const td = tr.querySelector('td:last-child');
         if (!row.received_at) {
-          const btnR = document.createElement('button');
-          btnR.textContent = 'Marcar Recebido';
-          btnR.addEventListener('click', () => showOpiniaoRecForm(row.id));
-          td.appendChild(btnR);
+          const btn = document.createElement('button');
+          btn.textContent = 'Marcar Recebido';
+          btn.addEventListener('click', () => showRecebOpiniaoForm(row.id));
+          td.appendChild(btn);
         }
         if (!row.finalized_at) {
           const btnF = document.createElement('button');
           btnF.textContent = 'Finalizar';
-          btnF.addEventListener('click', () => showOpiniaoFinForm(row.id));
+          btnF.addEventListener('click', () => showFinOpiniaoForm(row.id));
           td.appendChild(btnF);
         }
         tbody.appendChild(tr);
@@ -502,6 +472,7 @@ window.Modules.processos = (() => {
       const thead = document.createElement('thead');
       thead.innerHTML = '<tr><th>Tipo</th><th>Solicitada</th><th>Lida</th><th>Ações</th></tr>';
       table.appendChild(thead);
+
       const tbody = document.createElement('tbody');
       data.forEach(row => {
         const tr = document.createElement('tr');
@@ -534,35 +505,36 @@ window.Modules.processos = (() => {
     box.innerHTML = '<div class="msg">Carregando…</div>';
     try {
       const { data, error } = await sb.from('sigadaer')
-        .select('id,type,numbers,requested_at,expedit_at,received_at')
+        .select('id,numbers,requested_at,expedit_at,received_at,status')
         .eq('process_id', processId)
         .order('requested_at', { ascending: false });
       if (error) throw error;
 
       if (!data || !data.length) {
-        box.innerHTML = '<div class="msg">Nenhuma solicitação SIGADAER encontrada.</div>';
+        box.innerHTML = '<div class="msg">Nenhuma solicitação encontrada.</div>';
         return;
       }
 
       const table = document.createElement('table');
       const thead = document.createElement('thead');
-      thead.innerHTML = '<tr><th>Tipo</th><th>Números</th><th>Solicitada</th><th>Recebida</th><th>Ações</th></tr>';
+      thead.innerHTML = '<tr><th>Números</th><th>Solicitado</th><th>Expedido</th><th>Recebido</th><th>Status</th><th>Ações</th></tr>';
       table.appendChild(thead);
+
       const tbody = document.createElement('tbody');
       data.forEach(row => {
         const tr = document.createElement('tr');
-        const nums = Array.isArray(row.numbers) ? row.numbers.join(', ') : '';
         tr.innerHTML = `
-          <td>${row.type || ''}</td>
-          <td>${nums}</td>
+          <td>${row.numbers || ''}</td>
           <td>${row.requested_at ? Utils.fmtDateTime(row.requested_at) : ''}</td>
+          <td>${row.expedit_at ? Utils.fmtDateTime(row.expedit_at) : ''}</td>
           <td>${row.received_at ? Utils.fmtDateTime(row.received_at) : ''}</td>
+          <td>${row.status || ''}</td>
           <td></td>
         `;
         const td = tr.querySelector('td:last-child');
         if (!row.expedit_at) {
           const btnE = document.createElement('button');
-          btnE.textContent = 'Marcar Expedido';
+          btnE.textContent = 'Marcar Expedida';
           btnE.addEventListener('click', () => showSIGExpedidoForm(row.id));
           td.appendChild(btnE);
         }
@@ -608,8 +580,9 @@ window.Modules.processos = (() => {
 
       const table = document.createElement('table');
       const thead = document.createElement('thead');
-      thead.innerHTML = '<tr><th>NUP</th><th>Tipo</th><th>Status</th><th>Status desde</th><th>1ª entrada</th><th>Obra término</th><th>Concluída</th><th>Ações</th></tr>';
+      thead.innerHTML = '<tr><th>NUP</th><th>Tipo</th><th>Status</th><th>Desde</th><th>1ª entrada</th><th>Término obra</th><th>Obra concl.</th><th>Ações</th></tr>';
       table.appendChild(thead);
+
       const tbody = document.createElement('tbody');
       data.forEach(p => {
         const tr = document.createElement('tr');
@@ -648,12 +621,6 @@ window.Modules.processos = (() => {
   }
 
   async function reloadLists() {
-    if (!currentProcId) {
-      el('opLista').innerHTML = '';
-      el('ntLista').innerHTML = '';
-      el('sgLista').innerHTML = '';
-      return;
-    }
     await Promise.all([
       loadProcessList(),
       currentProcId ? loadOpiniaoList(currentProcId) : Promise.resolve(),
@@ -678,41 +645,36 @@ window.Modules.processos = (() => {
     if (el('btnSalvarNtLida')) el('btnSalvarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); marcarNotifLida(); });
     if (el('btnVoltarNtLida')) el('btnVoltarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); cancelarNotifLida(); });
 
-    // Corrigido: id correto no HTML é "btnCadSig"
-    if (el('btnCadSig')) el('btnCadSig').addEventListener('click', (ev) => { ev.preventDefault(); cadastrarSIG(); });
+    if (el('btnCadSIG')) el('btnCadSIG').addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const numbers = el('sgNums')?.value?.trim() || null;
+      const t = el('sgSolic')?.value;
+      const requested_at = t ? new Date(t).toISOString() : new Date().toISOString();
+      if (!currentProcId) return Utils.setMsg('sgMsg', 'Nenhum processo selecionado.', true);
+      Utils.setMsg('sgMsg', 'Cadastrando…');
+      try {
+        const payload = { process_id: currentProcId, numbers, requested_at, status: 'SOLICITADA' };
+        const { error } = await sb.from('sigadaer').insert(payload);
+        if (error) throw error;
+        Utils.setMsg('sgMsg', 'Solicitação cadastrada.');
+        await reloadLists();
+      } catch (e) {
+        Utils.setMsg('sgMsg', e.message || String(e), true);
+      }
+    });
     if (el('btnSalvarSgExp')) el('btnSalvarSgExp').addEventListener('click', (ev) => { ev.preventDefault(); registrarSIGExpedido(); });
     if (el('btnVoltarSgExp')) el('btnVoltarSgExp').addEventListener('click', (ev) => { ev.preventDefault(); cancelarSIGExpedido(); });
     if (el('btnSalvarSgRec')) el('btnSalvarSgRec').addEventListener('click', (ev) => { ev.preventDefault(); registrarSIGRecebido(); });
     if (el('btnVoltarSgRec')) el('btnVoltarSgRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelarSIGRec(); });
   }
 
-  async function loadProcessFromNUP() {
-    const url = new URL(location.href);
-    const nupParam = url.searchParams.get('nup');
-    if (!nupParam) return;
-    const p = await fetchProcessByNUP(nupParam);
-    if (!p) return;
-    currentProcId = p.id;
-    currentNUP = p.nup || '';
-    syncNUP();
-    el('procNUP').value = p.nup || '';
-    el('procTipo').value = p.type || '';
-    el('procStatus').value = p.status || '';
-    el('procStatusDate').value = Utils.toDateTimeLocalValue(p.status_since);
-    el('procEntrada').value = Utils.toDateInputValue(p.first_entry_date);
-    el('procObraTermino').value = Utils.toDateInputValue(p.obra_termino_date);
-    el('btnObraConcluida').classList.toggle('active', !!p.obra_concluida);
-    await reloadLists();
-    await loadHistory(p.id);
-  }
-
-  function init() {
+  async function load() {
     bindTabs();
     bindProcFormTracking();
     bindActions();
-    loadProcessFromNUP();
-    reloadLists();
+    clearProcessForm();
+    await reloadLists();
   }
 
-  return { init, reloadLists };
+  return { load };
 })();
