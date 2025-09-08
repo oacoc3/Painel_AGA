@@ -3,7 +3,11 @@
 /* 3 colunas: formulário estreito (rolável), lista larga, histórico */
 .split.processos {
   display: grid;
-  grid-template-columns: 320px minmax(720px, 1fr) minmax(420px, 1fr);
+  /* Responsivo, sem overflow horizontal */
+  grid-template-columns:
+    clamp(240px, 26vw, 320px)
+    minmax(0, 1fr)
+    clamp(280px, 32vw, 420px);
   gap: 12px;
   height: 100%;
 }
@@ -32,7 +36,7 @@
   padding: 6px 8px;
 }
 
-/* Larguras percentuais — somam 100% para caber sem scroll horizontal */
+/* Larguras percentuais — somam ~100% para caber sem scroll horizontal */
 #procLista th:nth-child(1), #procLista td:nth-child(1) { width: 30%; } /* NUP */
 #procLista th:nth-child(2), #procLista td:nth-child(2) { width: 10%; } /* Tipo */
 #procLista th:nth-child(3), #procLista td:nth-child(3) { width: 15%; } /* Status */
