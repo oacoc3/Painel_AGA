@@ -200,7 +200,9 @@ window.Modules.processos = (() => {
 
     try {
       if (!currentProcId) {
-        const { data, error } = await sb.from('processes').insert(payload).select('id').single();
+        const u = await getUser();
+        if (!u) return U.setMsg('procMsg', 'Sessão expirada.', true);
+        const { data, error } = await sb.from('processes').insert({ ...payload, created_by: u.id }).select('id').single();
         if (error) throw error;
         currentProcId = data.id;
         currentNUP = nup;
