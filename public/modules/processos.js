@@ -174,11 +174,9 @@ window.Modules.processos = (() => {
         if (el('procObs')) el('procObs').value = '';
         const ob = el('btnObraConcluida'); if (ob) ob.classList.toggle('active', !!data.obra_concluida);
 
-        setProcFormEnabled(true);
+        // patch: removido setProcFormEnabled/toggleProcFields/bindProcFormTracking aqui
         setOtherTabsEnabled(true);
-        toggleProcFields(true);
         toggleOtherTabsVisible(true);
-        bindProcFormTracking();
         if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true;
         if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
@@ -186,8 +184,14 @@ window.Modules.processos = (() => {
         await loadProcessList();
         await reloadLists();
       } else {
-        // novo fluxo: popup para cadastrar processo
-        await showNovoProcessoPopup(nup);
+        // patch: confirmar antes de abrir popup de novo processo
+        const ok = window.confirm('Processo não encontrado. Criar novo?');
+        if (ok) {
+          await showNovoProcessoPopup(nup);
+        } else {
+          clearProcessForm();
+          await loadProcessList();
+        }
       }
     } catch (e) {
       U.setMsg('procMsg', e.message || String(e), true);
@@ -304,6 +308,86 @@ window.Modules.processos = (() => {
     }
   }
 
+  // Popup para editar status do processo (patch)
+  function showStatusEditPopup(id, curStatus, curDate) {
+    if (!id) return;
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <h3>Alterar status</h3>
+        <label>Novo status
+          <select id="stNovo">
+            <option>ANATEC-PRE</option><option>ANATEC</option><option>ANADOC</option><option>ANAICA</option><option>DIPEJ</option><option>ICA-PUB</option><option>OPEA</option><option>JJAER</option><option>DADOS</option><option>ARQ</option>
+          </select>
+        </label>
+        <label>Desde <input type="datetime-local" id="stDesde"></label>
+        <menu>
+          <button value="cancel">Cancelar</button>
+          <button id="stSalvar" value="default">Salvar</button>
+        </menu>
+      </form>`;
+    document.body.appendChild(dlg);
+    const sel = dlg.querySelector('#stNovo');
+    if (sel) sel.value = curStatus || 'ANATEC-PRE';
+    const dt = dlg.querySelector('#stDesde');
+    if (dt && curDate) dt.value = U.toDateTimeLocalValue(curDate);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#stSalvar')?.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const payload = {
+        status: sel?.value || 'ANATEC-PRE',
+        status_since: dt?.value ? new Date(dt.value).toISOString() : null
+      };
+      try {
+        const { error } = await sb.from('processes').update(payload).eq('id', id);
+        if (error) throw error;
+        dlg.close();
+        await loadProcessList();
+      } catch (e) {
+        alert(e.message || e);
+      }
+    });
+    dlg.showModal();
+  }
+
+  // Popup para editar término de obra (patch)
+  function showObraEditPopup(id, curDate, concluida) {
+    if (!id) return;
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <h3>Atualizar obra</h3>
+        <label>Término <input type="date" id="obTerm"></label>
+        <label><input type="checkbox" id="obConc"> Obra concluída</label>
+        <menu>
+          <button value="cancel">Cancelar</button>
+          <button id="obSalvar" value="default">Salvar</button>
+        </menu>
+      </form>`;
+    document.body.appendChild(dlg);
+    const term = dlg.querySelector('#obTerm');
+    if (term && curDate) term.value = U.toDateInputValue(curDate);
+    const chk = dlg.querySelector('#obConc');
+    if (chk) chk.checked = !!concluida;
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#obSalvar')?.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const payload = {
+        obra_termino_date: term?.value ? new Date(term.value).toISOString().slice(0,10) : null,
+        obra_concluida: !!chk?.checked
+      };
+      try {
+        const { error } = await sb.from('processes').update(payload).eq('id', id);
+        if (error) throw error;
+        dlg.close();
+        await loadProcessList();
+      } catch (e) {
+        alert(e.message || e);
+      }
+    });
+    dlg.showModal();
+  }
+
   async function loadProcessList() {
     const box = el('procLista');
     if (!box) return;
@@ -336,13 +420,15 @@ window.Modules.processos = (() => {
       rows.forEach(r => {
         const tr = document.createElement('tr');
         if (String(r.id) === String(currentProcId)) tr.classList.add('selected');
+        const stCls = currentProcId ? 'editStatus editable' : '';
+        const obCls = currentProcId ? 'editObra editable' : '';
         tr.innerHTML = `
           <td>${r.nup}</td>
           <td>${r.type || ''}</td>
-          <td>${r.status || ''}</td>
+          <td class="${stCls}" data-id="${r.id}" data-status="${r.status || ''}" data-status-date="${r.status_since || ''}">${r.status || ''}</td>
           <td>${r.status_since ? U.fmtDateTime(r.status_since) : ''}</td>
           <td>${r.first_entry_date ? U.fmtDate(r.first_entry_date) : ''}</td>
-          <td>${r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : ''}</td>
+          <td class="${obCls}" data-id="${r.id}" data-obra="${r.obra_termino_date || ''}" data-conc="${r.obra_concluida ? '1' : '0'}">${r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : ''}</td>
           <td>${r.obra_concluida ? 'Sim' : 'Não'}</td>
           <td><button type="button" class="selProc" data-id="${r.id}">Selecionar</button></td>
           <td><button type="button" class="histProc" data-id="${r.id}" title="Histórico">🕒</button></td>`;
@@ -352,6 +438,17 @@ window.Modules.processos = (() => {
 
       box.innerHTML = '';
       box.appendChild(table);
+
+      box.querySelectorAll('.editStatus').forEach(td => {
+        td.addEventListener('click', () => {
+          showStatusEditPopup(td.dataset.id, td.dataset.status, td.dataset.statusDate);
+        });
+      });
+      box.querySelectorAll('.editObra').forEach(td => {
+        td.addEventListener('click', () => {
+          showObraEditPopup(td.dataset.id, td.dataset.obra, td.dataset.conc === '1');
+        });
+      });
 
       box.querySelectorAll('.selProc').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -372,11 +469,9 @@ window.Modules.processos = (() => {
           if (el('procObs')) el('procObs').value = '';
           const ob = el('btnObraConcluida'); if (ob) ob.classList.toggle('active', !!row.obra_concluida);
 
-          setProcFormEnabled(true);
+          // patch: removido setProcFormEnabled/toggleProcFields/bindProcFormTracking aqui
           setOtherTabsEnabled(true);
-          toggleProcFields(true);
           toggleOtherTabsVisible(true);
-          bindProcFormTracking();
           if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true;
           if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
@@ -849,6 +944,7 @@ window.Modules.processos = (() => {
     if (el('btnSalvarProc')) el('btnSalvarProc').addEventListener('click', (ev) => { ev.preventDefault(); upsertProcess(); });
     if (el('btnNovoProc')) el('btnNovoProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); });
     if (el('btnBuscarProc')) el('btnBuscarProc').addEventListener('click', (ev) => { ev.preventDefault(); buscarProcesso(); });
+    if (el('btnLimparProc')) el('btnLimparProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); loadProcessList(); });
     if (el('procNUP')) el('procNUP').addEventListener('input', () => { currentNUP = el('procNUP').value.trim(); syncNupFields(); });
 
     // binds do patch
@@ -879,7 +975,7 @@ window.Modules.processos = (() => {
       el('ntLidaForm')?.classList.toggle('hidden', st !== 'LIDA');
     });
 
-    bindProcFormTracking();
+    // formulário principal permanece oculto por padrão
   }
 
   async function init() {
