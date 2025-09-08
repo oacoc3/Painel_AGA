@@ -34,6 +34,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 6px 8px;
+  text-align: center; /* (patch) centraliza por padrão */
 }
 
 /* Larguras por coluna (somam ~100% e evitam scroll horizontal)
@@ -53,22 +54,36 @@
 /* Linha selecionada na lista */
 #procLista tr.selected { background: #ffe; }
 
-/* Células editáveis (status e obra) */
-#procLista td.editable {
-  cursor: pointer;
-  background: #fffdcc;
-  text-decoration: underline;
-}
+/* (patch) Removido o bloco .editable (status e obra) */
 
-/* Ícones de documentos (P/N/S) */
+/* Ícones de documentos (P/N/S) - (patch) novos ícones circulares preenchidos */
 #procLista .docIcon {
-  background: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
   border: none;
   cursor: pointer;
   font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  padding: 0;
 }
-#procLista .docIcon.off { color: #888; }
-#procLista .docIcon.on  { color: #080; }
+#procLista .docIcon.off { background: #ccc; }
+#procLista .docIcon.on  { background: var(--brand); }
+
+/* (patch) Botão de edição nas colunas Status e Término */
+#procLista .editBtn {
+  padding: 2px 4px;
+  margin-left: 4px;
+  border: none;
+  border-radius: 3px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
 
 /* Ícones/botões de seleção e histórico */
 #procLista .selProc,
@@ -79,12 +94,16 @@
 }
 
 /* Popup do histórico */
-.hist-popup {
-  padding: 16px;
-}
+.hist-popup { padding: 16px; }
 .hist-popup .table {
   max-height: 60vh;
   overflow-y: auto;
+}
+.hist-popup menu {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 /* Popup de processo (container genérico para diálogos relacionados a processo) */
@@ -94,12 +113,9 @@
   gap: 8px;
 }
 
-/* Botões "Ver" iluminados quando ativos */
-#procAcoes button.active {
-  background: var(--brand);
-  color: #fff;
-}
+/* (patch) Removido: #procAcoes button.active */
 
+/* Área de ações dentro dos popups de processo */
 .proc-popup menu {
   display: flex;
   justify-content: flex-end;
