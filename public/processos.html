@@ -42,9 +42,9 @@
     </header>
 
     <main class="main">
-      <!-- Usamos uma grade de 3 colunas já existente nos estilos -->
+      <!-- Grade de 3 colunas -->
       <section id="viewProcessos" class="view">
-        <div class="split">
+        <div class="split processos"><!-- <<< classe específica para o layout do módulo -->
           <!-- COLUNA ESQUERDA: Cadastro/Alteração (com abas) -->
           <div class="card">
             <h2>Processos</h2>
@@ -52,9 +52,10 @@
             <div class="tabs">
               <div class="tab-buttons">
                 <button data-tab="proc" type="button" class="active">Processo</button>
-                <button data-tab="opiniao" type="button">Parecer Interno</button>
-                <button data-tab="notif" type="button">Notificação</button>
-                <button data-tab="sig" type="button">SIGADAER</button>
+                <!-- As outras abas iniciam desabilitadas; o JS habilita conforme regras -->
+                <button data-tab="opiniao" type="button" id="tabBtnOpiniao" disabled>Parecer Interno</button>
+                <button data-tab="notif" type="button" id="tabBtnNotif" disabled>Notificação</button>
+                <button data-tab="sig" type="button" id="tabBtnSig" disabled>SIGADAER</button>
               </div>
 
               <!-- Processo -->
@@ -70,7 +71,7 @@
                     </label>
                     <label>Status
                       <select id="procStatus" disabled>
-                        <option>ANATEC-PRE</option><option>ANATEC</option><option>ANADOC</option><option>ANAICA</option><option>ANAMOP</option><option>ANAPROT</option><option>ANAPJ</option><option>JJAER</option><option>DADOS</option><option>ARQ</option>
+                        <option>ANATEC-PRE</option><option>ANATEC</option><option>ANADOC</option><option>ANAICA</option><option>DIPEJ</option><option>ICA-PUB</option><option>OPEA</option><option>JJAER</option><option>DADOS</option><option>ARQ</option>
                       </select>
                     </label>
                   </div>
@@ -100,34 +101,37 @@
                     <label>NUP <input id="opNUP" required readonly></label>
                     <label>Tipo
                       <select id="opTipo">
-                        <option>OACO</option><option>OAGA</option><option>OPEA</option><option>OUTRO</option>
+                        <option>OACO</option><option>OAGA</option>
+                      </select>
+                    </label>
+                    <label>Status
+                      <select id="opStatus">
+                        <option>PENDENTE</option><option>RECEBIDO</option><option>FINALIZADO</option>
                       </select>
                     </label>
                   </div>
-                  <div class="row stretch">
-                    <label>Solicitado em <input type="datetime-local" id="opSolic"></label>
+                  <div class="row">
+                    <label>Solicitada em <input type="datetime-local" id="opSolic"></label>
                     <div class="actions">
                       <button id="btnCadOpiniao" type="button">Cadastrar</button>
-                      <button id="btnSalvarOpRec" type="button" class="hidden">Salvar recebimento</button>
-                      <button id="btnVoltarOpRec" type="button" class="hidden">Voltar</button>
-                      <button id="btnSalvarOpFin" type="button" class="hidden">Salvar finalização</button>
-                      <button id="btnVoltarOpFin" type="button" class="hidden">Voltar</button>
                     </div>
                   </div>
 
-                  <!-- Subformularios (receb./finaliz.) -->
+                  <!-- Recebimento -->
                   <div id="opRecForm" class="hidden">
-                    <label>Recebido em <input type="datetime-local" id="opRecInput"></label>
+                    <label>Recebida em <input type="datetime-local" id="opRecInput"></label>
                     <div class="row actions">
-                      <button id="btnSalvarOpRec2" type="button">Salvar</button>
-                      <button id="btnVoltarOpRec2" type="button">Voltar</button>
+                      <button id="btnSalvarOpRec" type="button">Salvar</button>
+                      <button id="btnVoltarOpRec" type="button">Voltar</button>
                     </div>
                   </div>
+
+                  <!-- Finalização -->
                   <div id="opFinForm" class="hidden">
-                    <label>Finalizado em <input type="datetime-local" id="opFinInput"></label>
+                    <label>Finalizada em <input type="datetime-local" id="opFinInput"></label>
                     <div class="row actions">
-                      <button id="btnSalvarOpFin2" type="button">Salvar</button>
-                      <button id="btnVoltarOpFin2" type="button">Voltar</button>
+                      <button id="btnSalvarOpFin" type="button">Salvar</button>
+                      <button id="btnVoltarOpFin" type="button">Voltar</button>
                     </div>
                   </div>
 
@@ -142,7 +146,12 @@
                     <label>NUP <input id="ntNUP" required readonly></label>
                     <label>Tipo
                       <select id="ntTipo">
-                        <option>ANAICA</option><option>ANADOC</option><option>OUTRO</option>
+                        <option>ANAICA</option><option>ANADOC</option><option>ANATEC-PRE</option><option>ANATEC</option>
+                      </select>
+                    </label>
+                    <label>Status
+                      <select id="ntStatus">
+                        <option>PENDENTE</option><option>LIDA</option>
                       </select>
                     </label>
                   </div>
@@ -174,21 +183,18 @@
                     <label>Tipo
                       <select id="sgTipo">
                         <option>COMAE</option><option>COMPREP</option><option>COMGAP</option>
-                        <option>GABAER</option><option>SAC</option><option>ANAC</option>
-                        <option>OPR_AD</option><option>PREF</option><option>GOV</option>
-                        <option>OUTRO</option>
                       </select>
                     </label>
                   </div>
                   <div class="row stretch">
-                    <label>Solicitado em <input type="datetime-local" id="sgSolic"></label>
+                    <label>Solicitada em <input type="datetime-local" id="sgSolic"></label>
                     <div class="actions">
-                      <button id="btnCadSIG" type="button">Cadastrar</button>
+                      <button id="btnCadSig" type="button">Cadastrar</button>
                     </div>
                   </div>
 
                   <div id="sgExpForm" class="hidden">
-                    <label>Expedido em <input type="datetime-local" id="sgExpInput"></label>
+                    <label>Expedida em <input type="datetime-local" id="sgExpInput"></label>
                     <div class="row actions">
                       <button id="btnSalvarSgExp" type="button">Salvar</button>
                       <button id="btnVoltarSgExp" type="button">Voltar</button>
@@ -196,7 +202,7 @@
                   </div>
 
                   <div id="sgRecForm" class="hidden">
-                    <label>Recebido em <input type="datetime-local" id="sgRecInput"></label>
+                    <label>Recebida em <input type="datetime-local" id="sgRecInput"></label>
                     <div class="row actions">
                       <button id="btnSalvarSgRec" type="button">Salvar</button>
                       <button id="btnVoltarSgRec" type="button">Voltar</button>
@@ -209,10 +215,9 @@
             </div>
           </div>
 
-          <!-- COLUNA DO MEIO: Lista -->
+          <!-- COLUNA DO MEIO: Listas (tabela principal / alterna conforme aba) -->
           <div class="card">
             <h2>Lista</h2>
-            <!-- Apenas um fica visível conforme a aba -->
             <div id="procLista" class="table scrolly" style="display:block"></div>
             <div id="opLista"   class="table scrolly" style="display:none"></div>
             <div id="ntLista"   class="table scrolly" style="display:none"></div>
@@ -222,7 +227,6 @@
           <!-- COLUNA DIREITA: Histórico -->
           <div class="card">
             <h2>Histórico</h2>
-            <!-- Usamos o id histProcesso para aproveitar os estilos já existentes -->
             <div id="histProcesso" class="table scrolly"></div>
           </div>
         </div>
