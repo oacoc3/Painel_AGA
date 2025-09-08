@@ -367,6 +367,27 @@ window.Modules.processos = (() => {
     dlg.showModal();
   }
 
+  // === novo helper para seleção da linha ===
+  async function selectProcess(row) {
+    if (!row) return;
+    currentProcId = row.id;
+    currentNUP = row.nup;
+    syncNupFields();
+
+    if (el('procNUP')) el('procNUP').value = row.nup;
+    if (el('procObs')) el('procObs').value = '';
+
+    setProcFormEnabled(true);
+    toggleProcFields(true);
+    bindProcFormTracking();
+    toggleProcActions(true);
+    if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true;
+    if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
+
+    U.setMsg('procMsg', 'Processo selecionado.');
+    await loadProcessList();
+  }
+
   async function loadProcessList() {
     const box = el('procLista');
     if (!box) return;
@@ -400,7 +421,7 @@ window.Modules.processos = (() => {
       const thead = document.createElement('thead');
       thead.innerHTML = `
         <tr>
-          <th></th><th></th><th>NUP</th><th>Tipo</th><th>1ª Entrada DO-AGA</th>
+          <th></th><th>NUP</th><th>Tipo</th><th>1ª Entrada DO-AGA</th>
           <th>Status</th><th>Término de Obra</th><th></th><th></th><th></th>
         </tr>`;
       table.appendChild(thead);
@@ -414,78 +435,59 @@ window.Modules.processos = (() => {
         const hasNt = ntSet.has(r.id);
         const hasSg = sgSet.has(r.id);
         const stTxt = `${r.status || ''}${r.status_since ? '<br><small>' + U.fmtDateTime(r.status_since) + '</small>' : ''}`;
-        const stBtn = isCurrent ? `<button type="button" class="editBtn editStatus" data-id="${r.id}" data-status="${r.status || ''}" data-status-date="${r.status_since || ''}">Editar</button>` : '';
+        const stBtn = isCurrent ? `<button type="button" class="editBtn editStatus">Editar</button>` : '';
         const obTxt = r.obra_concluida ? 'Concluída' : (r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : '');
-        const obBtn = isCurrent ? `<button type="button" class="editBtn editObra" data-id="${r.id}" data-obra="${r.obra_termino_date || ''}" data-conc="${r.obra_concluida ? '1' : '0'}">Editar</button>` : '';
+        const obBtn = isCurrent ? `<button type="button" class="editBtn editObra">Editar</button>` : '';
         tr.innerHTML = `
-          <td><button type="button" class="selProc" data-id="${r.id}" title="Editar">✏️</button></td>
-          <td><button type="button" class="histProc" data-id="${r.id}" title="Histórico">H</button></td>
+          <td><button type="button" class="histProc" title="Histórico">📄🔍🕒</button></td>
           <td>${r.nup}</td>
           <td>${r.type || ''}</td>
           <td>${r.first_entry_date ? U.fmtDateTime(r.first_entry_date) : ''}</td>
           <td>${stTxt} ${stBtn}</td>
           <td>${obTxt} ${obBtn}</td>
-          <td><button type="button" class="opinIcon docIcon ${hasOp ? 'on' : 'off'}" data-id="${r.id}" title="Pareceres Internos">P</button></td>
-          <td><button type="button" class="notifIcon docIcon ${hasNt ? 'on' : 'off'}" data-id="${r.id}" title="Notificações">N</button></td>
-          <td><button type="button" class="sigIcon docIcon ${hasSg ? 'on' : 'off'}" data-id="${r.id}" title="SIGADAER">S</button></td>`;
+          <td><button type="button" class="opinIcon docIcon ${hasOp ? 'on' : 'off'}" title="Pareceres Internos">P</button></td>
+          <td><button type="button" class="notifIcon docIcon ${hasNt ? 'on' : 'off'}" title="Notificações">N</button></td>
+          <td><button type="button" class="sigIcon docIcon ${hasSg ? 'on' : 'off'}" title="SIGADAER">S</button></td>`;
+
+        // clique na linha seleciona o processo (exceto quando clicar em um botão)
+        tr.addEventListener('click', async (e) => {
+          if (e.target.closest('button')) return;
+          await selectProcess(r);
+        });
+        tr.querySelector('.histProc')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showHistoryPopup(r.id);
+        });
+        tr.querySelector('.opinIcon')?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await selectProcess(r);
+          showOpiniaoPopup(r.id);
+        });
+        tr.querySelector('.notifIcon')?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await selectProcess(r);
+          showNotifPopup(r.id);
+        });
+        tr.querySelector('.sigIcon')?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await selectProcess(r);
+          showSigPopup(r.id);
+        });
+        tr.querySelector('.editStatus')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showStatusEditPopup(r.id, r.status || '', r.status_since || '');
+        });
+        tr.querySelector('.editObra')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showObraEditPopup(r.id, r.obra_termino_date || '', r.obra_concluida);
+        });
+
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
 
       box.innerHTML = '';
       box.appendChild(table);
-
-      box.querySelectorAll('.editStatus').forEach(btn => {
-        btn.addEventListener('click', () => {
-          showStatusEditPopup(btn.dataset.id, btn.dataset.status, btn.dataset.statusDate);
-        });
-      });
-      box.querySelectorAll('.editObra').forEach(btn => {
-        btn.addEventListener('click', () => {
-          showObraEditPopup(btn.dataset.id, btn.dataset.obra, btn.dataset.conc === '1');
-        });
-      });
-
-      box.querySelectorAll('.selProc').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const id = btn.getAttribute('data-id');
-          const row = rows.find(r => String(r.id) === String(id));
-          if (!row) return;
-
-          currentProcId = row.id;
-          currentNUP = row.nup;
-          syncNupFields();
-
-          if (el('procNUP')) el('procNUP').value = row.nup;
-          if (el('procObs')) el('procObs').value = '';
-
-          setProcFormEnabled(true);
-          toggleProcFields(true);
-          bindProcFormTracking();
-          toggleProcActions(true);
-          if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true;
-          if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
-
-          U.setMsg('procMsg', 'Processo selecionado.');
-          await loadProcessList();
-        });
-      });
-
-      box.querySelectorAll('.histProc').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.getAttribute('data-id');
-          showHistoryPopup(id);
-        });
-      });
-      box.querySelectorAll('.opinIcon').forEach(btn => {
-        btn.addEventListener('click', () => showOpiniaoPopup(btn.dataset.id));
-      });
-      box.querySelectorAll('.notifIcon').forEach(btn => {
-        btn.addEventListener('click', () => showNotifPopup(btn.dataset.id));
-      });
-      box.querySelectorAll('.sigIcon').forEach(btn => {
-        btn.addEventListener('click', () => showSigPopup(btn.dataset.id));
-      });
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
     }
@@ -1082,11 +1084,6 @@ window.Modules.processos = (() => {
     if (el('btnLimparProc')) el('btnLimparProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); loadProcessList(); });
     if (el('procNUP')) el('procNUP').addEventListener('input', () => { currentNUP = el('procNUP').value.trim(); syncNupFields(); });
 
-    // Novos botões de cadastro (dialogs)
-    if (el('btnNovoOpiniao')) el('btnNovoOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); showCadOpiniaoForm(); });
-    if (el('btnNovaNotif')) el('btnNovaNotif').addEventListener('click', (ev) => { ev.preventDefault(); showCadNotifForm(); });
-    if (el('btnNovoSig')) el('btnNovoSig').addEventListener('click', (ev) => { ev.preventDefault(); showCadSigForm(); });
-
     // formulário principal permanece oculto por padrão
   }
 
@@ -1094,6 +1091,14 @@ window.Modules.processos = (() => {
     bindEvents();
     clearProcessForm();     // apenas NUP + Buscar habilitados
     await loadProcessList();
+
+    // suporte à pré-seleção de NUP (ex.: navegar a partir de outra view)
+    const pre = sessionStorage.getItem('procPreSelect');
+    if (pre && el('procNUP')) {
+      sessionStorage.removeItem('procPreSelect');
+      el('procNUP').value = pre;
+      await buscarProcesso();
+    }
   }
 
   return { init, reloadLists };
