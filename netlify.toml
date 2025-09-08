@@ -3,10 +3,7 @@
   publish = "public"
   functions = "netlify/functions"
   node_version = "20"
-
-# SPA: fallback para index.html (mantemos também public/_redirects por segurança)
-# (Removido fallback de SPA para MPA)
-# Headers de segurança (equivalentes ao bloco que você mostrou)
+# Headers de segurança
 [[headers]]
   for = "/*"
   [headers.values]
@@ -17,7 +14,7 @@
 
 # Mapeia funções (os endpoints já seguem o padrão /.netlify/functions/<nome>)
 # Certifique-se de nomear os arquivos:
-# netlify/functions/build-info.js  e  netlify/functions/create-user.js
+# netlify/functions/build-info.js, netlify/functions/create-user.js e netlify/functions/delete-user.js
 
 [functions]
   node_bundler = "esbuild"
