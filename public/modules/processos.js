@@ -60,7 +60,7 @@ window.Modules.processos = (() => {
   };
   const U = (window.Utils && typeof window.Utils.setMsg === 'function') ? window.Utils : SafeUtils;
 
-  // === novos toggles do patch ===
+  // === toggles ===
   function toggleProcFields(on) {
     const box = el('procCampos');
     if (box) box.classList.toggle('hidden', !on);
@@ -70,6 +70,10 @@ window.Modules.processos = (() => {
       const b = el(id);
       if (b) b.classList.toggle('hidden', !on);
     });
+  }
+  function toggleProcActions(on) {
+    const box = el('procAcoes');
+    if (box) box.classList.toggle('hidden', !on);
   }
   // ===============================
 
@@ -126,6 +130,11 @@ window.Modules.processos = (() => {
     setOtherTabsEnabled(false);
     toggleProcFields(false);
     toggleOtherTabsVisible(false);
+    toggleProcActions(false);
+    ['btnVerOpiniao','btnVerNotif','btnVerSig'].forEach(id => {
+      const b = el(id);
+      if (b) { b.disabled = true; b.classList.remove('active'); }
+    });
     U.setMsg('procMsg', '');
   }
 
@@ -174,9 +183,10 @@ window.Modules.processos = (() => {
         if (el('procObs')) el('procObs').value = '';
         const ob = el('btnObraConcluida'); if (ob) ob.classList.toggle('active', !!data.obra_concluida);
 
-        // patch: removido setProcFormEnabled/toggleProcFields/bindProcFormTracking aqui
-        setOtherTabsEnabled(true);
-        toggleOtherTabsVisible(true);
+        setProcFormEnabled(true);
+        toggleProcFields(true);
+        bindProcFormTracking();
+        toggleProcActions(true);
         if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true;
         if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
@@ -184,7 +194,6 @@ window.Modules.processos = (() => {
         await loadProcessList();
         await reloadLists();
       } else {
-        // patch: confirmar antes de abrir popup de novo processo
         const ok = window.confirm('Processo não encontrado. Criar novo?');
         if (ok) {
           await showNovoProcessoPopup(nup);
@@ -248,7 +257,6 @@ window.Modules.processos = (() => {
           obra_concluida: !!obraBtn?.classList.contains('active')
         };
         try {
-          // >>> Patch: associar created_by <<<
           const u = await getUser();
           if (!u) throw new Error('Sessão expirada.');
           const { data, error } = await sb
@@ -293,7 +301,7 @@ window.Modules.processos = (() => {
         if (error) throw error;
         currentProcId = data.id;
         currentNUP = nup;
-        setOtherTabsEnabled(true);
+        toggleProcActions(true);
         U.setMsg('procMsg', 'Processo cadastrado.');
       } else {
         const { error } = await sb.from('processes').update(payload).eq('id', currentProcId);
@@ -311,7 +319,7 @@ window.Modules.processos = (() => {
     }
   }
 
-  // Popup para editar status do processo (patch)
+  // Popup para editar status do processo
   function showStatusEditPopup(id, curStatus, curDate) {
     if (!id) return;
     const dlg = document.createElement('dialog');
@@ -353,7 +361,7 @@ window.Modules.processos = (() => {
     dlg.showModal();
   }
 
-  // Popup para editar término de obra (patch)
+  // Popup para editar término de obra
   function showObraEditPopup(id, curDate, concluida) {
     if (!id) return;
     const dlg = document.createElement('dialog');
@@ -422,7 +430,6 @@ window.Modules.processos = (() => {
       const tbody = document.createElement('tbody');
       rows.forEach(r => {
         const tr = document.createElement('tr');
-        // >>> Patch: apenas a linha selecionada fica "editável"
         const isCurrent = String(r.id) === String(currentProcId);
         if (isCurrent) tr.classList.add('selected');
         const stCls = isCurrent ? 'editStatus editable' : '';
@@ -474,9 +481,10 @@ window.Modules.processos = (() => {
           if (el('procObs')) el('procObs').value = '';
           const ob = el('btnObraConcluida'); if (ob) ob.classList.toggle('active', !!row.obra_concluida);
 
-          // patch: removido setProcFormEnabled/toggleProcFields/bindProcFormTracking aqui
-          setOtherTabsEnabled(true);
-          toggleOtherTabsVisible(true);
+          setProcFormEnabled(true);
+          toggleProcFields(true);
+          bindProcFormTracking();
+          toggleProcActions(true);
           if (el('btnSalvarProc')) el('btnSalvarProc').disabled = true;
           if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
@@ -497,8 +505,8 @@ window.Modules.processos = (() => {
     }
   }
 
-  async function loadOpiniaoList(procId) {
-    const box = el('opLista');
+  async function loadOpiniaoList(procId, targetId = 'opLista') {
+    const box = el(targetId);
     if (!box) return;
     box.innerHTML = '<div class="msg">Carregando…</div>';
     try {
@@ -540,8 +548,8 @@ window.Modules.processos = (() => {
     }
   }
 
-  async function loadNotifList(procId) {
-    const box = el('ntLista');
+  async function loadNotifList(procId, targetId = 'ntLista') {
+    const box = el(targetId);
     if (!box) return;
     box.innerHTML = '<div class="msg">Carregando…</div>';
     try {
@@ -576,8 +584,8 @@ window.Modules.processos = (() => {
     }
   }
 
-  async function loadSIGList(procId) {
-    const box = el('sgLista');
+  async function loadSIGList(procId, targetId = 'sgLista') {
+    const box = el(targetId);
     if (!box) return;
     box.innerHTML = '<div class="msg">Carregando…</div>';
     try {
@@ -623,6 +631,42 @@ window.Modules.processos = (() => {
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
     }
+  }
+
+  async function showOpiniaoPopup() {
+    if (!currentProcId) return;
+    const dlg = document.createElement('dialog');
+    dlg.className = 'hist-popup';
+    dlg.innerHTML = '<div id="opListaPop" class="table scrolly">Carregando…</div><button type="button" id="opClose">Fechar</button>';
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#opClose').addEventListener('click', () => dlg.close());
+    dlg.showModal();
+    await loadOpiniaoList(currentProcId, 'opListaPop');
+  }
+
+  async function showNotifPopup() {
+    if (!currentProcId) return;
+    const dlg = document.createElement('dialog');
+    dlg.className = 'hist-popup';
+    dlg.innerHTML = '<div id="ntListaPop" class="table scrolly">Carregando…</div><button type="button" id="ntClose">Fechar</button>';
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#ntClose').addEventListener('click', () => dlg.close());
+    dlg.showModal();
+    await loadNotifList(currentProcId, 'ntListaPop');
+  }
+
+  async function showSigPopup() {
+    if (!currentProcId) return;
+    const dlg = document.createElement('dialog');
+    dlg.className = 'hist-popup';
+    dlg.innerHTML = '<div id="sgListaPop" class="table scrolly">Carregando…</div><button type="button" id="sgClose">Fechar</button>';
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#sgClose').addEventListener('click', () => dlg.close());
+    dlg.showModal();
+    await loadSIGList(currentProcId, 'sgListaPop');
   }
 
   function formatHistoryDetails(det) {
@@ -682,7 +726,7 @@ window.Modules.processos = (() => {
     }
   }
 
-  // === Patch adicionado ===
+  // === Cadastro e status ===
 
   function parseSigNumbers(text) {
     if (!text) return [];
@@ -703,69 +747,124 @@ window.Modules.processos = (() => {
       .filter(n => n !== null);
   }
 
-  async function cadOpiniao() {
+  function showCadOpiniaoForm() {
+    if (!currentProcId) return;
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Tipo
+          <select id="opTipo"><option>ATM</option><option>DT</option><option>CGNA</option></select>
+        </label>
+        <label>Solicitada em <input type="datetime-local" id="opSolic"></label>
+        <menu>
+          <button id="btnSalvarOp" type="button">Salvar</button>
+          <button type="button" id="btnCancelarOp">Cancelar</button>
+        </menu>
+        <div id="opMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#btnSalvarOp').addEventListener('click', async ev => { ev.preventDefault(); await cadOpiniao(dlg); });
+    dlg.querySelector('#btnCancelarOp').addEventListener('click', () => dlg.close());
+    dlg.showModal();
+  }
+
+  async function cadOpiniao(dlg) {
     if (!currentProcId) return U.setMsg('opMsg', 'Selecione um processo.', true);
-    const st = el('opStatus')?.value || 'PENDENTE';
     const payload = {
       process_id: currentProcId,
-      type: el('opTipo')?.value || 'ATM',
-      requested_at: el('opSolic')?.value ? new Date(el('opSolic').value).toISOString() : new Date().toISOString(),
-      status: { PENDENTE: 'SOLICITADO', RECEBIDO: 'RECEBIDO', FINALIZADO: 'RECEBIDO' }[st] || 'SOLICITADO',
-      received_at: (st === 'RECEBIDO' || st === 'FINALIZADO') && el('opRecInput')?.value
-        ? new Date(el('opRecInput').value).toISOString()
-        : null,
-      finalized_at: st === 'FINALIZADO' && el('opFinInput')?.value
-        ? new Date(el('opFinInput').value).toISOString()
-        : null
+      type: dlg.querySelector('#opTipo')?.value || 'ATM',
+      requested_at: dlg.querySelector('#opSolic')?.value ? new Date(dlg.querySelector('#opSolic').value).toISOString() : new Date().toISOString(),
+      status: 'SOLICITADO'
     };
     try {
       const u = await getUser();
       if (!u) return U.setMsg('opMsg', 'Sessão expirada.', true);
       const { error } = await sb.from('internal_opinions').insert({ ...payload, created_by: u.id });
       if (error) throw error;
-      U.setMsg('opMsg', 'Parecer cadastrado.');
-      if (el('opSolic')) el('opSolic').value = '';
-      if (el('opRecInput')) el('opRecInput').value = '';
-      if (el('opFinInput')) el('opFinInput').value = '';
+      dlg.close();
       await reloadLists();
     } catch (e) {
       U.setMsg('opMsg', e.message || String(e), true);
     }
   }
 
-  async function cadNotif() {
+  function showCadNotifForm() {
+    if (!currentProcId) return;
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Tipo
+          <select id="ntTipo">
+            <option>FAV</option><option>FAV-TERM</option><option>TERM-ATRA</option><option>DESF-NAO_INI</option><option>DESF_JJAER</option><option>DESF-REM_REB</option><option>NCD</option><option>NCT</option>
+          </select>
+        </label>
+        <label>Solicitada em <input type="datetime-local" id="ntSolic"></label>
+        <menu>
+          <button id="btnSalvarNt" type="button">Salvar</button>
+          <button type="button" id="btnCancelarNt">Cancelar</button>
+        </menu>
+        <div id="ntMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#btnSalvarNt').addEventListener('click', async ev => { ev.preventDefault(); await cadNotif(dlg); });
+    dlg.querySelector('#btnCancelarNt').addEventListener('click', () => dlg.close());
+    dlg.showModal();
+  }
+
+  async function cadNotif(dlg) {
     if (!currentProcId) return U.setMsg('ntMsg', 'Selecione um processo.', true);
-    const st = el('ntStatus')?.value || 'PENDENTE';
     const payload = {
       process_id: currentProcId,
-      type: el('ntTipo')?.value || 'FAV',
-      requested_at: el('ntSolic')?.value ? new Date(el('ntSolic').value).toISOString() : new Date().toISOString(),
-      status: st === 'LIDA' ? 'LIDA' : 'SOLICITADA',
-      read_at: st === 'LIDA' && el('ntLidaInput')?.value
-        ? new Date(el('ntLidaInput').value).toISOString()
-        : null
+      type: dlg.querySelector('#ntTipo')?.value || 'FAV',
+      requested_at: dlg.querySelector('#ntSolic')?.value ? new Date(dlg.querySelector('#ntSolic').value).toISOString() : new Date().toISOString(),
+      status: 'SOLICITADA'
     };
     try {
       const u = await getUser();
       if (!u) return U.setMsg('ntMsg', 'Sessão expirada.', true);
       const { error } = await sb.from('notifications').insert({ ...payload, created_by: u.id });
       if (error) throw error;
-      U.setMsg('ntMsg', 'Notificação cadastrada.');
-      if (el('ntSolic')) el('ntSolic').value = '';
-      if (el('ntLidaInput')) el('ntLidaInput').value = '';
+      dlg.close();
       await reloadLists();
     } catch (e) {
       U.setMsg('ntMsg', e.message || String(e), true);
     }
   }
 
-  async function cadSig() {
+  function showCadSigForm() {
+    if (!currentProcId) return;
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Números <input id="sgNums" placeholder="Ex.: 123/2024; 456/2024"></label>
+        <label>Tipo
+          <select id="sgTipo">
+            <option>COMAE</option><option>COMPREP</option><option>COMGAP</option><option>GABAER</option><option>SAC</option><option>ANAC</option><option>OPR_AD</option><option>PREF</option><option>GOV</option><option>OUTRO</option>
+          </select>
+        </label>
+        <label>Solicitada em <input type="datetime-local" id="sgSolic"></label>
+        <menu>
+          <button id="btnSalvarSg" type="button">Salvar</button>
+          <button type="button" id="btnCancelarSg">Cancelar</button>
+        </menu>
+        <div id="sgMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#btnSalvarSg').addEventListener('click', async ev => { ev.preventDefault(); await cadSig(dlg); });
+    dlg.querySelector('#btnCancelarSg').addEventListener('click', () => dlg.close());
+    dlg.showModal();
+  }
+
+  async function cadSig(dlg) {
     if (!currentProcId) return U.setMsg('sgMsg', 'Selecione um processo.', true);
-    const numbers = parseSigNumbers(el('sgNums')?.value || '');
+    const numbers = parseSigNumbers(dlg.querySelector('#sgNums')?.value || '');
     const payload = {
       process_id: currentProcId,
-      type: el('sgTipo')?.value || 'COMAE',
-      requested_at: el('sgSolic')?.value ? new Date(el('sgSolic').value).toISOString() : new Date().toISOString(),
+      type: dlg.querySelector('#sgTipo')?.value || 'COMAE',
+      requested_at: dlg.querySelector('#sgSolic')?.value ? new Date(dlg.querySelector('#sgSolic').value).toISOString() : new Date().toISOString(),
       numbers,
       status: 'SOLICITADO'
     };
@@ -774,67 +873,81 @@ window.Modules.processos = (() => {
       if (!u) return U.setMsg('sgMsg', 'Sessão expirada.', true);
       const { error } = await sb.from('sigadaer').insert({ ...payload, created_by: u.id });
       if (error) throw error;
-      U.setMsg('sgMsg', 'SIGADAER cadastrado.');
-      if (el('sgSolic')) el('sgSolic').value = '';
-      if (el('sgNums')) el('sgNums').value = '';
+      dlg.close();
       await reloadLists();
     } catch (e) {
       U.setMsg('sgMsg', e.message || String(e), true);
     }
   }
 
-  // === Ações de atualização de status ===
+  // === Ações de atualização de status (dialogs) ===
 
   function showOpRecForm(id) {
     editingOpId = id;
-    el('opRecForm')?.classList.remove('hidden');
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Recebida em <input type="datetime-local" id="opRecInput"></label>
+        <menu>
+          <button id="btnSalvarOpRec" type="button">Salvar</button>
+          <button type="button" id="btnCancelarOpRec">Cancelar</button>
+        </menu>
+        <div id="opMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => { dlg.remove(); editingOpId = null; });
+    dlg.querySelector('#btnSalvarOpRec').addEventListener('click', async ev => { ev.preventDefault(); await salvarOpRec(dlg); });
+    dlg.querySelector('#btnCancelarOpRec').addEventListener('click', () => dlg.close());
+    dlg.showModal();
   }
 
   function showOpFinForm(id) {
     editingOpId = id;
-    el('opFinForm')?.classList.remove('hidden');
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Finalizada em <input type="datetime-local" id="opFinInput"></label>
+        <menu>
+          <button id="btnSalvarOpFin" type="button">Salvar</button>
+          <button type="button" id="btnCancelarOpFin">Cancelar</button>
+        </menu>
+        <div id="opMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => { dlg.remove(); editingOpId = null; });
+    dlg.querySelector('#btnSalvarOpFin').addEventListener('click', async ev => { ev.preventDefault(); await salvarOpFin(dlg); });
+    dlg.querySelector('#btnCancelarOpFin').addEventListener('click', () => dlg.close());
+    dlg.showModal();
   }
 
-  function cancelOpRec() {
-    el('opRecForm')?.classList.add('hidden');
-    if (el('opRecInput')) el('opRecInput').value = '';
-    editingOpId = null;
-  }
-
-  function cancelOpFin() {
-    el('opFinForm')?.classList.add('hidden');
-    if (el('opFinInput')) el('opFinInput').value = '';
-    editingOpId = null;
-  }
-
-  async function salvarOpRec() {
+  async function salvarOpRec(dlg) {
     if (!editingOpId) return;
-    const dt = el('opRecInput')?.value ? new Date(el('opRecInput').value).toISOString() : new Date().toISOString();
+    const input = dlg.querySelector('#opRecInput');
+    const dt = input && input.value ? new Date(input.value).toISOString() : new Date().toISOString();
     try {
       const { error } = await sb
         .from('internal_opinions')
         .update({ status: 'RECEBIDO', received_at: dt })
         .eq('id', editingOpId);
       if (error) throw error;
-      U.setMsg('opMsg', 'Recebimento registrado.');
-      cancelOpRec();
+      dlg.close();
       await reloadLists();
     } catch (e) {
       U.setMsg('opMsg', e.message || String(e), true);
     }
   }
 
-  async function salvarOpFin() {
+  async function salvarOpFin(dlg) {
     if (!editingOpId) return;
-    const dt = el('opFinInput')?.value ? new Date(el('opFinInput').value).toISOString() : new Date().toISOString();
+    const input = dlg.querySelector('#opFinInput');
+    const dt = input && input.value ? new Date(input.value).toISOString() : new Date().toISOString();
     try {
       const { error } = await sb
         .from('internal_opinions')
         .update({ status: 'FINALIZADO', finalized_at: dt })
         .eq('id', editingOpId);
       if (error) throw error;
-      U.setMsg('opMsg', 'Parecer finalizado.');
-      cancelOpFin();
+      dlg.close();
       await reloadLists();
     } catch (e) {
       U.setMsg('opMsg', e.message || String(e), true);
@@ -843,26 +956,34 @@ window.Modules.processos = (() => {
 
   function showNtLidaForm(id) {
     editingNtId = id;
-    el('ntLidaForm')?.classList.remove('hidden');
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Lida em <input type="datetime-local" id="ntLidaInput"></label>
+        <menu>
+          <button id="btnSalvarNtLida" type="button">Salvar</button>
+          <button type="button" id="btnCancelarNtLida">Cancelar</button>
+        </menu>
+        <div id="ntMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => { dlg.remove(); editingNtId = null; });
+    dlg.querySelector('#btnSalvarNtLida').addEventListener('click', async ev => { ev.preventDefault(); await salvarNtLida(dlg); });
+    dlg.querySelector('#btnCancelarNtLida').addEventListener('click', () => dlg.close());
+    dlg.showModal();
   }
 
-  function cancelNtLida() {
-    el('ntLidaForm')?.classList.add('hidden');
-    if (el('ntLidaInput')) el('ntLidaInput').value = '';
-    editingNtId = null;
-  }
-
-  async function salvarNtLida() {
+  async function salvarNtLida(dlg) {
     if (!editingNtId) return;
-    const dt = el('ntLidaInput')?.value ? new Date(el('ntLidaInput').value).toISOString() : new Date().toISOString();
+    const input = dlg.querySelector('#ntLidaInput');
+    const dt = input && input.value ? new Date(input.value).toISOString() : new Date().toISOString();
     try {
       const { error } = await sb
         .from('notifications')
         .update({ status: 'LIDA', read_at: dt })
         .eq('id', editingNtId);
       if (error) throw error;
-      U.setMsg('ntMsg', 'Leitura registrada.');
-      cancelNtLida();
+      dlg.close();
       await reloadLists();
     } catch (e) {
       U.setMsg('ntMsg', e.message || String(e), true);
@@ -871,69 +992,111 @@ window.Modules.processos = (() => {
 
   function showSgExpForm(id) {
     editingSgId = id;
-    el('sgExpForm')?.classList.remove('hidden');
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Expedida em <input type="datetime-local" id="sgExpInput"></label>
+        <menu>
+          <button id="btnSalvarSgExp" type="button">Salvar</button>
+          <button type="button" id="btnCancelarSgExp">Cancelar</button>
+        </menu>
+        <div id="sgMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => { dlg.remove(); editingSgId = null; });
+    dlg.querySelector('#btnSalvarSgExp').addEventListener('click', async ev => { ev.preventDefault(); await salvarSgExp(dlg); });
+    dlg.querySelector('#btnCancelarSgExp').addEventListener('click', () => dlg.close());
+    dlg.showModal();
   }
 
   function showSgRecForm(id) {
     editingSgId = id;
-    el('sgRecForm')?.classList.remove('hidden');
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Recebida em <input type="datetime-local" id="sgRecInput"></label>
+        <menu>
+          <button id="btnSalvarSgRec" type="button">Salvar</button>
+          <button type="button" id="btnCancelarSgRec">Cancelar</button>
+        </menu>
+        <div id="sgMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => { dlg.remove(); editingSgId = null; });
+    dlg.querySelector('#btnSalvarSgRec').addEventListener('click', async ev => { ev.preventDefault(); await salvarSgRec(dlg); });
+    dlg.querySelector('#btnCancelarSgRec').addEventListener('click', () => dlg.close());
+    dlg.showModal();
   }
 
-  function cancelSgExp() {
-    el('sgExpForm')?.classList.add('hidden');
-    if (el('sgExpInput')) el('sgExpInput').value = '';
-    editingSgId = null;
-  }
-
-  function cancelSgRec() {
-    el('sgRecForm')?.classList.add('hidden');
-    if (el('sgRecInput')) el('sgRecInput').value = '';
-    editingSgId = null;
-  }
-
-  async function salvarSgExp() {
+  async function salvarSgExp(dlg) {
     if (!editingSgId) return;
-    const dt = el('sgExpInput')?.value ? new Date(el('sgExpInput').value).toISOString() : new Date().toISOString();
+    const input = dlg.querySelector('#sgExpInput');
+    const dt = input && input.value ? new Date(input.value).toISOString() : new Date().toISOString();
     try {
       const { error } = await sb
         .from('sigadaer')
         .update({ status: 'EXPEDIDO', expedit_at: dt })
         .eq('id', editingSgId);
       if (error) throw error;
-      U.setMsg('sgMsg', 'Expedição registrada.');
-      cancelSgExp();
+      dlg.close();
       await reloadLists();
     } catch (e) {
       U.setMsg('sgMsg', e.message || String(e), true);
     }
   }
 
-  async function salvarSgRec() {
+  async function salvarSgRec(dlg) {
     if (!editingSgId) return;
-    const dt = el('sgRecInput')?.value ? new Date(el('sgRecInput').value).toISOString() : new Date().toISOString();
+    const input = dlg.querySelector('#sgRecInput');
+    const dt = input && input.value ? new Date(input.value).toISOString() : new Date().toISOString();
     try {
       const { error } = await sb
         .from('sigadaer')
         .update({ status: 'RECEBIDO', received_at: dt })
         .eq('id', editingSgId);
       if (error) throw error;
-      U.setMsg('sgMsg', 'Recebimento registrado.');
-      cancelSgRec();
+      dlg.close();
       await reloadLists();
     } catch (e) {
       U.setMsg('sgMsg', e.message || String(e), true);
     }
   }
 
-  // === Fim do patch adicionado ===
+  // === Atualização de botões extras / listas ===
 
   async function reloadLists() {
     try {
-      if (currentProcId) {
-        if (typeof loadOpiniaoList === 'function') await loadOpiniaoList(currentProcId);
-        if (typeof loadNotifList   === 'function') await loadNotifList(currentProcId);
-        if (typeof loadSIGList     === 'function') await loadSIGList(currentProcId);
-      }
+      if (currentProcId) await updateExtraButtons();
+    } catch {
+      // ignore
+    }
+  }
+
+  async function updateExtraButtons() {
+    if (!currentProcId) {
+      ['btnVerOpiniao','btnVerNotif','btnVerSig'].forEach(id => {
+        const b = el(id); if (b) { b.disabled = true; b.classList.remove('active'); }
+      });
+      return;
+    }
+    try {
+      const [op, nt, sg] = await Promise.all([
+        sb.from('internal_opinions').select('*', { count: 'exact', head: true }).eq('process_id', currentProcId),
+        sb.from('notifications').select('*', { count: 'exact', head: true }).eq('process_id', currentProcId),
+        sb.from('sigadaer').select('*', { count: 'exact', head: true }).eq('process_id', currentProcId)
+      ]);
+      const pairs = [
+        ['btnVerOpiniao', op.count || 0],
+        ['btnVerNotif', nt.count || 0],
+        ['btnVerSig', sg.count || 0]
+      ];
+      pairs.forEach(([id, c]) => {
+        const b = el(id);
+        if (b) {
+          b.disabled = c === 0;
+          b.classList.toggle('active', c > 0);
+        }
+      });
     } catch {
       // ignore
     }
@@ -952,33 +1115,15 @@ window.Modules.processos = (() => {
     if (el('btnLimparProc')) el('btnLimparProc').addEventListener('click', (ev) => { ev.preventDefault(); clearProcessForm(); loadProcessList(); });
     if (el('procNUP')) el('procNUP').addEventListener('input', () => { currentNUP = el('procNUP').value.trim(); syncNupFields(); });
 
-    // binds do patch
-    if (el('btnCadOpiniao')) el('btnCadOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); cadOpiniao(); });
-    if (el('btnCadNotif')) el('btnCadNotif').addEventListener('click', (ev) => { ev.preventDefault(); cadNotif(); });
-    if (el('btnCadSig')) el('btnCadSig').addEventListener('click', (ev) => { ev.preventDefault(); cadSig(); });
+    // Novos botões de cadastro (dialogs)
+    if (el('btnNovoOpiniao')) el('btnNovoOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); showCadOpiniaoForm(); });
+    if (el('btnNovaNotif')) el('btnNovaNotif').addEventListener('click', (ev) => { ev.preventDefault(); showCadNotifForm(); });
+    if (el('btnNovoSig')) el('btnNovoSig').addEventListener('click', (ev) => { ev.preventDefault(); showCadSigForm(); });
 
-    if (el('btnSalvarOpRec')) el('btnSalvarOpRec').addEventListener('click', (ev) => { ev.preventDefault(); salvarOpRec(); });
-    if (el('btnVoltarOpRec')) el('btnVoltarOpRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelOpRec(); });
-    if (el('btnSalvarOpFin')) el('btnSalvarOpFin').addEventListener('click', (ev) => { ev.preventDefault(); salvarOpFin(); });
-    if (el('btnVoltarOpFin')) el('btnVoltarOpFin').addEventListener('click', (ev) => { ev.preventDefault(); cancelOpFin(); });
-
-    if (el('btnSalvarNtLida')) el('btnSalvarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); salvarNtLida(); });
-    if (el('btnVoltarNtLida')) el('btnVoltarNtLida').addEventListener('click', (ev) => { ev.preventDefault(); cancelNtLida(); });
-
-    if (el('btnSalvarSgExp')) el('btnSalvarSgExp').addEventListener('click', (ev) => { ev.preventDefault(); salvarSgExp(); });
-    if (el('btnVoltarSgExp')) el('btnVoltarSgExp').addEventListener('click', (ev) => { ev.preventDefault(); cancelSgExp(); });
-    if (el('btnSalvarSgRec')) el('btnSalvarSgRec').addEventListener('click', (ev) => { ev.preventDefault(); salvarSgRec(); });
-    if (el('btnVoltarSgRec')) el('btnVoltarSgRec').addEventListener('click', (ev) => { ev.preventDefault(); cancelSgRec(); });
-
-    if (el('opStatus')) el('opStatus').addEventListener('change', () => {
-      const st = el('opStatus').value;
-      el('opRecForm')?.classList.toggle('hidden', st === 'PENDENTE');
-      el('opFinForm')?.classList.toggle('hidden', st !== 'FINALIZADO');
-    });
-    if (el('ntStatus')) el('ntStatus').addEventListener('change', () => {
-      const st = el('ntStatus').value;
-      el('ntLidaForm')?.classList.toggle('hidden', st !== 'LIDA');
-    });
+    // Botões para visualizar listas em popup
+    if (el('btnVerOpiniao')) el('btnVerOpiniao').addEventListener('click', (ev) => { ev.preventDefault(); showOpiniaoPopup(); });
+    if (el('btnVerNotif')) el('btnVerNotif').addEventListener('click', (ev) => { ev.preventDefault(); showNotifPopup(); });
+    if (el('btnVerSig')) el('btnVerSig').addEventListener('click', (ev) => { ev.preventDefault(); showSigPopup(); });
 
     // formulário principal permanece oculto por padrão
   }
