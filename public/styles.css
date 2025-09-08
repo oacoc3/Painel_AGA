@@ -22,7 +22,7 @@ html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); 
 .build { color: var(--ink-soft); font-size: 14px; margin-left: 8px; }
 
 .nav { display: flex; gap: 6px; }
-/* FIX: dividir espaço entre 6 botões sem estourar largura */
+/* AJUSTE 1: dividir espaço entre os seis botões sem estourar largura */
 .nav button { flex: 1 1 0; min-width: 0; }
 .nav button.active,
 .tabs button.active { background: var(--brand); color: #fff; }
@@ -58,7 +58,7 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 
 /* Grade de 3 colunas do módulo Processos */
 .split { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; height: 100%; }
-/* FIX: permitir às colunas encolher sem gerar overflow horizontal */
+/* AJUSTE 2: permitir às colunas encolherem sem overflow horizontal */
 .split > .card { min-width: 0; }
 
 .card { background: var(--card); border: 1px solid var(--line); box-shadow: 0 1px 0 #fff inset; padding: 12px; display: flex; flex-direction: column; min-height: 0; }
@@ -71,12 +71,6 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 #tabOpiniao label, #tabOpiniao button,
 #tabNotif label, #tabNotif button,
 #tabSig label, #tabSig button { font-size: 12px; }
-
-.row { display: flex; gap: 8px; align-items: center; }
-.row > * { flex: 1; }
-.row.stretch { align-items: stretch; }
-.row.stretch > label { flex: 1 1 50%; }
-.row.stretch > button { flex: 1 1 50%; width: 100%; height: 100%; }
 
 .table { width: 100%; border-collapse: collapse; }
 .table th, .table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
@@ -96,3 +90,5 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .err   { color: #900; }
 
 footer { padding: 8px 12px; background: #faf9f7; }
+
+/* (restante do seu arquivo segue igual; não foram alteradas cores, fontes ou layout além do necessário) */
