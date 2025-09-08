@@ -1,0 +1,43 @@
+/* ====== Ajustes específicos do módulo Processos ====== */
+
+/* 3 colunas: formulário estreito (rolável), lista larga, histórico */
+.split.processos {
+  display: grid;
+  grid-template-columns: 320px minmax(720px, 1fr) minmax(420px, 1fr);
+  gap: 12px;
+  height: 100%;
+}
+.split.processos > .card { min-width: 0; }
+
+/* Faz a coluna do formulário rolar verticalmente sem cortar conteúdo */
+.split.processos > .card:first-child { overflow-y: auto; }
+
+/* Tabelas: rolagem apenas vertical; nunca horizontal */
+.table,
+.scrolly {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Lista de processos: ocupar 100% e evitar overflow horizontal */
+#procLista table {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+}
+#procLista th, #procLista td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 6px 8px;
+}
+
+/* Larguras percentuais — somam 100% para caber sem scroll horizontal */
+#procLista th:nth-child(1), #procLista td:nth-child(1) { width: 30%; } /* NUP */
+#procLista th:nth-child(2), #procLista td:nth-child(2) { width: 10%; } /* Tipo */
+#procLista th:nth-child(3), #procLista td:nth-child(3) { width: 15%; } /* Status */
+#procLista th:nth-child(4), #procLista td:nth-child(4) { width: 15%; } /* Desde */
+#procLista th:nth-child(5), #procLista td:nth-child(5) { width: 10%; } /* 1ª Entrada */
+#procLista th:nth-child(6), #procLista td:nth-child(6) { width: 10%; } /* Obra (término) */
+#procLista th:nth-child(7), #procLista td:nth-child(7) { width: 5%; }  /* Concluída */
+#procLista th:nth-child(8), #procLista td:nth-child(8) { width: 5%; }  /* Ações */
