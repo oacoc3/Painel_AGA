@@ -38,8 +38,8 @@
         <button data-route="processos" class="active">Processos</button>
         <button data-route="prazos">Prazos</button>
         <button data-route="modelos">Modelos</button>
-        <button data-route="analise">Análise Documental</button>
-        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+        <button data-route="analise">ANADOC</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Adm</button>
       </nav>
       <div id="userBox" class="user hidden">
           <span id="userName"></span>
@@ -64,18 +64,6 @@
                 <button id="btnLimparProc" type="button">Limpar</button>
               </div>
 
-              <div id="procCampos" class="hidden">
-                <div class="row">
-                  <label class="grow">Observações
-                    <textarea id="procObs" rows="2" placeholder="(opcional)" disabled></textarea>
-                  </label>
-                  <div class="actions">
-                     <button id="btnSalvarProc" type="button" disabled>Salvar</button>
-                    <button id="btnNovoProc" type="button" disabled>Cancelar</button>
-                  </div>
-                </div>
-              </div>
-
               <div id="procMsg" class="msg"></div>
             </form>
           </div>
@@ -90,7 +78,9 @@
     </main>
 
     <footer class="bar foot">
-      <small>&copy; DO-AGA</small>
+      <span>Retro-UI</span>
+      <span>© DO-AGA</span>
+      <span id="footBuild"></span>
     </footer>
   </div>
 
