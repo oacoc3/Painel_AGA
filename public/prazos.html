@@ -7,10 +7,11 @@
   <title>Painel DO-AGA</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./process_ring.css" />
-  <!-- Supabase client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
-  <!-- App config e cliente -->
+  <!-- App config -->
   <script src="./config.js" defer></script>
+  <!-- Supabase library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
   <!-- Sessão pronta antes de inicializar a página -->
   <script src="./auth-ready.js" defer></script>
@@ -23,7 +24,7 @@
 </head>
 <body data-route="prazos">
   <div id="app" class="vh">
-<header class="bar">
+    <header class="bar">
       <div class="brand">
         <span class="logo">■</span>
         <strong>Painel DO-AGA</strong>
@@ -43,8 +44,9 @@
         <button id="btnLogout" class="danger" type="button">Sair</button>
       </div>
     </header>
-<main class="main">
-<section id="viewPrazos" class="view">
+
+    <main class="main">
+      <section id="viewPrazos" class="view">
         <div class="prazo-grid">
 
           <div class="prazo-col">
@@ -53,41 +55,40 @@
               <label>Tipo
                 <select id="psTipo">
                   <option value="">Todos</option>
-
                 </select>
               </label>
               <div id="prazoParec" class="table scrolly"></div>
             </div>
             <div class="card">
               <h2>Remoção/Rebaixamento</h2>
-
               <div id="prazoRemocao" class="table scrolly"></div>
             </div>
           </div>
+
           <div class="prazo-col">
             <div class="card">
               <h2>Término de Obra</h2>
-
               <div id="prazoObra" class="table scrolly"></div>
             </div>
             <div class="card">
               <h2>Monitorar Leitura/Expedição</h2>
-               <label>Tipo
+              <label>Tipo
                 <select id="monTipo"><option value="">Todos</option></select>
               </label>
- 
               <div id="prazoMonit" class="table scrolly"></div>
             </div>
           </div>
+
           <div class="card">
             <h2>Prazo DO-AGA</h2>
             <div id="prazoDOAGA" class="table scrolly"></div>
           </div>
+
         </div>
       </section>
-</main>
+    </main>
 
-<footer class="bar foot">
+    <footer class="bar foot">
       <span>Retro-UI</span>
       <span>© DO-AGA</span>
       <span id="footBuild"></span>
