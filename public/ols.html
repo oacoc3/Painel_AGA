@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <base href="/" />
+  <title>Painel DO-AGA</title>
+
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./process_ring.css" />
+
+  <!-- App config -->
+  <script src="./config.js" defer></script>
+  <!-- Supabase library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <!-- Inicialização do cliente Supabase -->
+  <script src="./supabaseClient.js" defer></script>
+  <!-- Sessão pronta antes de inicializar a página -->
+  <script src="./auth-ready.js" defer></script>
+  <script src="./utils.js" defer></script>
+  <!-- Guardas de segurança: não alteram visual -->
+  <script src="./safety-guards.js" defer></script>
+  <script src="./mpa.js" defer></script>
+
+  <!-- THREE.js (apenas nesta página) -->
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js" defer></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js" defer></script>
+
+  <script src="./modules/ols.js" defer></script>
+</head>
+<body data-route="ols">
+  <div id="app" class="vh">
+    <header class="bar">
+      <div class="brand">
+        <span class="logo">■</span>
+        <strong>Painel DO-AGA</strong>
+        <small class="build" id="buildInfo">build…</small>
+      </div>
+      <!-- Nav original, SEM alterações visuais -->
+      <nav id="topNav" class="nav hidden">
+        <button data-route="dashboard">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise">ANADOC</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Adm</button>
+      </nav>
+      <div id="userBox" class="user hidden">
+        <span id="userName"></span>
+        <small id="userRole" class="muted"></small>
+        <button id="btnLogout" class="danger" type="button">Sair</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <section id="viewOLS" class="view">
+        <div class="split ols">
+          <!-- COLUNA ESQUERDA: Formulário -->
+          <div class="card">
+            <h2>OLS — Superfícies Limitadoras</h2>
+            <form id="olsForm" data-ajax>
+              <div class="row">
+                <label class="grow">Classificação (aproximação)
+                  <select id="categoria">
+                    <option value="nonInstrument">Sem instrumentos</option>
+                    <option value="nonPrecision">Não-precisão</option>
+                    <option value="catI">Precisão CAT I</option>
+                    <option value="catIIIII">Precisão CAT II/III</option>
+                  </select>
+                </label>
+                <label>Número de código
+                  <select id="codeNumber">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                  </select>
+                </label>
+              </div>
+              <div class="row">
+                <label>Letra de código = F?
+                  <input type="checkbox" id="codeLetterF" />
+                </label>
+                <label>Elevação do limiar (m)
+                  <input type="number" id="thrElev" value="0" step="0.1"/>
+                </label>
+              </div>
+              <div class="row">
+                <label class="grow">Comprimento da pista (m)
+                  <input type="number" id="rwLen" value="3000" step="1"/>
+                </label>
+                <label>Largura da pista (m)
+                  <input type="number" id="rwWid" value="45" step="1"/>
+                </label>
+              </div>
+              <div class="row">
+                <label class="grow">OHS raio (m)
+                  <input type="number" id="ohsRadius" value="15000" step="1"/>
+                </label>
+                <label>OHS altura (m)
+                  <input type="number" id="ohsHeight" value="150" step="0.1"/>
+                </label>
+              </div>
+
+              <hr/>
+              <h3>Dados de terreno e obstáculos</h3>
+              <p class="muted">Opcional — arquivos em coordenadas locais (X para fora da cabeceira, Y lateral; metros a partir do limiar; Z acima do limiar).</p>
+              <div class="row">
+                <label class="grow">Terreno (CSV grade)
+                  <input type="file" id="fileTerrain" accept=".csv" />
+                </label>
+              </div>
+              <details class="muted">
+                <summary>Formato do terreno (CSV)</summary>
+                <p>Primeira linha: <code># cell=&lt;tamanho_da_célula_m&gt; originX=&lt;origemX_m&gt; originY=&lt;origemY_m&gt;</code></p>
+                <p>Demais linhas: matriz de valores de elevação (m), separados por vírgula. Exemplo em <code>samples/terrain_sample.csv</code>.</p>
+              </details>
+              <div class="row">
+                <label class="grow">Obstáculos (CSV pontos)
+                  <input type="file" id="fileObstacles" accept=".csv" />
+                </label>
+              </div>
+              <details class="muted">
+                <summary>Formato de obstáculos (CSV)</summary>
+                <p>Colunas: <code>name,x,y,height</code> (metros; height acima do limiar). Exemplo em <code>samples/obstacles_sample.csv</code>.</p>
+              </details>
+
+              <div class="row" style="gap:8px; margin-top:8px;">
+                <button type="button" id="btnGerar">Gerar</button>
+                <button type="button" id="btnClearTerrain" class="secondary">Limpar terreno/obst.</button>
+                <button type="button" id="btnSave2D" class="secondary">Baixar PNG 2D</button>
+                <button type="button" id="btnSave3D" class="secondary">Baixar PNG 3D</button>
+              </div>
+              <div id="msg" class="muted" style="margin-top:6px;"></div>
+            </form>
+
+            <details style="margin-top:12px;">
+              <summary>Legenda</summary>
+              <ul>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#000;"></span> Pista</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#4a90e2;"></span> Aproximação</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#50e3c2;"></span> Aproximação interna</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#f5a623;"></span> Decolagem (TOC)</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#9013fe;"></span> Arremetida (BL)</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#bd10e0;"></span> Transicional</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#7ed321;"></span> IHS</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#b8e986;"></span> Cônica</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#9b9b9b;"></span> OHS</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#d0021b;"></span> Obstáculos</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#888;"></span> Terreno</li>
+              </ul>
+            </details>
+          </div>
+
+          <!-- COLUNA DIREITA: Canvas 2D + 3D -->
+          <div class="card" style="min-width:0;">
+            <h2>Planta (2D)</h2>
+            <canvas id="planCanvas" width="1400" height="740" style="width:100%;height:auto;border:1px solid #ddd;"></canvas>
+
+            <h2 style="margin-top:12px;">Perfil longitudinal (2D)</h2>
+            <canvas id="profileCanvas" width="1400" height="360" style="width:100%;height:auto;border:1px solid #ddd;"></canvas>
+
+            <h2 style="margin-top:12px;">3D interativo</h2>
+            <div id="ols3d" style="width:100%;aspect-ratio: 16/9; border:1px solid #ddd; background:#fff;"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="muted">Build: <span id="footBuild">…</span></div>
+    </footer>
+  </div>
+</body>
+</html>
