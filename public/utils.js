@@ -36,7 +36,7 @@
       timeZone: 'America/Sao_Paulo',
       day: '2-digit',
       month: '2-digit',
-      year: '2-digit'
+      year: 'numeric'
     }).format(x);
   }
 
@@ -44,13 +44,17 @@
     if (!d) return '';
     const x = (d instanceof Date) ? d : new Date(d);
     if (Number.isNaN(+x)) return '';
-    const dt = fmtDate(x);
-    let tm = new Intl.DateTimeFormat('pt-BR', {
+    const dt = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).format(x);
+    const tm = new Intl.DateTimeFormat('pt-BR', {
       timeZone: 'America/Sao_Paulo',
       hour: '2-digit',
       minute: '2-digit'
     }).format(x);
-    tm = tm.replace(':', '/');
     return `${dt} ${tm}`;
   }
 
