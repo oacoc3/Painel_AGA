@@ -1,3 +1,4 @@
+// public/utils.js
 (function() {
   function el(id) { return document.getElementById(id); }
   function $$ (sel, ctx = document) { return Array.from(ctx.querySelectorAll(sel)); }
@@ -79,27 +80,47 @@
     return Math.round((d2 - d1) / (24 * 3600 * 1000));
   }
 
-  function renderTable(id, cols, rows = []) {
-    const table = el(id);
-    if (!table) return {};
-    const thead = table.querySelector('thead');
-    const tbody = table.querySelector('tbody');
-    if (thead) {
-      thead.innerHTML = '<tr>' + cols.map(c => `<th${c.align ? ` class="align-${c.align}"` : ''}>${c.label}</th>`).join('') + '</tr>';
+  // PATCH: agora aceita um contêiner (div/section/etc.) OU uma <table>.
+  // Se for contêiner, cria a <table> internamente com <thead> e <tbody>.
+  // Retorna { thead, tbody, table }.
+  function renderTable(target, cols, rows = []) {
+    const box = typeof target === 'string' ? el(target) : target;
+    if (!box) return {};
+
+    let table = box;
+    if (table.tagName !== 'TABLE') {
+      box.innerHTML = '';
+      table = document.createElement('table');
+      box.appendChild(table);
     }
-    if (tbody) {
-      tbody.innerHTML = rows.map(r => {
-        const data = JSON.stringify(r).replace(/"/g, '&quot;');
-        return `<tr data-row="${data}">` + cols.map(c => {
-          let val = r[c.key];
-          if (typeof c.value === 'function') val = c.value(r);
-          if (val == null) val = '';
-          const align = c.align ? ` class="align-${c.align}"` : '';
-          return `<td${align}>${val}</td>`;
-        }).join('') + '</tr>';
-      }).join('');
+
+    let thead = table.querySelector('thead');
+    if (!thead) {
+      thead = document.createElement('thead');
+      table.appendChild(thead);
     }
-    return { thead, tbody };
+    let tbody = table.querySelector('tbody');
+    if (!tbody) {
+      tbody = document.createElement('tbody');
+      table.appendChild(tbody);
+    }
+
+    thead.innerHTML = '<tr>' + cols
+      .map(c => `<th${c.align ? ` class="align-${c.align}"` : ''}>${c.label}</th>`)
+      .join('') + '</tr>';
+
+    tbody.innerHTML = rows.map(r => {
+      const data = JSON.stringify(r).replace(/"/g, '&quot;');
+      return `<tr data-row="${data}">` + cols.map(c => {
+        let val = r[c.key];
+        if (typeof c.value === 'function') val = c.value(r);
+        if (val == null) val = '';
+        const align = c.align ? ` class="align-${c.align}"` : '';
+        return `<td${align}>${val}</td>`;
+      }).join('') + '</tr>`;
+    }).join('');
+
+    return { thead, tbody, table };
   }
 
   async function callFn(name, payload) {
