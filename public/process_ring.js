@@ -1,9 +1,9 @@
 // Retro Elegant Process Ring (dias/processo)
 // API simples para criar e atualizar o anel.
-// Integração: window.Components.ProcessRing.create(container, options)
+// Integração: window.AppComponents.ProcessRing.create(container, options)
 
-window.Components = window.Components || {};
-window.Components.ProcessRing = (() => {
+window.AppComponents = window.AppComponents || {};
+window.AppComponents.ProcessRing = (() => {
   const TAU = Math.PI * 2;
 
   function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
