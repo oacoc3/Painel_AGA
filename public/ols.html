@@ -10,21 +10,29 @@
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./process_ring.css" />
 
+  <!-- Import Map: mapeia o bare specifier "three" para o arquivo local -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "/vendor/three/three.module.js"
+    }
+  }
+  </script>
+
   <!-- Carregador ESM do Three.js com fallback de CDNs. Emite eventos: THREE_READY | THREE_FAILED -->
   <script type="module">
     async function loadThree() {
       const sources = [
-        // (opcional) local — se quiser garantir offline, coloque os dois arquivos nesses caminhos:
-        { three: "/vendor/three/three.module.js", ctrl: "/vendor/three/examples/jsm/controls/OrbitControls.js" },
-        // unpkg
+        // LOCAL primeiro (garante offline):
+        { three: "/vendor/three/three.module.js",
+          ctrl:  "/vendor/three/examples/jsm/controls/OrbitControls.js" },
+        // CDNs (caso você remova os arquivos locais no futuro):
         { three: "https://unpkg.com/three@0.159.0/build/three.module.js",
           ctrl:  "https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js" },
-        // jsDelivr
         { three: "https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.module.js",
           ctrl:  "https://cdn.jsdelivr.net/npm/three@0.159.0/examples/jsm/controls/OrbitControls.js" },
-        // cdnjs
         { three: "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.159.0/three.module.min.js",
-          ctrl:  "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.159.0/examples/jsm/controls/OrbitControls.min.js" },
+          ctrl:  "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.159.0/examples/jsm/controls/OrbitControls.min.js" }
       ];
       let T = null, OrbitControls = null, lastErr = null;
       for (const s of sources) {
@@ -192,7 +200,7 @@
           <div id="ols3d" style="width:100%;aspect-ratio: 16/9; border:1px solid #ddd; background:#fff;"></div>
           <div id="ols3dFallback" class="muted" style="display:none;margin-top:6px;">
             Não foi possível carregar o Three.js (rede/CDN bloqueada). Se quiser garantir offline,
-            coloque <code>three.module.js</code> e <code>OrbitControls.js</code> em <code>public/vendor/three/</code>.
+            coloque <code>three.module.js</code> e <code>examples/jsm/controls/OrbitControls.js</code> em <code>public/vendor/three/</code>.
           </div>
         </div>
       </section>
