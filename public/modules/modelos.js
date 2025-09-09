@@ -10,7 +10,44 @@ window.Modules.modelos = (() => {
     const { tbody } = Utils.renderTable('listaModelos', [
       { key: 'category', label: 'Categoria' },
       { key: 'title', label: 'Título' },
-      { key: 'updated_at', label: 'Atualizado em', value: r => Utils.fmtDateTime(r.updated_at) }
+      { key: 'updated_at', label: 'Atualizado em', value: r => Utils.fmtDateTime(r.updated_at) },
+      {
+        label: 'Ações',
+        render: (r) => {
+          const box = document.createElement('div');
+          box.className = 'actions';
+
+          const bEd = document.createElement('button');
+          bEd.type = 'button';
+          bEd.textContent = 'Editar';
+          bEd.addEventListener('click', ev => {
+            ev.stopPropagation();
+            selectedId = r.id;
+            el('mdlId').value = r.id;
+            el('mdlCat').value = r.category;
+            el('mdlTit').value = r.title;
+            el('mdlTxt').value = r.content;
+            Utils.setMsg('mdlMsg', `Carregado: ${r.title}`);
+          });
+
+          const bDel = document.createElement('button');
+          bDel.type = 'button';
+          bDel.className = 'danger';
+          bDel.textContent = 'Excluir';
+          bDel.addEventListener('click', async ev => {
+            ev.stopPropagation();
+            const { error } = await sb.from('models').delete().eq('id', r.id);
+            if (error) return Utils.setMsg('mdlMsg', error.message, true);
+            Utils.setMsg('mdlMsg', 'Excluído.');
+            if (selectedId === r.id) { selectedId = null; el('formModelo').reset(); }
+            await loadModelos();
+          });
+
+          box.appendChild(bEd);
+          box.appendChild(bDel);
+          return box;
+        }
+      }
     ], rows);
 
     tbody?.addEventListener('click', ev => {
