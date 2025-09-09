@@ -117,7 +117,7 @@
         if (val == null) val = '';
         const align = c.align ? ` class="align-${c.align}"` : '';
         return `<td${align}>${val}</td>`;
-      }).join('') + '</tr>`;
+      }).join('') + '</tr>';
     }).join('');
 
     return { thead, tbody, table };
