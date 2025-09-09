@@ -809,22 +809,157 @@ begin
   -- Deriva o process_id conforme a tabela que disparou o trigger
   if tg_table_name = 'processes' then
     pid := coalesce(new.id, old.id);
-  elsif tg_table_name in ('internal_opinions','notifications','sigadaer','checklist_responses','process_observations') then
+
+    if tg_op = 'INSERT' then
+      insert into history(process_id, action, details, user_id, user_email, created_at)
+      values (
+        pid,
+        'Processo criado',
+        json_build_object('nup', new.nup, 'type', new.type),
+        auth.uid(),
+        auth.jwt()->>'email',
+        now()
+      );
+    else
+      if (new.status is distinct from old.status) or (new.status_since is distinct from old.status_since) then
+        insert into history(process_id, action, details, user_id, user_email, created_at)
+        values (
+          pid,
+          'Status atualizado',
+          json_build_object('status', new.status, 'status_since', new.status_since),
+          auth.uid(),
+          auth.jwt()->>'email',
+          now()
+        );
+      end if;
+
+      if (new.obra_termino_date is distinct from old.obra_termino_date) or (new.obra_concluida is distinct from old.obra_concluida) then
+        insert into history(process_id, action, details, user_id, user_email, created_at)
+        values (
+          pid,
+          'Término de obra atualizado',
+          json_build_object('obra_termino_date', new.obra_termino_date, 'obra_concluida', new.obra_concluida),
+          auth.uid(),
+          auth.jwt()->>'email',
+          now()
+        );
+      end if;
+    end if;
+
+  elsif tg_table_name = 'process_observations' then
+    pid := new.process_id;
+    if tg_op = 'INSERT' then
+      insert into history(process_id, action, details, user_id, user_email, created_at)
+      values (
+        pid,
+        'Observação inserida',
+        json_build_object('text', new.text),
+        auth.uid(),
+        auth.jwt()->>'email',
+        now()
+      );
+    end if;
+
+  elsif tg_table_name = 'internal_opinions' then
     pid := coalesce(new.process_id, old.process_id);
+    if tg_op = 'INSERT' then
+      insert into history(process_id, action, details, user_id, user_email, created_at)
+      values (
+        pid,
+        'Parecer interno solicitado',
+        json_build_object('type', new.type, 'requested_at', new.requested_at),
+        auth.uid(),
+        auth.jwt()->>'email',
+        now()
+      );
+    elsif tg_op = 'UPDATE' and new.status = 'RECEBIDO' and old.status is distinct from 'RECEBIDO' then
+      insert into history(process_id, action, details, user_id, user_email, created_at)
+      values (
+        pid,
+        'Parecer interno recebido',
+        json_build_object('type', new.type, 'received_at', new.received_at),
+        auth.uid(),
+        auth.jwt()->>'email',
+        now()
+      );
+    end if;
+
+  elsif tg_table_name = 'notifications' then
+    pid := coalesce(new.process_id, old.process_id);
+    if tg_op = 'INSERT' then
+      insert into history(process_id, action, details, user_id, user_email, created_at)
+      values (
+        pid,
+        'Notificação solicitada',
+        json_build_object('type', new.type, 'requested_at', new.requested_at),
+        auth.uid(),
+        auth.jwt()->>'email',
+        now()
+      );
+    elsif tg_op = 'UPDATE' and new.status = 'LIDA' and old.status is distinct from 'LIDA' then
+      insert into history(process_id, action, details, user_id, user_email, created_at)
+      values (
+        pid,
+        'Notificação lida',
+        json_build_object('type', new.type, 'read_at', new.read_at),
+        auth.uid(),
+        auth.jwt()->>'email',
+        now()
+      );
+    end if;
+
+  elsif tg_table_name = 'sigadaer' then
+    pid := coalesce(new.process_id, old.process_id);
+    if tg_op = 'INSERT' then
+      insert into history(process_id, action, details, user_id, user_email, created_at)
+      values (
+        pid,
+        'SIGADAER solicitado',
+        json_build_object('type', new.type, 'numbers', new.numbers, 'requested_at', new.requested_at),
+        auth.uid(),
+        auth.jwt()->>'email',
+        now()
+      );
+    elsif tg_op = 'UPDATE' then
+      if new.status = 'EXPEDIDO' and old.status is distinct from 'EXPEDIDO' then
+        insert into history(process_id, action, details, user_id, user_email, created_at)
+        values (
+          pid,
+          'SIGADAER expedido',
+          json_build_object('type', new.type, 'numbers', new.numbers, 'expedit_at', new.expedit_at),
+          auth.uid(),
+          auth.jwt()->>'email',
+          now()
+        );
+      end if;
+      if new.status = 'RECEBIDO' and old.status is distinct from 'RECEBIDO' then
+        insert into history(process_id, action, details, user_id, user_email, created_at)
+        values (
+          pid,
+          'SIGADAER recebido',
+          json_build_object('type', new.type, 'numbers', new.numbers, 'received_at', new.received_at),
+          auth.uid(),
+          auth.jwt()->>'email',
+          now()
+        );
+      end if;
+    end if;
+
+  elsif tg_table_name = 'checklist_responses' then
+    pid := coalesce(new.process_id, old.process_id);
+    insert into history(process_id, action, details, user_id, user_email, created_at)
+    values (
+      pid,
+      tg_op,
+      row_to_json(coalesce(new, old)),
+      auth.uid(),
+      auth.jwt()->>'email',
+      now()
+    );
+
   else
-    -- Para outras tabelas, não faz nada
     return coalesce(new, old);
   end if;
-
-  insert into history(process_id, action, details, user_id, user_email, created_at)
-  values (
-    pid,
-    tg_op,
-    row_to_json(coalesce(new, old)),
-    auth.uid(),
-    auth.jwt()->>'email',
-    now()
-  );
 
   return coalesce(new, old);
 end
