@@ -190,9 +190,8 @@
     sb.auth.onAuthStateChange(() => ensureAuthAndUI());
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  // Always wait for DOMContentLoaded to ensure all modules (e.g. auth) have loaded
+  // before running the initialization routine. This avoids race conditions where
+  // scripts loaded later via <script defer> are not yet available when init() runs.
+  document.addEventListener('DOMContentLoaded', init);
 })();
