@@ -1,115 +1,175 @@
-
 <!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <base href="/" />
-  <title>Painel DO-AGA • OLS</title>
-  <link rel="stylesheet" href="./styles.css" />
-  <style>
-    /* sem alteração de identidade visual: apenas layout mínimo para o módulo */
-    .ols-wrap { display: grid; grid-template-columns: 420px 1fr; gap: 8px; height: calc(100vh - 120px); }
-    .ols-form { overflow: auto; padding: 8px; border: 1px solid #ddd; border-radius: 8px; }
-    .ols-view { display: grid; grid-template-rows: 1fr 1fr; gap: 8px; }
-    #plan2d, #view3d { border: 1px solid #ddd; border-radius: 8px; background: #fff; }
-    fieldset{border:1px solid #ccc; border-radius:6px;padding:8px;margin-bottom:8px}
-    label{display:block;font-size:12px;margin-top:6px}
-    input, select{width:100%;padding:6px;border:1px solid #ccc;border-radius:4px}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-    .muted{opacity:.7}
-  </style>
+  <title>Painel DO-AGA</title>
 
-  <!-- App config / sessão / cliente supabase (já usados no app) -->
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./process_ring.css" />
+
+  <!-- App base (sem mudanças visuais) -->
   <script src="./config.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
   <script src="./supabaseClient.js" defer></script>
   <script src="./auth-ready.js" defer></script>
+  <script src="./utils.js" defer></script>
   <script src="./safety-guards.js" defer></script>
   <script src="./mpa.js" defer></script>
-  <!-- libs apenas para este módulo -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.158/examples/js/controls/OrbitControls.js"></script>
-  <!-- módulo -->
-  <script src="./utils.js"></script>
-  <script src="./modules/ols-geom.js"></script>
-  <script src="./modules/ols-3d.js"></script>
+
+  <!-- Three.js via ES Modules (corrige MIME e depreciação dos "build/*.js") -->
+  <script type="module">
+    import * as THREE from "https://unpkg.com/three@0.159.0/build/three.module.js";
+    import { OrbitControls } from "https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js";
+    // Exponho no escopo global para o código não-modular do módulo.
+    window.THREE = THREE;
+    window.THREE.OrbitControls = OrbitControls;
+  </script>
+
+  <!-- Módulo OLS (2D+3D) -->
   <script src="./modules/ols.js" defer></script>
 </head>
-<body>
-  <div class="app">
-    <header class="bar head">
-      <div class="lhs">
-        <a href="./dashboard.html" class="appTitle">Painel DO-AGA</a>
-        <nav class="crumbs muted">OLS</nav>
+<body data-route="ols">
+  <div id="app" class="vh">
+    <header class="bar">
+      <div class="brand">
+        <span class="logo">■</span>
+        <strong>Painel DO-AGA</strong>
+        <small class="build" id="buildInfo">build…</small>
       </div>
-      <div class="rhs">
-        <span id="userName"></span> • <span id="userRole"></span>
+      <nav id="topNav" class="nav hidden">
+        <button data-route="dashboard">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise">ANADOC</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Adm</button>
+      </nav>
+      <div id="userBox" class="user hidden">
+        <span id="userName"></span>
+        <small id="userRole" class="muted"></small>
+        <button id="btnLogout" class="danger" type="button">Sair</button>
       </div>
     </header>
 
-    <main class="ols-wrap">
-      <section class="ols-form">
-        <h3>Parâmetros do aeródromo (hipotético)</h3>
-        <fieldset>
-          <legend>Pista</legend>
-          <div class="row">
-            <label>Título/Identificador <input id="rwylbl" value="RWY 09/27"></label>
-            <label>Classe de aproximação
-              <select id="class">
-                <option value="non-instrument">Não-instrumento</option>
-                <option value="non-precision">Não-precisão</option>
-                <option value="catI" selected>Precisão CAT I</option>
-                <option value="catII">Precisão CAT II/III</option>
-              </select>
-            </label>
-          </div>
-          <div class="row">
-            <label>Code number (1–4) <input type="number" id="code" min="1" max="4" step="1" value="4"></label>
-            <label>Largura da pista (m) <input type="number" id="rwyw" value="45"></label>
-          </div>
-          <div class="row">
-            <label>Comprimento da pista (m) <input type="number" id="rwyl" value="2500"></label>
-            <label>Declividade longitudinal (%) <input type="number" id="slope" value="0"></label>
-          </div>
-          <div class="row">
-            <label>Elevação THR A (m) <input type="number" id="thrA_elev" value="100"></label>
-            <label>Elevação THR B (m) <input type="number" id="thrB_elev" value="103"></label>
-          </div>
-          <div class="row">
-            <label>Ângulo de rumo da pista (graus, a partir do Norte) <input type="number" id="heading" min="0" max="360" value="90"></label>
-            <label>Escala planta (m por unidade) <input type="number" id="scale" value="1"></label>
-          </div>
-        </fieldset>
+    <main class="main">
+      <section id="viewOLS" class="view">
+        <div class="split ols">
+          <!-- COLUNA ESQUERDA -->
+          <div class="card">
+            <h2>OLS — Superfícies Limitadoras</h2>
+            <form id="olsForm" data-ajax>
+              <div class="row">
+                <label class="grow">Classificação (aproximação)
+                  <select id="categoria">
+                    <option value="nonInstrument">Sem instrumentos</option>
+                    <option value="nonPrecision">Não-precisão</option>
+                    <option value="catI">Precisão CAT I</option>
+                    <option value="catIIIII">Precisão CAT II/III</option>
+                  </select>
+                </label>
+                <label>Número de código
+                  <select id="codeNumber">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                  </select>
+                </label>
+              </div>
+              <div class="row">
+                <label>Letra de código = F?
+                  <input type="checkbox" id="codeLetterF" />
+                </label>
+                <label>Elevação do limiar (m)
+                  <input type="number" id="thrElev" value="0" step="0.1"/>
+                </label>
+              </div>
+              <div class="row">
+                <label class="grow">Comprimento da pista (m)
+                  <input type="number" id="rwLen" value="3000" step="1"/>
+                </label>
+                <label>Largura da pista (m)
+                  <input type="number" id="rwWid" value="45" step="1"/>
+                </label>
+              </div>
+              <div class="row">
+                <label class="grow">Alinhamento da pista (° 0–360)
+                  <input type="number" id="rwHeading" value="90" step="0.1" min="0" max="360"/>
+                </label>
+              </div>
+              <div class="row">
+                <label class="grow"><input type="checkbox" id="drawA" checked /> <span id="rwyLabelA">RWY ??</span> (Cabeceira A)</label>
+                <label class="grow"><input type="checkbox" id="drawB" checked /> <span id="rwyLabelB">RWY ??</span> (Cabeceira B)</label>
+              </div>
+              <div class="row">
+                <label class="grow">OHS raio (m)
+                  <input type="number" id="ohsRadius" value="15000" step="1"/>
+                </label>
+                <label>OHS altura (m)
+                  <input type="number" id="ohsHeight" value="150" step="0.1"/>
+                </label>
+              </div>
 
-        <fieldset>
-          <legend>Coordenadas (planta cartesiana)</legend>
-          <div class="row">
-            <label>X do ponto médio (m) <input type="number" id="cx" value="0"></label>
-            <label>Y do ponto médio (m) <input type="number" id="cy" value="0"></label>
-          </div>
-          <div class="row">
-            <label>Carregar obstáculos (GeoJSON) <input type="file" id="obstacles" accept=".geojson,.json"></label>
-            <label class="muted">Campo de altura esperado: <code>elev</code> (m AMSL) ou <code>height</code> (m AGL)</label>
-          </div>
-        </fieldset>
+              <hr />
+              <h3>Terreno e obstáculos (opcional)</h3>
+              <p class="muted">CSV de terreno (grade) e CSV de obstáculos (pontos). Coordenadas relativas à <strong>Cabeceira A</strong>: X para fora da A; Y lateral; Z acima do limiar.</p>
+              <div class="row">
+                <label class="grow">Terreno (CSV grade)
+                  <input type="file" id="fileTerrain" accept=".csv" />
+                </label>
+              </div>
+              <div class="row">
+                <label class="grow">Obstáculos (CSV pontos)
+                  <input type="file" id="fileObstacles" accept=".csv" />
+                </label>
+              </div>
 
-        <button id="btnDraw">Desenhar / Atualizar</button>
-        <span class="muted">Dica: passe o mouse sobre as superfícies para ver os rótulos.</span>
-      </section>
+              <div class="row" style="gap:8px; margin-top:8px;">
+                <button type="button" id="btnGerar">Gerar</button>
+                <button type="button" id="btnClearTerrain" class="secondary">Limpar terreno/obst.</button>
+                <button type="button" id="btnSave2D" class="secondary">Baixar PNG 2D</button>
+                <button type="button" id="btnSave3D" class="secondary">Baixar PNG 3D</button>
+              </div>
+              <div id="msg" class="muted" style="margin-top:6px;"></div>
+            </form>
 
-      <section class="ols-view">
-        <canvas id="plan2d"></canvas>
-        <div id="view3d"></div>
+            <details style="margin-top:12px;">
+              <summary>Legenda</summary>
+              <ul>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#000;"></span> Pista</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#4a90e2;"></span> Aproximação</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#50e3c2;"></span> Aproximação interna</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#f5a623;"></span> Decolagem (TOC)</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#9013fe;"></span> Arremetida (BL)</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#bd10e0;"></span> Transicional</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#7ed321;"></span> IHS</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#b8e986;"></span> Cônica</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#9b9b9b;"></span> OHS</li>
+                <li><span style="display:inline-block;width:12px;height:12px;background:#d0021b;"></span> Obstáculos</li>
+              </ul>
+            </details>
+          </div>
+
+          <!-- COLUNA DIREITA -->
+          <div class="card" style="min-width:0;">
+            <h2>Planta (2D)</h2>
+            <canvas id="planCanvas" width="1400" height="740" style="width:100%;height:auto;border:1px solid #ddd;"></canvas>
+
+            <h2 style="margin-top:12px;">Perfil longitudinal (2D)</h2>
+            <canvas id="profileCanvas" width="1400" height="360" style="width:100%;height:auto;border:1px solid #ddd;"></canvas>
+
+            <h2 style="margin-top:12px;">3D interativo</h2>
+            <div id="ols3d" style="width:100%;aspect-ratio: 16/9; border:1px solid #ddd; background:#fff;"></div>
+          </div>
+        </div>
       </section>
     </main>
 
-    <footer class="bar foot">
-      <span>Retro-UI</span>
-      <span>© DO-AGA</span>
-      <span id="footBuild"></span>
+    <footer class="foot">
+      <div class="muted">Build: <span id="footBuild">…</span></div>
     </footer>
   </div>
-  <script defer src="./build-info-client.js"></script>
 </body>
 </html>
