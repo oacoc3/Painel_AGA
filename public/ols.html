@@ -77,6 +77,7 @@
                   </select>
                 </label>
               </div>
+
               <div class="row">
                 <label>Letra de código = F?
                   <input type="checkbox" id="codeLetterF" />
@@ -85,6 +86,7 @@
                   <input type="number" id="thrElev" value="0" step="0.1"/>
                 </label>
               </div>
+
               <div class="row">
                 <label class="grow">Comprimento da pista (m)
                   <input type="number" id="rwLen" value="3000" step="1"/>
@@ -93,6 +95,27 @@
                   <input type="number" id="rwWid" value="45" step="1"/>
                 </label>
               </div>
+
+              <div class="row">
+                <label class="grow">Alinhamento da pista (° 0–360)
+                  <input type="number" id="rwHeading" value="90" step="0.1" min="0" max="360"/>
+                </label>
+              </div>
+
+              <div class="row">
+                <label class="grow">Desenhar cabeceiras</label>
+              </div>
+              <div class="row">
+                <label class="grow">
+                  <input type="checkbox" id="drawA" checked />
+                  <span id="rwyLabelA">RWY ??</span> (Cabeceira A)
+                </label>
+                <label class="grow">
+                  <input type="checkbox" id="drawB" checked />
+                  <span id="rwyLabelB">RWY ??</span> (Cabeceira B)
+                </label>
+              </div>
+
               <div class="row">
                 <label class="grow">OHS raio (m)
                   <input type="number" id="ohsRadius" value="15000" step="1"/>
@@ -104,7 +127,8 @@
 
               <hr/>
               <h3>Dados de terreno e obstáculos</h3>
-              <p class="muted">Opcional — arquivos em coordenadas locais (X para fora da cabeceira, Y lateral; metros a partir do limiar; Z acima do limiar).</p>
+              <p class="muted">Opcional — arquivos em coordenadas locais (X para fora da <strong>Cabeceira A</strong>, Y lateral; metros a partir do limiar A; Z acima do limiar).</p>
+
               <div class="row">
                 <label class="grow">Terreno (CSV grade)
                   <input type="file" id="fileTerrain" accept=".csv" />
@@ -115,6 +139,7 @@
                 <p>Primeira linha: <code># cell=&lt;tamanho_da_célula_m&gt; originX=&lt;origemX_m&gt; originY=&lt;origemY_m&gt;</code></p>
                 <p>Demais linhas: matriz de valores de elevação (m), separados por vírgula. Exemplo em <code>samples/terrain_sample.csv</code>.</p>
               </details>
+
               <div class="row">
                 <label class="grow">Obstáculos (CSV pontos)
                   <input type="file" id="fileObstacles" accept=".csv" />
