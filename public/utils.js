@@ -171,11 +171,18 @@
     const container = el(id);
     if (!container) return;
     container.innerHTML = '';
+
+    const max = Math.max(30, ...items.map(it => it.avg || 0));
     items.forEach(it => {
-      const div = document.createElement('div');
-      div.className = 'process-ring';
-      div.textContent = `${it.status}: ${it.count}`;
-      container.appendChild(div);
+      window.AppComponents.ProcessRing.create(container, {
+        nup: String(it.count ?? ''),
+        status: it.status,
+        speed: it.avg ?? 0,
+        min: 0,
+        max,
+        sizeClass: 'sm',
+        ariaLabel: `Velocidade média de ${it.status}`
+      });
     });
   }
 
