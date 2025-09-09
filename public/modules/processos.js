@@ -79,9 +79,6 @@ window.Modules.processos = (() => {
   // ===============================
 
   function setProcFormEnabled(on) {
-    ['procObs'].forEach(id => {
-      const e = el(id); if (e) e.disabled = !on;
-    });
     ['btnSalvarProc','btnNovoProc']
       .forEach(id => { const b = el(id); if (b) b.disabled = !on; });
   }
@@ -119,7 +116,6 @@ window.Modules.processos = (() => {
     syncNupFields();
 
     if (el('procNUP')) el('procNUP').value = '';
-    if (el('procObs')) el('procObs').value = '';
 
     setProcFormEnabled(false);
     setOtherTabsEnabled(false);
@@ -130,15 +126,7 @@ window.Modules.processos = (() => {
   }
 
   function bindProcFormTracking() {
-    ['procObs'].forEach(id => {
-      const e = el(id); if (!e) return;
-      ['input','change'].forEach(evt => {
-        e.addEventListener(evt, () => {
-          const btn = el('btnSalvarProc');
-          if (btn && btn.disabled) btn.disabled = false;
-        });
-      });
-    });
+    // campos de observação removidos
   }
 
   async function buscarProcesso() {
@@ -159,8 +147,6 @@ window.Modules.processos = (() => {
         currentProcId = data.id;
         currentNUP = data.nup;
         syncNupFields();
-
-        if (el('procObs')) el('procObs').value = '';
 
         setProcFormEnabled(true);
         toggleProcFields(true);
@@ -387,7 +373,6 @@ window.Modules.processos = (() => {
     syncNupFields();
 
     if (el('procNUP')) el('procNUP').value = row.nup;
-    if (el('procObs')) el('procObs').value = '';
 
     setProcFormEnabled(true);
     toggleProcFields(true);
