@@ -508,6 +508,9 @@ for insert with check ( has_write_role() );
 create policy "processes update by role" on processes
 for update using ( has_write_role() );
 
+create policy "processes delete by role" on processes
+for delete using ( has_write_role() );
+
 -- process_observations
 create policy "proc_obs read" on process_observations
 for select using (auth.role() = 'authenticated');
