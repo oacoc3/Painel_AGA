@@ -7,10 +7,11 @@
   <title>Painel DO-AGA</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./process_ring.css" />
-  <!-- Supabase client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
-  <!-- App config e cliente -->
+  <!-- App config -->
   <script src="./config.js" defer></script>
+  <!-- Supabase library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
   <!-- Sessão pronta antes de inicializar a página -->
   <script src="./auth-ready.js" defer></script>
@@ -23,7 +24,7 @@
 </head>
 <body data-route="login">
   <div id="app" class="vh">
-<header class="bar">
+    <header class="bar">
       <div class="brand">
         <span class="logo">■</span>
         <strong>Painel DO-AGA</strong>
@@ -43,8 +44,9 @@
         <button id="btnLogout" class="danger" type="button">Sair</button>
       </div>
     </header>
-<main class="main">
-<section id="viewLogin" class="view centered">
+
+    <main class="main">
+      <section id="viewLogin" class="view centered">
         <div class="panel">
           <h1>Login</h1>
           <!-- AJAX: evitamos navegação por submit tradicional -->
@@ -55,9 +57,9 @@
           <div id="loginMsg" class="msg"></div>
         </div>
       </section>
-</main>
+    </main>
 
-<footer class="bar foot">
+    <footer class="bar foot">
       <span>Retro-UI</span>
       <span>© DO-AGA</span>
       <span id="footBuild"></span>
