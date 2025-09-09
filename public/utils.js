@@ -105,21 +105,39 @@
       table.appendChild(tbody);
     }
 
-    thead.innerHTML = '<tr>' + cols
-      .map(c => `<th${c.align ? ` class="align-${c.align}"` : ''}>${c.label}</th>`)
-      .join('') + '</tr>';
+    // Cabeçalho
+    thead.innerHTML = '';
+    const trh = document.createElement('tr');
+    cols.forEach(c => {
+      const th = document.createElement('th');
+      if (c.align) th.className = `align-${c.align}`;
+      th.textContent = c.label;
+      trh.appendChild(th);
+    });
+    thead.appendChild(trh);
 
-    tbody.innerHTML = rows.map(r => {
-      const data = JSON.stringify(r).replace(/"/g, '&quot;');
-      return `<tr data-row="${data}">` + cols.map(c => {
-        let val = r[c.key];
-        if (typeof c.value === 'function') val = c.value(r);
-        if (val == null) val = '';
-        const align = c.align ? ` class="align-${c.align}"` : '';
-        return `<td${align}>${val}</td>`;
-      }).join('') + '</tr>';
-    }).join('');
-
+    // Corpo
+    tbody.innerHTML = '';
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.dataset.row = JSON.stringify(r);
+      cols.forEach(c => {
+        const td = document.createElement('td');
+        if (c.align) td.className = `align-${c.align}`;
+        if (typeof c.render === 'function') {
+          const val = c.render(r);
+          if (val instanceof Node) td.appendChild(val);
+          else td.innerHTML = val;
+        } else {
+          let val = r[c.key];
+          if (typeof c.value === 'function') val = c.value(r);
+          if (val == null) val = '';
+          td.textContent = val;
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
     return { thead, tbody, table };
   }
 
