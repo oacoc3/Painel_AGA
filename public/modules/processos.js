@@ -797,7 +797,7 @@ window.Modules.processos = (() => {
     try {
       const { data, error } = await sb
         .from('history')
-        .select('id,action,details,user_id,created_at')
+        .select('id,action,details,user_email,created_at')
         .eq('process_id', procId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -812,7 +812,7 @@ window.Modules.processos = (() => {
       Utils.renderTable(content, [
         { key: 'created_at', label: 'Data', value: r => U.fmtDateTime(r.created_at) },
         { key: 'action', label: 'Ação' },
-        { key: 'user_id', label: 'Usuário', value: r => r.user_id || '' },
+        { key: 'user_email', label: 'Usuário', value: r => r.user_email || '' },
         { key: 'details_text', label: 'Detalhes' }
       ], rows);
       const btn = document.createElement('button');
