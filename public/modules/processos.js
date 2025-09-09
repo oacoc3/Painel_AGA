@@ -36,15 +36,30 @@ window.Modules.processos = (() => {
       try {
         const d = new Date(iso);
         if (Number.isNaN(d.getTime())) return '';
-        return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+        return new Intl.DateTimeFormat('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          day: '2-digit',
+          month: '2-digit',
+          year: '2-digit'
+        }).format(d);
       } catch { return ''; }
     },
     fmtDateTime(iso) {
       try {
         const d = new Date(iso);
         if (Number.isNaN(d.getTime())) return '';
-        const dt = d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-        const tm = d.toLocaleTimeString('pt-BR', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' });
+        const dt = new Intl.DateTimeFormat('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          day: '2-digit',
+          month: '2-digit',
+          year: '2-digit'
+        }).format(d);
+        let tm = new Intl.DateTimeFormat('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          hour: '2-digit',
+          minute: '2-digit'
+        }).format(d);
+        tm = tm.replace(':', '/');
         return `${dt} ${tm}`;
       } catch { return ''; }
     },
@@ -763,23 +778,6 @@ window.Modules.processos = (() => {
     }
   }
 
-  // >>> NOVO: data/hora no fuso America/Sao_Paulo
-  function fmtBrDateTime(iso) {
-    try {
-      const d = new Date(iso);
-      if (Number.isNaN(d.getTime())) return '';
-      const dt = d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-      const tm = d.toLocaleTimeString('pt-BR', {
-        timeZone: 'America/Sao_Paulo',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      return `${dt} ${tm}`;
-    } catch {
-      return '';
-    }
-  }
-
   async function showHistoryPopup(procId) {
     if (!procId) return;
     const dlg = document.createElement('dialog');
@@ -804,7 +802,7 @@ window.Modules.processos = (() => {
       const content = document.createElement('div');
       content.className = 'table scrolly';
       Utils.renderTable(content, [
-        { key: 'created_at', label: 'Data', value: r => fmtBrDateTime(r.created_at) },
+        { key: 'created_at', label: 'Data', value: r => U.fmtDateTime(r.created_at) },
         { key: 'action', label: 'Ação' },
         { key: 'user_id', label: 'Usuário', value: r => r.user_id || '' },
         { key: 'details_text', label: 'Detalhes' }
