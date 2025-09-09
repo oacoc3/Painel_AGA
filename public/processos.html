@@ -12,10 +12,11 @@
   <!-- CSS específico do módulo Processos (apenas layout do módulo) -->
   <link rel="stylesheet" href="./styles.processos.css" />
 
-  <!-- Supabase client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
-  <!-- App config e cliente -->
+  <!-- App config -->
   <script src="./config.js" defer></script>
+  <!-- Supabase library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
   <!-- Sessão pronta antes de inicializar a página -->
   <script src="./auth-ready.js" defer></script>
@@ -42,7 +43,7 @@
         <button data-route="admin" id="btnAdmin" class="hidden">Adm</button>
       </nav>
       <div id="userBox" class="user hidden">
-          <span id="userName"></span>
+        <span id="userName"></span>
         <small id="userRole" class="muted"></small>
         <button id="btnLogout" class="danger" type="button">Sair</button>
       </div>
