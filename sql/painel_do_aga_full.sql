@@ -17,6 +17,7 @@ drop table if exists models cascade;
 drop table if exists audit_log cascade;
 drop table if exists sigadaer cascade;
 drop table if exists notifications cascade;
+drop table if exists process_observations cascade;
 drop table if exists internal_opinions cascade;
 drop table if exists processes cascade;
 drop table if exists profiles cascade;
@@ -142,6 +143,14 @@ comment on column processes.do_aga_start_date is 'Data base do prazo de 60 dias 
 create trigger trg_processes_updated_at
 before update on processes
 for each row execute function extensions.moddatetime(updated_at);
+
+-- Observações de processos
+create table process_observations (
+  id uuid primary key default gen_random_uuid(),
+  process_id uuid not null references processes(id) on delete cascade,
+  text text not null,
+  created_at timestamptz not null default now()
+);
 
 -- Pareceres internos
 create table internal_opinions (
@@ -347,12 +356,13 @@ begin
   values (auth.uid(), auth.jwt()->>'email', tg_op, tg_table_name, coalesce(new.id, old.id), row_to_json(coalesce(new, old)));
   return coalesce(new, old);
 end$$;
-create trigger audit_processes     after insert or update on processes            for each row execute function add_audit_log();
-create trigger audit_opinions      after insert or update on internal_opinions    for each row execute function add_audit_log();
-create trigger audit_notifications after insert or update on notifications        for each row execute function add_audit_log();
-create trigger audit_sigadaer      after insert or update on sigadaer             for each row execute function add_audit_log();
-create trigger audit_models        after insert or update on models               for each row execute function add_audit_log();
-create trigger audit_checklists    after insert or update on checklist_responses  for each row execute function add_audit_log();
+create trigger audit_processes     after insert or update on processes               for each row execute function add_audit_log();
+create trigger audit_proc_observations after insert or update on process_observations for each row execute function add_audit_log();
+create trigger audit_opinions      after insert or update on internal_opinions       for each row execute function add_audit_log();
+create trigger audit_notifications after insert or update on notifications           for each row execute function add_audit_log();
+create trigger audit_sigadaer      after insert or update on sigadaer                for each row execute function add_audit_log();
+create trigger audit_models        after insert or update on models                  for each row execute function add_audit_log();
+create trigger audit_checklists    after insert or update on checklist_responses     for each row execute function add_audit_log();
 
 -- =========================
 -- Views (Prazos)
@@ -452,6 +462,7 @@ where p.status <> 'ARQ';
 -- =========================
 alter table profiles             enable row level security;
 alter table processes            enable row level security;
+alter table process_observations enable row level security;
 alter table internal_opinions    enable row level security;
 alter table notifications        enable row level security;
 alter table sigadaer             enable row level security;
@@ -496,6 +507,13 @@ for insert with check ( has_write_role() );
 
 create policy "processes update by role" on processes
 for update using ( has_write_role() );
+
+-- process_observations
+create policy "proc_obs read" on process_observations
+for select using (auth.role() = 'authenticated');
+
+create policy "proc_obs write" on process_observations
+for insert with check ( has_write_role() );
 
 -- internal_opinions
 create policy "opinions read" on internal_opinions
@@ -791,7 +809,7 @@ begin
   -- Deriva o process_id conforme a tabela que disparou o trigger
   if tg_table_name = 'processes' then
     pid := coalesce(new.id, old.id);
-  elsif tg_table_name in ('internal_opinions','notifications','sigadaer','checklist_responses') then
+  elsif tg_table_name in ('internal_opinions','notifications','sigadaer','checklist_responses','process_observations') then
     pid := coalesce(new.process_id, old.process_id);
   else
     -- Para outras tabelas, não faz nada
@@ -821,6 +839,11 @@ create trigger history_processes
 drop trigger if exists history_internal_opinions on internal_opinions;
 create trigger history_internal_opinions
   after insert or update on internal_opinions
+  for each row execute function add_history_event();
+
+drop trigger if exists history_process_observations on process_observations;
+create trigger history_process_observations
+  after insert or update on process_observations
   for each row execute function add_history_event();
 
 drop trigger if exists history_notifications on notifications;
