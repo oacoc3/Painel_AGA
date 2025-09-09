@@ -763,6 +763,23 @@ window.Modules.processos = (() => {
     }
   }
 
+  // >>> NOVO: data/hora no fuso America/Sao_Paulo
+  function fmtBrDateTime(iso) {
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      const dt = d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      const tm = d.toLocaleTimeString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      return `${dt} ${tm}`;
+    } catch {
+      return '';
+    }
+  }
+
   async function showHistoryPopup(procId) {
     if (!procId) return;
     const dlg = document.createElement('dialog');
@@ -774,7 +791,7 @@ window.Modules.processos = (() => {
     try {
       const { data, error } = await sb
         .from('history')
-        .select('id,action,details,user_email,created_at')
+        .select('id,action,details,user_id,created_at')
         .eq('process_id', procId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -787,9 +804,9 @@ window.Modules.processos = (() => {
       const content = document.createElement('div');
       content.className = 'table scrolly';
       Utils.renderTable(content, [
-        { key: 'created_at', label: 'Data', value: r => U.fmtDateTime(r.created_at) },
+        { key: 'created_at', label: 'Data', value: r => fmtBrDateTime(r.created_at) },
         { key: 'action', label: 'Ação' },
-        { key: 'user_email', label: 'Usuário', value: r => r.user_email || '' },
+        { key: 'user_id', label: 'Usuário', value: r => r.user_id || '' },
         { key: 'details_text', label: 'Detalhes' }
       ], rows);
       const btn = document.createElement('button');
