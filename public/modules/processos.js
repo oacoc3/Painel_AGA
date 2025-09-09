@@ -355,6 +355,11 @@ window.Modules.processos = (() => {
 
   async function deleteProcess(procId) {
     if (!procId) return;
+       // remove dependências que referenciam o processo antes de apagar o registro principal
+      const tables = ['internal_opinions', 'notifications', 'sigadaer',
+        'process_observations', 'checklist_responses', 'history'];
+      await Promise.all(tables.map(t => sb.from(t).delete().eq('process_id', procId)));
+
     try {
       const { error } = await sb.from('processes').delete().eq('id', procId);
       if (error) throw error;
