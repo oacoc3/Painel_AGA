@@ -18,16 +18,45 @@
   <script src="./safety-guards.js" defer></script>
   <script src="./mpa.js" defer></script>
 
-  <!-- Three.js via ES Modules (corrige MIME e depreciação dos "build/*.js") -->
+  <!-- Loader do Three.js: tenta local e 3 CDNs; emite THREE_READY/THREE_FAILED -->
   <script type="module">
-    import * as THREE from "https://unpkg.com/three@0.159.0/build/three.module.js";
-    import { OrbitControls } from "https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js";
-    // Exponho no escopo global para o código não-modular do módulo.
-    window.THREE = THREE;
-    window.THREE.OrbitControls = OrbitControls;
+    async function loadThree() {
+      const sources = [
+        // 1) Caminho local (opcional). Se quiser garantir 100%, coloque os dois arquivos neste path:
+        //    public/vendor/three/three.module.js e public/vendor/three/examples/jsm/controls/OrbitControls.js
+        { three: "/vendor/three/three.module.js", ctrl: "/vendor/three/examples/jsm/controls/OrbitControls.js" },
+        // 2) unpkg
+        { three: "https://unpkg.com/three@0.159.0/build/three.module.js",
+          ctrl:  "https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js" },
+        // 3) jsDelivr
+        { three: "https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.module.js",
+          ctrl:  "https://cdn.jsdelivr.net/npm/three@0.159.0/examples/jsm/controls/OrbitControls.js" },
+        // 4) cdnjs
+        { three: "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.159.0/three.module.min.js",
+          ctrl:  "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.159.0/examples/jsm/controls/OrbitControls.min.js" },
+      ];
+      let T = null, OrbitControls = null, lastErr = null;
+      for (const s of sources) {
+        try {
+          const t = await import(s.three);
+          const c = await import(s.ctrl);
+          T = t.default || t; OrbitControls = c.OrbitControls || c.default;
+          if (T && OrbitControls) break;
+        } catch (e) { lastErr = e; }
+      }
+      if (T && OrbitControls) {
+        window.THREE = T;
+        window.THREE.OrbitControls = OrbitControls;
+        window.dispatchEvent(new Event("THREE_READY"));
+      } else {
+        window.__THREE_LOAD_ERROR__ = lastErr || new Error("Falha ao carregar Three.js");
+        window.dispatchEvent(new Event("THREE_FAILED"));
+      }
+    }
+    loadThree();
   </script>
 
-  <!-- Módulo OLS (2D+3D) -->
+  <!-- Módulo OLS (2D + 3D) -->
   <script src="./modules/ols.js" defer></script>
 </head>
 <body data-route="ols">
@@ -134,22 +163,6 @@
               </div>
               <div id="msg" class="muted" style="margin-top:6px;"></div>
             </form>
-
-            <details style="margin-top:12px;">
-              <summary>Legenda</summary>
-              <ul>
-                <li><span style="display:inline-block;width:12px;height:12px;background:#000;"></span> Pista</li>
-                <li><span style="display:inline-block;width:12px;height:12px;background:#4a90e2;"></span> Aproximação</li>
-                <li><span style="display:inline-block;width:12px;height:12px;background:#50e3c2;"></span> Aproximação interna</li>
-                <li><span style="display:inline-block;width:12px;height:12px;background:#f5a623;"></span> Decolagem (TOC)</li>
-                <li><span style="display:inline-block;width:12px;height:12px;background:#9013fe;"></span> Arremetida (BL)</li>
-                <li><span style="display:inline-block;width:12px;height:12px;background:#bd10e0;"></span> Transicional</li>
-                <li><span style="display:inline-block;width:12px;height:12px;background:#7ed321;"></span> IHS</li>
-                <li><span style="display:inline-block;width:12px;height:12px;background:#b8e986;"></span> Cônica</li>
-                <li><span style="display:inline-block;width:12px;height:12px;background:#9b9b9b;"></span> OHS</li>
-                <li><span style="display:inline-block;width:12px;height:12px;background:#d0021b;"></span> Obstáculos</li>
-              </ul>
-            </details>
           </div>
 
           <!-- COLUNA DIREITA -->
@@ -162,6 +175,10 @@
 
             <h2 style="margin-top:12px;">3D interativo</h2>
             <div id="ols3d" style="width:100%;aspect-ratio: 16/9; border:1px solid #ddd; background:#fff;"></div>
+            <div id="ols3dFallback" class="muted" style="display:none;margin-top:6px;">
+              Não foi possível carregar o Three.js (rede/CDN bloqueada). Se quiser garantir offline,
+              coloque <code>three.module.js</code> e <code>OrbitControls.js</code> em <code>public/vendor/three/</code>.
+            </div>
           </div>
         </div>
       </section>
