@@ -4,6 +4,7 @@
 
 (() => {
   const ROUTE_TO_PAGE = {
+    login: 'index.html',
     dashboard: 'dashboard.html',
     processos: 'processos.html',
     prazos: 'prazos.html',
@@ -15,7 +16,11 @@
   const state = {
     session: null,
     profile: null,
-    route: (location.pathname.split('/').pop() || 'dashboard.html').replace('.html',''),
+    route: (() => {
+      const file = location.pathname.split('/').pop() || 'index.html';
+      const name = file.replace('.html', '');
+      return (name === '' || name === 'index') ? 'login' : name;
+    })(),
   };
 
   function renderFooterVersion() {
