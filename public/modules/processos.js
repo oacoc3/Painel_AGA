@@ -19,6 +19,9 @@ window.Modules.processos = (() => {
   let editingSgId = null;
   let popupProcId = null;
 
+  const PROCESS_STATUSES = ['CONFEC','REV-OACO','APROV','ICA-PUB','EDICAO','AGD-LEIT','ANADOC','ANATEC-PRE','ANATEC','ANAICA','SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL','ARQ'];
+  const STATUS_OPTIONS = PROCESS_STATUSES.map(s => `<option>${s}</option>`).join('');
+
   const el = (id) => document.getElementById(id);
 
   const SafeUtils = {
@@ -185,7 +188,7 @@ window.Modules.processos = (() => {
           </label>
           <label>Status
             <select id="npStatus">
-              <option>ANATEC-PRE</option><option>ANATEC</option><option>ANADOC</option><option>ANAICA</option><option>DIPEJ</option><option>ICA-PUB</option><option>OPEA</option><option>JJAER</option><option>DADOS</option><option>ARQ</option>
+              ${STATUS_OPTIONS}
             </select>
           </label>
           <label>Desde <input type="datetime-local" id="npStatusDate"></label>
