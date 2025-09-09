@@ -100,15 +100,6 @@ window.Modules.modelos = (() => {
       await loadModelos();
     });
 
-    el('btnExcluirModelo').addEventListener('click', async () => {
-      if (!selectedId) return Utils.setMsg('mdlMsg', 'Selecione um modelo antes de excluir.', true);
-      const { error } = await sb.from('models').delete().eq('id', selectedId);
-      if (error) return Utils.setMsg('mdlMsg', error.message, true);
-      Utils.setMsg('mdlMsg', 'Excluído.');
-      selectedId = null; el('formModelo').reset();
-      await loadModelos();
-    });
-
     el('btnCopiarModelo').addEventListener('click', async (ev) => {
       ev.preventDefault();
       const txt = el('mdlTxt').value;
@@ -119,6 +110,13 @@ window.Modules.modelos = (() => {
       } catch {
         Utils.setMsg('mdlMsg', 'Falha ao copiar o conteúdo.', true);
       }
+    });
+
+    el('btnLimparModelo').addEventListener('click', (ev) => {
+      ev.preventDefault();
+      selectedId = null;
+      el('formModelo').reset();
+      Utils.setMsg('mdlMsg', '');
     });
 
     // Copiar conteúdo ao clicar numa linha (duplo-clique)
