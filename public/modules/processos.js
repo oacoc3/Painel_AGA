@@ -40,7 +40,7 @@ window.Modules.processos = (() => {
           timeZone: 'America/Sao_Paulo',
           day: '2-digit',
           month: '2-digit',
-          year: '2-digit'
+          year: 'numeric'
         }).format(d);
       } catch { return ''; }
     },
@@ -52,14 +52,13 @@ window.Modules.processos = (() => {
           timeZone: 'America/Sao_Paulo',
           day: '2-digit',
           month: '2-digit',
-          year: '2-digit'
+          year: 'numeric'
         }).format(d);
-        let tm = new Intl.DateTimeFormat('pt-BR', {
+        const tm = new Intl.DateTimeFormat('pt-BR', {
           timeZone: 'America/Sao_Paulo',
           hour: '2-digit',
           minute: '2-digit'
         }).format(d);
-        tm = tm.replace(':', '/');
         return `${dt} ${tm}`;
       } catch { return ''; }
     },
@@ -373,10 +372,10 @@ window.Modules.processos = (() => {
 
   async function deleteProcess(procId) {
     if (!procId) return;
-       // remove dependências que referenciam o processo antes de apagar o registro principal
-      const tables = ['internal_opinions', 'notifications', 'sigadaer',
-        'process_observations', 'checklist_responses', 'history'];
-      await Promise.all(tables.map(t => sb.from(t).delete().eq('process_id', procId)));
+    // remove dependências que referenciam o processo antes de apagar o registro principal
+    const tables = ['internal_opinions', 'notifications', 'sigadaer',
+      'process_observations', 'checklist_responses', 'history'];
+    await Promise.all(tables.map(t => sb.from(t).delete().eq('process_id', procId)));
 
     try {
       const { error } = await sb.from('processes').delete().eq('id', procId);
@@ -768,7 +767,16 @@ window.Modules.processos = (() => {
         .map(([k, v]) => {
           if (v == null) return null;
           const key = k.replace(/_/g, ' ');
-          const val = typeof v === 'object' ? JSON.stringify(v) : v;
+          let val = v;
+          if (typeof v === 'object') {
+            val = JSON.stringify(v);
+          } else if (typeof v === 'string') {
+            if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) {
+              val = U.fmtDateTime(v);
+            } else if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+              val = U.fmtDate(v);
+            }
+          }
           return `${key}: ${val}`;
         })
         .filter(Boolean)
