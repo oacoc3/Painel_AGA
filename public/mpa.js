@@ -164,9 +164,12 @@
   }
 
   function bootModules() {
-    // init() de todos os módulos (preserva comportamento)
+    const onLogin = state.route === 'login';
+    if (onLogin && !state.session) {
+      window.Modules?.auth?.init?.();
+      return;
+    }
     Object.values(window.Modules || {}).forEach(m => m.init?.());
-    // load() do módulo específico por página
     switch (state.route) {
       case 'dashboard':  window.Modules.dashboard?.load?.(); break;
       case 'processos':  window.Modules.processos?.load?.(); break;
