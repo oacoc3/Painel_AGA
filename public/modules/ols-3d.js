@@ -99,7 +99,8 @@
   }
 
   function init3D(container){
-    const scene = new THREE.Scene();
+    const start = () => {
+      const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xffffff);
 
     const renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true});
@@ -175,7 +176,12 @@
       camera.updateProjectionMatrix();
     }
 
-    return {scene, addSurface, addObstacle, addTerrain, clearSurfaces, camera, renderer, controls, snapshotPNG, setYaw, zoomBy, fitToSurfaces};
+       return {scene, addSurface, addObstacle, addTerrain, clearSurfaces, camera, renderer, controls, snapshotPNG, setYaw, zoomBy, fitToSurfaces};
+    };
+    if (window.THREE) {
+      return start();
+    }
+    window.addEventListener('THREE_READY', start, { once: true });
   }
 
   window.OLS3D = { init3D };
