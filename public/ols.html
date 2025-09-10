@@ -6,39 +6,30 @@
   <base href="/" />
   <title>Painel DO-AGA — OLS</title>
 
-  <!-- CSS do projeto (visual inalterado) -->
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./process_ring.css" />
 
-  <!-- Import Map: faz o bare specifier "three" apontar para o arquivo local -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "./vendor/three/three.module.js"
-    }
-  }
-  </script>
-
-  <!-- Carregamento LOCAL do Three.js (sem CDN). Emite THREE_READY | THREE_FAILED -->
+  <!-- Carrega SOMENTE dos arquivos locais (sem import map, sem CDN) -->
   <script type="module">
     try {
-      // carrega a lib principal pela importmap (aponta para ./vendor/three/three.module.js)
-      const THREE = await import("three");
-      // carrega os controles apontando para o arquivo local
+      // three principal
+      const THREE = await import("./vendor/three/three.module.js");
+      // OrbitControls (ESM)
       const { OrbitControls } = await import("./vendor/three/examples/jsm/controls/OrbitControls.js");
 
-      // expõe globalmente (usado pelos módulos do OLS)
+      // expõe para os módulos do OLS
       window.THREE = THREE;
       window.THREE.OrbitControls = OrbitControls;
 
       window.dispatchEvent(new Event("THREE_READY"));
     } catch (e) {
+      console.error("THREE FAILED:", e);
       window.__THREE_LOAD_ERROR__ = e;
       window.dispatchEvent(new Event("THREE_FAILED"));
     }
   </script>
 
-  <!-- Módulos do OLS (2D + 3D) -->
+  <!-- Módulos do OLS -->
   <script src="./modules/ols-geom.js" defer></script>
   <script src="./modules/ols-3d.js" defer></script>
   <script src="./modules/ols.js" defer></script>
@@ -62,7 +53,7 @@
 
     <main class="main" style="padding:12px;">
       <section class="split" style="grid-template-columns: 360px 1fr; gap:12px;">
-        <!-- COLUNA ESQUERDA -->
+        <!-- COLUNA ESQUERDA (igual à sua) -->
         <div class="card" style="min-width:320px;">
           <h2>Parâmetros</h2>
           <form id="olsForm" data-ajax>
@@ -169,7 +160,7 @@
           </form>
         </div>
 
-        <!-- COLUNA DIREITA -->
+        <!-- COLUNA DIREITA (igual) -->
         <div class="card" id="vizCard" style="min-width:0;">
           <h2>Planta (2D)</h2>
           <div class="row" style="gap:6px; margin:6px 0;">
@@ -181,7 +172,7 @@
           <canvas id="planCanvas" style="width:100%; border:1px solid #ddd;"></canvas>
 
           <h2 style="margin-top:12px;">Perfil longitudinal (2D)</h2>
-          <div class="row" style="gap:6px; margin:6px 0;">
+          <div class="row" style="gap:6px, margin:6px 0;">
             <button type="button" id="profZoomIn">+</button>
             <button type="button" id="profZoomOut">−</button>
             <button type="button" id="profZoomReset" class="secondary">100%</button>
@@ -197,7 +188,7 @@
           </div>
           <div id="ols3d" style="width:100%; border:1px solid #ddd; background:#fff;"></div>
           <div id="ols3dFallback" class="muted" style="display:none;margin-top:6px;">
-            Não foi possível carregar o Three.js. Para uso offline, garanta estes arquivos locais:<br>
+            Não foi possível carregar o Three.js. Garanta estes arquivos locais:<br>
             <code>public/vendor/three/three.module.js</code><br>
             <code>public/vendor/three/examples/jsm/controls/OrbitControls.js</code>
           </div>
