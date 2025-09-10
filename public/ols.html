@@ -6,10 +6,11 @@
   <base href="/" />
   <title>Painel DO-AGA — OLS</title>
 
+  <!-- CSS do projeto (visual inalterado) -->
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./process_ring.css" />
 
-  <!-- Import Map: OrbitControls importa 'three' por nome -->
+  <!-- Import Map: faz o bare specifier "three" apontar para o arquivo local -->
   <script type="importmap">
   {
     "imports": {
@@ -18,41 +19,26 @@
   }
   </script>
 
-  <!-- Carregador do Three.js (tenta local relativo → local absoluto → CDNs) -->
+  <!-- Carregamento LOCAL do Three.js (sem CDN). Emite THREE_READY | THREE_FAILED -->
   <script type="module">
-    async function loadThree() {
-      const sources = [
-        { three: "./vendor/three/three.module.js",  ctrl: "./vendor/three/examples/jsm/controls/OrbitControls.js" },
-        { three: "/vendor/three/three.module.js",   ctrl: "/vendor/three/examples/jsm/controls/OrbitControls.js" },
-        { three: "https://unpkg.com/three@0.159.0/build/three.module.js",
-          ctrl:  "https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js" },
-        { three: "https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.module.js",
-          ctrl:  "https://cdn.jsdelivr.net/npm/three@0.159.0/examples/jsm/controls/OrbitControls.js" },
-        { three: "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.159.0/three.module.min.js",
-          ctrl:  "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.159.0/examples/jsm/controls/OrbitControls.min.js" }
-      ];
-      let T=null, OrbitControls=null, lastErr=null;
-      for (const s of sources) {
-        try {
-          const t = await import(s.three);
-          const c = await import(s.ctrl);
-          T = t.default || t;
-          OrbitControls = c.OrbitControls || c.default;
-          if (T && OrbitControls) break;
-        } catch (e) { lastErr = e; }
-      }
-      if (T && OrbitControls) {
-        window.THREE = T;
-        window.THREE.OrbitControls = OrbitControls;
-        window.dispatchEvent(new Event("THREE_READY"));
-      } else {
-        window.__THREE_LOAD_ERROR__ = lastErr || new Error("Falha ao carregar Three.js");
-        window.dispatchEvent(new Event("THREE_FAILED"));
-      }
+    try {
+      // carrega a lib principal pela importmap (aponta para ./vendor/three/three.module.js)
+      const THREE = await import("three");
+      // carrega os controles apontando para o arquivo local
+      const { OrbitControls } = await import("./vendor/three/examples/jsm/controls/OrbitControls.js");
+
+      // expõe globalmente (usado pelos módulos do OLS)
+      window.THREE = THREE;
+      window.THREE.OrbitControls = OrbitControls;
+
+      window.dispatchEvent(new Event("THREE_READY"));
+    } catch (e) {
+      window.__THREE_LOAD_ERROR__ = e;
+      window.dispatchEvent(new Event("THREE_FAILED"));
     }
-    loadThree();
   </script>
 
+  <!-- Módulos do OLS (2D + 3D) -->
   <script src="./modules/ols-geom.js" defer></script>
   <script src="./modules/ols-3d.js" defer></script>
   <script src="./modules/ols.js" defer></script>
@@ -84,8 +70,8 @@
               <label class="grow">Classificação (aproximação)
                 <select id="categoria">
                   <option value="nonInstrument">Sem instrumentos</option>
-                  <option value="nonPrecision">Não-precisão</option>
-                  <option value="catI" selected>Precisão CAT I</option>
+                  <option value="nonPrecision" selected>Não-precisão</option>
+                  <option value="catI">Precisão CAT I</option>
                   <option value="catIIIII">Precisão CAT II/III</option>
                 </select>
               </label>
@@ -104,7 +90,7 @@
                 <input type="checkbox" id="codeLetterF" />
               </label>
               <label>Elevação do limiar (m)
-                <input type="number" id="thrElev" value="100" step="0.1"/>
+                <input type="number" id="thrElev" value="10" step="0.1"/>
               </label>
             </div>
 
@@ -211,8 +197,9 @@
           </div>
           <div id="ols3d" style="width:100%; border:1px solid #ddd; background:#fff;"></div>
           <div id="ols3dFallback" class="muted" style="display:none;margin-top:6px;">
-            Não foi possível carregar o Three.js (rede/CDN bloqueada). Se quiser garantir offline,
-            coloque <code>three.module.js</code> e <code>examples/jsm/controls/OrbitControls.js</code> em <code>public/vendor/three/</code>.
+            Não foi possível carregar o Three.js. Para uso offline, garanta estes arquivos locais:<br>
+            <code>public/vendor/three/three.module.js</code><br>
+            <code>public/vendor/three/examples/jsm/controls/OrbitControls.js</code>
           </div>
         </div>
       </section>
