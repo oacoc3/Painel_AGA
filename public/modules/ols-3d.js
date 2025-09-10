@@ -53,12 +53,16 @@
     mesh.position.y = z; mesh.rotation.x = -Math.PI/2;
     return mesh;
   }
+  // >>> CORREÇÃO: usar “run = height / (slopePct/100)” (desenvolvimento horizontal)
   function makeConical(innerR, height, slopePct, baseZ, color=0x99cc66) {
     const steps = 16, group = new THREE.Group();
+    const run = height / (slopePct/100); // ex.: 100 m @ 5% = 2000 m
     for (let i=0;i<steps;i++){
-      const t1=(i+1)/steps;
-      const r1 = innerR + (height * (slopePct/100)) * t1;
-      group.add(ringMesh(r1 - (height*(slopePct/100)/steps), r1, baseZ + height*t1, color));
+      const t0 = i/steps, t1 = (i+1)/steps;
+      const r0 = innerR + run*t0;
+      const r1 = innerR + run*t1;
+      const z  = baseZ + height*t1; // sobe linearmente até “height”
+      group.add(ringMesh(r0, r1, z, color));
     }
     return group;
   }
@@ -76,7 +80,7 @@
     for (let r=0;r<rows-1;r++){
       for (let c=0;c<cols-1;c++){
         const x0 = originX + c*cell, y0 = originY + r*cell;
-        const h00 = zGrid[r][c], h01 = zGrid[r][c+1], h10 = zGrid[r+1][c], h11 = zGrid[r+1][c+1];
+        const h00=zGrid[r][c], h01=zGrid[r][c+1], h10=zGrid[r+1][c], h11=zGrid[r+1][c+1];
         const geo = new THREE.BufferGeometry();
         const verts = new Float32Array([
           x0,      h00+baseZ, y0,
@@ -100,8 +104,7 @@
 
     const renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true});
     renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
-    container.innerHTML='';
-    container.appendChild(renderer.domElement);
+    container.innerHTML=''; container.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(45, 16/9, 1, 200000);
     camera.position.set(1500, 1200, 1500);
@@ -157,19 +160,16 @@
     requestAnimationFrame(render);
 
     function snapshotPNG(){ return renderer.domElement.toDataURL('image/png'); }
-
-    // Helpers para zoom/fit via UI:
     function zoomBy(factor){
       const v = new THREE.Vector3().subVectors(camera.position, controls.target).multiplyScalar(factor);
       camera.position.copy(new THREE.Vector3().addVectors(controls.target, v));
     }
     function fitToSurfaces(){
-      const s = scene.getObjectByName('surfaces');
-      if (!s) return;
+      const s = scene.getObjectByName('surfaces'); if (!s) return;
       const box = new THREE.Box3().setFromObject(s);
       const sphere = box.getBoundingSphere(new THREE.Sphere());
       const dist = sphere.radius / Math.tan((camera.fov * Math.PI / 180) / 2);
-      const dir = new THREE.Vector3(1,0,1).normalize();
+      const dir  = new THREE.Vector3(1,0,1).normalize();
       controls.target.copy(sphere.center);
       camera.position.copy(new THREE.Vector3().addVectors(sphere.center, dir.multiplyScalar(dist*1.3)));
       camera.updateProjectionMatrix();
