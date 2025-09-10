@@ -6,27 +6,24 @@
   <base href="/" />
   <title>Painel DO-AGA — OLS</title>
 
-  <!-- CSS do projeto (visual não alterado) -->
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./process_ring.css" />
 
-  <!-- Import Map: mapeia o bare specifier "three" para o arquivo local -->
+  <!-- Import Map: OrbitControls importa 'three' por nome -->
   <script type="importmap">
   {
     "imports": {
-      "three": "/vendor/three/three.module.js"
+      "three": "./vendor/three/three.module.js"
     }
   }
   </script>
 
-  <!-- Carregador ESM do Three.js com fallback de CDNs. Emite eventos: THREE_READY | THREE_FAILED -->
+  <!-- Carregador do Three.js (tenta local relativo → local absoluto → CDNs) -->
   <script type="module">
     async function loadThree() {
       const sources = [
-        // LOCAL primeiro (garante offline):
-        { three: "/vendor/three/three.module.js",
-          ctrl:  "/vendor/three/examples/jsm/controls/OrbitControls.js" },
-        // CDNs (caso você remova os arquivos locais no futuro):
+        { three: "./vendor/three/three.module.js",  ctrl: "./vendor/three/examples/jsm/controls/OrbitControls.js" },
+        { three: "/vendor/three/three.module.js",   ctrl: "/vendor/three/examples/jsm/controls/OrbitControls.js" },
         { three: "https://unpkg.com/three@0.159.0/build/three.module.js",
           ctrl:  "https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js" },
         { three: "https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.module.js",
@@ -34,7 +31,7 @@
         { three: "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.159.0/three.module.min.js",
           ctrl:  "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.159.0/examples/jsm/controls/OrbitControls.min.js" }
       ];
-      let T = null, OrbitControls = null, lastErr = null;
+      let T=null, OrbitControls=null, lastErr=null;
       for (const s of sources) {
         try {
           const t = await import(s.three);
@@ -56,7 +53,6 @@
     loadThree();
   </script>
 
-  <!-- Módulo OLS (2D + 3D) — independentes de utils.js -->
   <script src="./modules/ols-geom.js" defer></script>
   <script src="./modules/ols-3d.js" defer></script>
   <script src="./modules/ols.js" defer></script>
@@ -89,7 +85,7 @@
                 <select id="categoria">
                   <option value="nonInstrument">Sem instrumentos</option>
                   <option value="nonPrecision">Não-precisão</option>
-                  <option value="catI">Precisão CAT I</option>
+                  <option value="catI" selected>Precisão CAT I</option>
                   <option value="catIIIII">Precisão CAT II/III</option>
                 </select>
               </label>
@@ -108,13 +104,13 @@
                 <input type="checkbox" id="codeLetterF" />
               </label>
               <label>Elevação do limiar (m)
-                <input type="number" id="thrElev" value="0" step="0.1"/>
+                <input type="number" id="thrElev" value="100" step="0.1"/>
               </label>
             </div>
 
             <div class="row">
               <label class="grow">Comprimento da pista (m)
-                <input type="number" id="rwLen" value="3000" step="1"/>
+                <input type="number" id="rwLen" value="1500" step="1"/>
               </label>
               <label>Largura da pista (m)
                 <input type="number" id="rwWidth" value="45" step="0.1"/>
@@ -123,7 +119,7 @@
 
             <div class="row">
               <label class="grow">Heading magnético (graus)
-                <input type="number" id="rwHeading" value="90" min="0" max="359" step="0.1"/>
+                <input type="number" id="rwHeading" value="170" min="0" max="359" step="0.1"/>
               </label>
               <label class="grow">Rumo (rótulo RWY)
                 <input type="number" id="rwyLabelDeg" value="90" min="0" max="359" step="0.1"/>
@@ -132,8 +128,7 @@
 
             <div class="row">
               <small class="muted">
-                Obs.: usamos o heading para orientar as superfícies e o “Rumo (rótulo RWY)” para calcular
-                os números de cabeceiras (ex.: 90° → RWY 09/27).
+                Obs.: o heading orienta as superfícies; o “Rumo (rótulo RWY)” calcula as cabeceiras (ex.: 90° → RWY 09/27).
               </small>
             </div>
 
@@ -161,8 +156,8 @@
 
             <p class="muted" style="margin-top:4px;">
               <strong>Arquivos CSV</strong> — Terreno (grade) e CSV de obstáculos (pontos).
-              Coordenadas <em>locais</em> relativas à <strong>cabeceira A</strong>: X para fora de A (eixo da pista),
-              Y lateral (à esquerda positivo), Z acima do limiar.
+              Coordenadas locais relativas à <strong>cabeceira A</strong>: X ao longo da pista (para fora de A),
+              Y lateral (esquerda positivo) e Z acima do limiar.
             </p>
 
             <div class="row">
@@ -178,7 +173,7 @@
 
             <div class="row" style="gap:8px; margin-top:8px;">
               <button type="button" id="btnGerar">Gerar/Atualizar</button>
-              <button type="button" id="btnFit" class="secondary">Zoom para ajustar</button>
+              <button type="button" id="btnFit" class="secondary">Ajustar planta</button>
               <button type="button" id="btnSave2DPlan" class="secondary">Baixar PNG Planta</button>
               <button type="button" id="btnSave2DProfile" class="secondary">Baixar PNG Perfil</button>
               <button type="button" id="btnSave3D" class="secondary">Baixar PNG 3D</button>
@@ -189,15 +184,32 @@
         </div>
 
         <!-- COLUNA DIREITA -->
-        <div class="card" style="min-width:0;">
+        <div class="card" id="vizCard" style="min-width:0;">
           <h2>Planta (2D)</h2>
-          <canvas id="planCanvas" width="1400" height="740" style="width:100%;height:auto;border:1px solid #ddd;"></canvas>
+          <div class="row" style="gap:6px; margin:6px 0;">
+            <button type="button" id="planZoomIn">+</button>
+            <button type="button" id="planZoomOut">−</button>
+            <button type="button" id="planZoomReset" class="secondary">100%</button>
+            <button type="button" id="planZoomFit" class="secondary">Ajustar</button>
+          </div>
+          <canvas id="planCanvas" style="width:100%; border:1px solid #ddd;"></canvas>
 
           <h2 style="margin-top:12px;">Perfil longitudinal (2D)</h2>
-          <canvas id="profileCanvas" width="1400" height="360" style="width:100%;height:auto;border:1px solid #ddd;"></canvas>
+          <div class="row" style="gap:6px; margin:6px 0;">
+            <button type="button" id="profZoomIn">+</button>
+            <button type="button" id="profZoomOut">−</button>
+            <button type="button" id="profZoomReset" class="secondary">100%</button>
+          </div>
+          <canvas id="profileCanvas" style="width:100%; border:1px solid #ddd;"></canvas>
 
           <h2 style="margin-top:12px;">3D interativo</h2>
-          <div id="ols3d" style="width:100%;aspect-ratio: 16/9; border:1px solid #ddd; background:#fff;"></div>
+          <div class="row" style="gap:6px; margin:6px 0;">
+            <button type="button" id="threeZoomIn">+</button>
+            <button type="button" id="threeZoomOut">−</button>
+            <button type="button" id="threeReset" class="secondary">Reset</button>
+            <button type="button" id="threeFit" class="secondary">Ajustar</button>
+          </div>
+          <div id="ols3d" style="width:100%; border:1px solid #ddd; background:#fff;"></div>
           <div id="ols3dFallback" class="muted" style="display:none;margin-top:6px;">
             Não foi possível carregar o Three.js (rede/CDN bloqueada). Se quiser garantir offline,
             coloque <code>three.module.js</code> e <code>examples/jsm/controls/OrbitControls.js</code> em <code>public/vendor/three/</code>.
@@ -207,7 +219,7 @@
     </main>
 
     <footer class="foot">
-      <div class="muted">Build: <span id="footBuild">OLS-3D módulo</span></div>
+      <div class="muted">Build: <span id="footBuild">OLS-3D</span></div>
     </footer>
   </div>
 </body>
