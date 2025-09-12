@@ -18,6 +18,35 @@ window.Modules.processos = (() => {
   let editingNtId = null;
   let editingSgId = null;
   let popupProcId = null;
+  // Paginação da lista de processos (HTML-first + Supabase range)
+  let PROC_PAGE = 1;
+  const PROC_PAGE_SIZE = 50; // ajuste se necessário
+
+  function renderProcPagination({ page, pagesTotal, count }) {
+    const box = el('procLista');
+    if (!box) return;
+    let pager = box.querySelector('.pager');
+    if (!pager) {
+      pager = document.createElement('div');
+      pager.className = 'pager';
+      box.appendChild(pager);
+    }
+    const disablePrev = page <= 1;
+    const disableNext = page >= pagesTotal;
+    pager.innerHTML = `
+      <div class="row" style="display:flex;gap:.5rem;align-items:center;justify-content:flex-end;margin-top:.5rem;">
+        <button type="button" id="procFirstPage" ${disablePrev ? 'disabled' : ''}>&laquo;</button>
+        <button type="button" id="procPrevPage" ${disablePrev ? 'disabled' : ''}>&lsaquo;</button>
+        <span id="procPagerInfo">${page} / ${pagesTotal} (${count} itens)</span>
+        <button type="button" id="procNextPage" ${disableNext ? 'disabled' : ''}>&rsaquo;</button>
+        <button type="button" id="procLastPage" ${disableNext ? 'disabled' : ''}>&raquo;</button>
+      </div>`;
+    pager.querySelector('#procFirstPage')?.addEventListener('click', () => loadProcessList({ page: 1 }));
+    pager.querySelector('#procPrevPage')?.addEventListener('click', () => loadProcessList({ page: Math.max(1, (PROC_PAGE - 1)) }));
+    pager.querySelector('#procNextPage')?.addEventListener('click', () => loadProcessList({ page: PROC_PAGE + 1 }));
+    pager.querySelector('#procLastPage')?.addEventListener('click', () => loadProcessList({ page: pagesTotal }));
+  }
+
 
   const PROCESS_STATUSES = ['CONFEC','REV-OACO','APROV','ICA-PUB','EDICAO','AGD-LEIT','ANADOC','ANATEC-PRE','ANATEC','ANAICA','SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL','ARQ'];
   const STATUS_OPTIONS = PROCESS_STATUSES.map(s => `<option>${s}</option>`).join('');
@@ -407,21 +436,31 @@ window.Modules.processos = (() => {
     await loadProcessList();
   }
 
-  async function loadProcessList() {
+  
+  async function loadProcessList({ page = PROC_PAGE, pageSize = PROC_PAGE_SIZE } = {}) {
     const box = el('procLista');
     if (!box) return;
     box.innerHTML = '<div class="msg">Carregando…</div>';
 
     try {
-      const { data, error } = await sb
+      // paginação via Supabase range
+      const p = Math.max(1, Number(page) || 1);
+      const size = Math.max(1, Number(pageSize) || PROC_PAGE_SIZE);
+      const from = (p - 1) * size;
+      const to = from + size - 1;
+
+      const { data, count, error } = await sb
         .from('processes')
-        .select('id,nup,type,status,status_since,first_entry_date,obra_termino_date,obra_concluida,created_at')
-        .order('created_at', { ascending: false });
+        .select('id,nup,type,status,status_since,first_entry_date,obra_termino_date,obra_concluida,created_at', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
       if (error) throw error;
 
       const rows = Array.isArray(data) ? [...data] : [];
       const ids = rows.map(r => r.id);
+
+      // Busca presença nas tabelas relacionadas apenas para os IDs da página atual
       const [op, nt, sg, ob] = await Promise.all([
         sb.from('internal_opinions').select('process_id').in('process_id', ids),
         sb.from('notifications').select('process_id').in('process_id', ids),
@@ -459,73 +498,51 @@ window.Modules.processos = (() => {
         const stTxt = `${r.status || ''}${r.status_since ? '<br><small>' + U.fmtDateTime(r.status_since) + '</small>' : ''}`;
         const stBtn = isCurrent ? `<button type="button" class="editBtn editStatus">Editar</button>` : '';
         const obTxt = r.obra_concluida ? 'Concluída' : (r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : '');
-        const obBtn = isCurrent ? `<button type="button" class="editBtn editObra">Editar</button>` : '';
+        const obBtn = isCurrent ? `<button type="button" class="toggleObra">${r.obra_concluida ? 'Desmarcar' : 'Marcar'}</button>` : '';
         tr.innerHTML = `
-          <td><button type="button" class="histProc" title="Histórico">Histórico</button></td>
-          <td>${r.nup}</td>
+          <td class="align-center"><button type="button" class="historyBtn">Ver</button></td>
+          <td>${r.nup || ''}</td>
           <td>${r.type || ''}</td>
-          <td>${r.first_entry_date ? U.fmtDateTime(r.first_entry_date) : ''}</td>
-          <td>${stTxt} ${stBtn}</td>
-          <td>${obTxt} ${obBtn}</td>
-          <td><button type="button" class="obsIcon docIcon ${hasOb ? 'on' : 'off'}" title="Observações">TXT</button></td>
-          <td><button type="button" class="opinIcon docIcon ${hasOp ? 'on' : 'off'}" title="Pareceres Internos">P</button></td>
-          <td><button type="button" class="notifIcon docIcon ${hasNt ? 'on' : 'off'}" title="Notificações">N</button></td>
-          <td><button type="button" class="sigIcon docIcon ${hasSg ? 'on' : 'off'}" title="SIGADAER">S</button></td>
-          <td><button type="button" class="delProc">Excluir</button></td>`;
-
-        // clique na linha seleciona o processo (exceto quando clicar em um botão)
-        tr.addEventListener('click', async (e) => {
-          if (e.target.closest('button')) return;
-          await selectProcess(r);
-        });
-        tr.querySelector('.histProc')?.addEventListener('click', (e) => {
-          e.stopPropagation();
-          showHistoryPopup(r.id);
-        });
-        tr.querySelector('.obsIcon')?.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          await selectProcess(r);
-          showObsPopup(r.id);
-        });
-        tr.querySelector('.opinIcon')?.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          await selectProcess(r);
-          showOpiniaoPopup(r.id);
-        });
-        tr.querySelector('.notifIcon')?.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          await selectProcess(r);
-          showNotifPopup(r.id);
-        });
-        tr.querySelector('.sigIcon')?.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          await selectProcess(r);
-          showSigPopup(r.id);
-        });
-        tr.querySelector('.delProc')?.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const ok = window.confirm('Deseja realmente excluir?');
-          if (ok) await deleteProcess(r.id);
-        });
-        tr.querySelector('.editStatus')?.addEventListener('click', (e) => {
-          e.stopPropagation();
-          showStatusEditPopup(r.id, r.status || '', r.status_since || '');
-        });
-        tr.querySelector('.editObra')?.addEventListener('click', (e) => {
-          e.stopPropagation();
-          showObraEditPopup(r.id, r.obra_termino_date || '', r.obra_concluida);
-        });
-
+          <td>${U.fmtDate(r.first_entry_date)}</td>
+          <td>${stTxt}</td>
+          <td>${obTxt}</td>
+          <td>${hasOb ? '●' : ''}</td>
+          <td class="align-center">${hasOp ? '<span class="dot">P</span>' : ''}</td>
+          <td class="align-center">${hasNt ? '<span class="dot">N</span>' : ''}</td>
+          <td class="align-center">${hasSg ? '<span class="dot">S</span>' : ''}</td>
+          <td class="align-right"><button type="button" class="selectBtn">Selecionar</button> ${stBtn} ${obBtn}</td>
+        `;
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
 
+      // Renderizar no container
       box.innerHTML = '';
       box.appendChild(table);
-    } catch (e) {
-      box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
+
+      // Atualiza estado de página e renderiza paginação
+      PROC_PAGE = p;
+      const pagesTotal = typeof count === 'number' ? Math.max(1, Math.ceil(count / size)) : 1;
+      renderProcPagination({ page: p, pagesTotal, count: count || rows.length });
+
+      // Bind row events (mantém comportamento existente)
+      tbody.addEventListener('click', async (ev) => {
+        const tr = ev.target.closest('tr');
+        if (!tr) return;
+        const idx = Array.from(tbody.children).indexOf(tr);
+        const row = rows[idx];
+        if (!row) return;
+        if (ev.target.closest('.selectBtn')) return selectProcess(row);
+        if (ev.target.closest('.historyBtn')) return showHistory(row.id);
+        if (ev.target.closest('.editStatus')) return onEditStatus(row);
+        if (ev.target.closest('.toggleObra')) return onToggleObra(row);
+      });
+    } catch (err) {
+      box.innerHTML = '<div class="msg error">Falha ao carregar a lista.</div>';
+      console.error(err);
     }
   }
+
 
   async function loadObsList(procId, targetId = 'obsLista') {
     const box = el(targetId);
