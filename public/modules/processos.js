@@ -499,6 +499,9 @@ window.Modules.processos = (() => {
         const stBtn = isCurrent ? `<button type="button" class="editBtn editStatus">Editar</button>` : '';
         const obTxt = r.obra_concluida ? 'Concluída' : (r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : '');
         const obBtn = isCurrent ? `<button type="button" class="toggleObra">${r.obra_concluida ? 'Desmarcar' : 'Marcar'}</button>` : '';
+        const opBtn = hasOp ? '<button type="button" class="dot opBtn">P</button>' : '';
+        const ntBtn = hasNt ? '<button type="button" class="dot ntBtn">N</button>' : '';
+        const sgBtn = hasSg ? '<button type="button" class="dot sgBtn">S</button>' : '';
         tr.innerHTML = `
           <td class="align-center"><button type="button" class="historyBtn">Ver</button></td>
           <td>${r.nup || ''}</td>
@@ -507,9 +510,9 @@ window.Modules.processos = (() => {
           <td>${stTxt}</td>
           <td>${obTxt}</td>
           <td>${hasOb ? '●' : ''}</td>
-          <td class="align-center">${hasOp ? '<span class="dot">P</span>' : ''}</td>
-          <td class="align-center">${hasNt ? '<span class="dot">N</span>' : ''}</td>
-          <td class="align-center">${hasSg ? '<span class="dot">S</span>' : ''}</td>
+          <td class="align-center">${opBtn}</td>
+          <td class="align-center">${ntBtn}</td>
+          <td class="align-center">${sgBtn}</td>
           <td class="align-right"><button type="button" class="selectBtn">Selecionar</button> ${stBtn} ${obBtn}</td>
         `;
         tbody.appendChild(tr);
@@ -534,6 +537,9 @@ window.Modules.processos = (() => {
         if (!row) return;
         if (ev.target.closest('.selectBtn')) return selectProcess(row);
         if (ev.target.closest('.historyBtn')) return showHistoryPopup(row.id);
+        if (ev.target.closest('.opBtn')) return showOpiniaoPopup(row.id);
+        if (ev.target.closest('.ntBtn')) return showNotifPopup(row.id);
+        if (ev.target.closest('.sgBtn')) return showSigPopup(row.id);
         if (ev.target.closest('.editStatus')) return showStatusEditPopup(row.id, row.status, row.status_since);
         if (ev.target.closest('.toggleObra')) return showObraEditPopup(row.id, row.obra_termino_date, row.obra_concluida);
       });
