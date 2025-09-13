@@ -77,6 +77,12 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .table th { font-family: var(--mono); font-weight: 600; }
 .table td .actions { display: flex; gap: 6px; }
 
+/* Scrollable content areas */
+.scrolly { overflow-y: auto; overflow-x: hidden; }
+
+/* Let scrollable areas fill the remaining card space */
+.card > .scrolly { flex: 1; min-height: 0; }
+
 .mono { font-family: var(--mono); }
 .muted { color: var(--ink-soft); }
 
