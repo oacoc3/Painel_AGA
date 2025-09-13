@@ -1,14 +1,15 @@
 // public/modules/admin.js
 window.Modules = window.Modules || {};
 window.Modules.admin = (() => {
-
   // Paginação local (RPC admin_list_profiles não aceita range)
   let ADMIN_PAGE = 1;
   const ADMIN_PAGE_SIZE = 50;
   let ADMIN_CACHE = [];
 
+  const el = id => document.getElementById(id);
+
   function renderUsersPagination({ page, pagesTotal, count }) {
-    const box = document.getElementById('listaUsers');
+    const box = el('listaUsers');
     if (!box) return;
     let pager = box.querySelector('.pager');
     if (!pager) {
@@ -27,7 +28,7 @@ window.Modules.admin = (() => {
         <button type="button" id="admLastPage" ${disableNext ? 'disabled' : ''}>&raquo;</button>
       </div>`;
     pager.querySelector('#admFirstPage')?.addEventListener('click', () => loadUsers({ page: 1 }));
-    pager.querySelector('#admPrevPage')?.addEventListener('click', () => loadUsers({ page: Math.max(1, (ADMIN_PAGE - 1)) }));
+    pager.querySelector('#admPrevPage')?.addEventListener('click', () => loadUsers({ page: Math.max(1, ADMIN_PAGE - 1) }));
     pager.querySelector('#admNextPage')?.addEventListener('click', () => loadUsers({ page: ADMIN_PAGE + 1 }));
     pager.querySelector('#admLastPage')?.addEventListener('click', () => {
       const pages = Math.max(1, Math.ceil((ADMIN_CACHE.length || 0) / ADMIN_PAGE_SIZE));
@@ -67,4 +68,87 @@ window.Modules.admin = (() => {
           btnDel.type = 'button';
           btnDel.textContent = 'Excluir';
           btnDel.className = 'danger';
-          btnDel
+          btnDel.addEventListener('click', () => onDeleteUser(r));
+          wrap.appendChild(btnEdit);
+          wrap.appendChild(btnDel);
+          return wrap;
+        }
+      }
+    ], slice);
+
+    renderUsersPagination({ page: p, pagesTotal, count: all.length });
+  }
+
+  function resetForm() {
+    const form = el('formUser');
+    if (!form) return;
+    form.reset();
+    delete form.dataset.editing;
+    const btn = el('btnCreateUser');
+    if (btn) btn.textContent = 'Criar';
+  }
+
+  function onEditUser(user) {
+    const form = el('formUser');
+    if (!form) return;
+    form.dataset.editing = user.id;
+    el('adEmail').value = user.email || '';
+    el('adName').value = user.name || '';
+    el('adRole').value = user.role || '';
+    const btn = el('btnCreateUser');
+    if (btn) btn.textContent = 'Atualizar';
+  }
+
+  async function callAdminFn(fn, payload) {
+    const session = await getSession();
+    const token = session?.access_token || '';
+    const res = await fetch(`/.netlify/functions/${fn}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(payload || {})
+    });
+    try { return await res.json(); }
+    catch { return { ok: false, error: 'Resposta inválida' }; }
+  }
+
+  async function onDeleteUser(user) {
+    if (!confirm('Confirma excluir este usuário?')) return;
+    const { ok, error } = await callAdminFn('delete-user', { id: user.id });
+    if (!ok) return Utils.setMsg('adminMsg', error || 'Falha ao excluir.', true);
+    Utils.setMsg('adminMsg', 'Usuário excluído.');
+    await loadUsers({ page: ADMIN_PAGE });
+  }
+
+  async function submitUser() {
+    const email = el('adEmail').value.trim();
+    const name = el('adName').value.trim();
+    const role = el('adRole').value;
+    if (!email || !name || !role) {
+      return Utils.setMsg('adminMsg', 'Preencha todos os campos.', true);
+    }
+    const form = el('formUser');
+    const editing = form?.dataset.editing;
+    const fn = editing ? 'update-user' : 'create-user';
+    const payload = editing ? { id: editing, email, name, role } : { email, name, role };
+    const { ok, error } = await callAdminFn(fn, payload);
+    if (!ok) return Utils.setMsg('adminMsg', error || 'Falha ao salvar.', true);
+    Utils.setMsg('adminMsg', editing ? 'Usuário atualizado.' : 'Usuário criado.');
+    resetForm();
+    await loadUsers({ page: ADMIN_PAGE });
+  }
+
+  function bindForm() {
+    el('btnCreateUser')?.addEventListener('click', ev => {
+      ev.preventDefault();
+      submitUser();
+    });
+  }
+
+  function init() { bindForm(); }
+  async function load() { await loadUsers(); }
+
+  return { init, load };
+})();
