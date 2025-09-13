@@ -498,7 +498,7 @@ window.Modules.processos = (() => {
         const stTxt = `${r.status || ''}${r.status_since ? '<br><small>' + U.fmtDateTime(r.status_since) + '</small>' : ''}`;
         const stBtn = isCurrent ? `<button type="button" class="editBtn editStatus">Editar</button>` : '';
         const obTxt = r.obra_concluida ? 'Concluída' : (r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : '');
-        const obBtn = isCurrent ? `<button type="button" class="toggleObra">${r.obra_concluida ? 'Desmarcar' : 'Marcar'}</button>` : '';
+        const obBtn = isCurrent ? `<button type="button" class="editBtn toggleObra">${r.obra_concluida ? 'Desmarcar' : 'Marcar'}</button>` : '';
         const opBtn = hasOp ? '<button type="button" class="dot opBtn">P</button>' : '';
         const ntBtn = hasNt ? '<button type="button" class="dot ntBtn">N</button>' : '';
         const sgBtn = hasSg ? '<button type="button" class="dot sgBtn">S</button>' : '';
@@ -507,13 +507,13 @@ window.Modules.processos = (() => {
           <td>${r.nup || ''}</td>
           <td>${r.type || ''}</td>
           <td>${U.fmtDate(r.first_entry_date)}</td>
-          <td>${stTxt}</td>
-          <td>${obTxt}</td>
+          <td>${stTxt} ${stBtn}</td>
+          <td>${obTxt} ${obBtn}</td>
           <td>${hasOb ? '●' : ''}</td>
           <td class="align-center">${opBtn}</td>
           <td class="align-center">${ntBtn}</td>
           <td class="align-center">${sgBtn}</td>
-          <td class="align-right"><button type="button" class="selectBtn">Selecionar</button> ${stBtn} ${obBtn}</td>
+          <td class="align-right"><button type="button" class="selectBtn">Selecionar</button></td>
         `;
         tbody.appendChild(tr);
       });
