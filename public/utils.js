@@ -162,11 +162,11 @@
     const input = typeof id === 'string' ? el(id) : id;
     if (!input) return;
     input.addEventListener('input', () => {
-      let v = input.value.replace(/\D/g, '');
-      if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
-      if (v.length > 10) v = v.slice(0, 10) + '.' + v.slice(10);
-      if (v.length > 15) v = v.slice(0, 15) + '/' + v.slice(15);
-      if (v.length > 19) v = v.slice(0, 19) + '-' + v.slice(19, 21);
+      const d = input.value.replace(/\D/g, '').slice(0, 17);
+      let v = d.slice(0, 5);
+      if (d.length > 5) v += '.' + d.slice(5, 11);
+      if (d.length > 11) v += '/' + d.slice(11, 15);
+      if (d.length > 15) v += '-' + d.slice(15, 17);
       input.value = v;
     });
   }
