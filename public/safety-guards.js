@@ -66,6 +66,6 @@
     });
   });
 
-  // Expor utilidade p/ ser chamada após renders dinâmicos:
-  window.SafetyGuards = { fixButtonTypes };
+  // Expor utilidades p/ serem chamadas após renders dinâmicos:
+  window.SafetyGuards = { fixButtonTypes, askReload };
 })();
