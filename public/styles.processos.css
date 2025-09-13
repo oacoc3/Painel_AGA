@@ -62,7 +62,7 @@
   padding: 0;
 }
 #procLista .docIcon.off { background: #ccc; }
-#procLista .docIcon.on  { background: var(--brand); }
+#procLista .docIcon.on  { background: var(--brand); color: #fff; }
 
 #procLista .obsIcon { font-size: 0.65rem; }
 #procLista .obsIcon.on  { background: #0a0; color: #fff; }
