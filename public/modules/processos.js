@@ -526,6 +526,7 @@ window.Modules.processos = (() => {
         const opBtn = hasOp ? '<button type="button" class="dot opBtn">P</button>' : '';
         const ntBtn = hasNt ? '<button type="button" class="dot ntBtn">N</button>' : '';
         const sgBtn = hasSg ? '<button type="button" class="dot sgBtn">S</button>' : '';
+        const obsBtn = `<button type="button" class="dot obsBtn">${hasOb ? '●' : '+'}</button>`;
         tr.innerHTML = `
           <td class="align-center"><button type="button" class="historyBtn">Ver</button></td>
           <td>${r.nup || ''}</td>
@@ -533,7 +534,7 @@ window.Modules.processos = (() => {
           <td>${U.fmtDate(r.first_entry_date)}</td>
           <td>${stTxt} ${stBtn}</td>
           <td>${obTxt} ${obBtn}</td>
-          <td>${hasOb ? '●' : ''}</td>
+          <td class="align-center">${obsBtn}</td>
           <td class="align-center">${opBtn}</td>
           <td class="align-center">${ntBtn}</td>
           <td class="align-center">${sgBtn}</td>
@@ -564,6 +565,7 @@ window.Modules.processos = (() => {
         if (ev.target.closest('.opBtn')) return showOpiniaoPopup(row.id);
         if (ev.target.closest('.ntBtn')) return showNotifPopup(row.id);
         if (ev.target.closest('.sgBtn')) return showSigPopup(row.id);
+        if (ev.target.closest('.obsBtn')) return showObsPopup(row.id);
         if (ev.target.closest('.editStatus')) return showStatusEditPopup(row.id, row.status, row.status_since);
         if (ev.target.closest('.toggleObra')) return showObraEditPopup(row.id, row.obra_termino_date, row.obra_concluida);
       });
