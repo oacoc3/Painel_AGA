@@ -447,12 +447,19 @@ window.Modules.processos = (() => {
       const from = (p - 1) * size;
       const to = from + size - 1;
 
-      const { data, count, error } = await sb
+      const query = sb
         .from('processes')
         .select('id,nup,type,status,status_since,first_entry_date,obra_termino_date,obra_concluida,created_at', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(from, to);
 
+      let toRef;
+      const timeout = new Promise((_, reject) => {
+        toRef = setTimeout(() => reject(new Error('timeout')), 10000);
+      });
+
+      const { data, count, error } = await Promise.race([query, timeout]);
+      clearTimeout(toRef);
       if (error) throw error;
 
       const rows = Array.isArray(data) ? [...data] : [];
@@ -542,7 +549,9 @@ window.Modules.processos = (() => {
         if (ev.target.closest('.toggleObra')) return showObraEditPopup(row.id, row.obra_termino_date, row.obra_concluida);
       });
     } catch (err) {
-      box.innerHTML = '<div class="msg error">Falha ao carregar a lista.</div>';
+      box.innerHTML = '<div class="msg error">Falha ao carregar a lista. <button type="button" id="procRetryBtn">Tentar novamente</button></div>';
+      document.getElementById('procRetryBtn')?.addEventListener('click', () => loadProcessList());
+      window.SafetyGuards?.askReload?.('Falha ao carregar a lista. Recarregar a página?');
       console.error(err);
     }
   }
@@ -588,7 +597,7 @@ window.Modules.processos = (() => {
         { key: 'received_at', label: 'Recebida em', value: r => U.fmtDateTime(r.receb_at || r.received_at) },
         {
           label: 'Ações',
-          render: r => {
+          render: (r) => {
             if (r.status === 'SOLICITADO') {
               const b = document.createElement('button');
               b.type = 'button';
@@ -631,7 +640,7 @@ window.Modules.processos = (() => {
         { key: 'read_at', label: 'Lida em', value: r => U.fmtDateTime(r.read_at) },
         {
           label: 'Ações',
-          render: r => {
+          render: (r) => {
             if (r.status !== 'LIDA') {
               const b = document.createElement('button');
               b.type = 'button';
@@ -673,7 +682,7 @@ window.Modules.processos = (() => {
         { key: 'received_at', label: 'Recebida em', value: r => U.fmtDateTime(r.recebido_at || r.received_at) },
         {
           label: 'Ações',
-          render: r => {
+          render: (r) => {
             if (r.status === 'SOLICITADO') {
               const b = document.createElement('button');
               b.type = 'button';
