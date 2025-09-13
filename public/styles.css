@@ -46,10 +46,10 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 100%; }
 .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .velocimetros { flex: 1; display: flex; flex-wrap: wrap; gap: 12px; overflow-y: auto; }
-.prazo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; height: 100%; }
+.prazo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; height: 100%; grid-auto-rows: 1fr; }
 .prazo-grid > .card,
-.prazo-grid > .prazo-col { height: 100%; }
-.prazo-col { display: flex; flex-direction: column; gap: 12px; height: 100%; }
+.prazo-grid > .prazo-col { height: 100%; min-height: 0; }
+.prazo-col { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
 .prazo-col .card { flex: 1; }
 .admin-col { display: flex; flex-direction: column; gap: 12px; height: 100%; }
 .admin-col > .card:last-child { flex: 1; }
