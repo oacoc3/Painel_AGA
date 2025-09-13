@@ -29,7 +29,7 @@ window.Modules.prazos = (() => {
     const { tbody } = Utils.renderTable('prazoParec', [
       { key: 'nup', label: 'NUP' },
       { key: 'type', label: 'Tipo' },
-      { key: 'requested_at', label: 'Solicitado/Expedido em', value: r => Utils.fmtDate(r.requested_at) },
+      { key: 'requested_at', label: 'Desde', value: r => Utils.fmtDate(r.requested_at) },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
       { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
     ], rows);
@@ -73,7 +73,6 @@ window.Modules.prazos = (() => {
     let rows = obras;
     const { tbody } = Utils.renderTable('prazoObra', [
       { key: 'nup', label: 'NUP' },
-      { key: 'requested_at', label: 'Solicitado/Expedido em', value: r => Utils.fmtDate(r.requested_at) },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
       { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) },
       { key: 'em_atraso', label: 'Atraso', value: r => (r.em_atraso ? 'ATRASO' : '') }
@@ -83,7 +82,7 @@ window.Modules.prazos = (() => {
 
   async function loadObra() {
     const { data } = await sb.from('v_prazo_termino_obra')
-      .select('nup,requested_at,due_date,days_remaining,em_atraso');
+      .select('nup,due_date,days_remaining,em_atraso');
     obras = data || [];
     renderObra();
   }
@@ -117,7 +116,7 @@ window.Modules.prazos = (() => {
     let rows = doaga;
     const { tbody } = Utils.renderTable('prazoDOAGA', [
       { key: 'nup', label: 'NUP' },
-      { key: 'requested_at', label: 'Solicitado/Expedido em', value: r => Utils.fmtDate(r.requested_at) },
+      { key: 'requested_at', label: 'Desde', value: r => Utils.fmtDate(r.requested_at) },
       { key: 'status', label: 'Status/Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : r.status) },
       { key: 'days_remaining', label: 'Dias rem.', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
     ], rows);
