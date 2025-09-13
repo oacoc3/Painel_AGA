@@ -1,0 +1,15 @@
+/* ====== Ajustes específicos do módulo Modelos ====== */
+
+/* Formulário ocupando 80% da largura da tela */
+.split.modelos {
+  display: grid;
+  grid-template-columns: 4fr 1fr; /* 80% para o formulário, 20% para a lista */
+  gap: 12px;
+  height: 100%;
+}
+.split.modelos > .card { min-width: 0; }
+
+/* Formulário usa toda a largura disponível da coluna */
+#formModelo {
+  width: 100%;
+}
