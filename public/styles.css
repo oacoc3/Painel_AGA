@@ -65,6 +65,17 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; min-height: 0; }
 .card h2 { margin: 0 0 8px; font-family: var(--mono); }
 
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.card-title h2 { margin: 0; }
+
+.card-title label { margin-left: auto; }
+
 .tabs { display: flex; flex-direction: column; gap: 8px; }
 .tab-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
 .tab { display: none; }
