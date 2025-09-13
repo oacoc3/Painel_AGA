@@ -31,12 +31,24 @@
     });
   }
 
+  function askReload(message) {
+    if (confirm(message)) location.reload();
+  }
+
   function installGlobalErrorTrap() {
     window.addEventListener('error', (e) => {
       console.error('Erro não tratado:', e.error || e.message, e.filename, e.lineno);
+      askReload('Ocorreu um erro. Recarregar a página?');
     });
     window.addEventListener('unhandledrejection', (e) => {
       console.error('Promise rejeitada sem catch:', e.reason);
+      askReload('Ocorreu um erro. Recarregar a página?');
+    });
+    window.addEventListener('offline', () => {
+      askReload('Sem conexão com a internet. Recarregar a página?');
+    });
+    window.addEventListener('online', () => {
+      askReload('Conexão restabelecida. Recarregar a página?');
     });
   }
 
