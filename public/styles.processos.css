@@ -56,6 +56,12 @@
 /* Linha selecionada na lista */
 #procLista tr.selected { background: #ffe; }
 
+/* permitir que os botões de edição fiquem visíveis nas colunas status e obra */
+#procLista td:nth-child(5),
+#procLista td:nth-child(6) {
+  overflow: visible;
+}
+
 /* (patch) Removido o bloco .editable (status e obra) */
 
 /* Ícones de documentos (P/N/S) - (patch) novos ícones circulares preenchidos */
