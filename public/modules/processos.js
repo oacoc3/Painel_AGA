@@ -533,9 +533,9 @@ window.Modules.processos = (() => {
         const row = rows[idx];
         if (!row) return;
         if (ev.target.closest('.selectBtn')) return selectProcess(row);
-        if (ev.target.closest('.historyBtn')) return showHistory(row.id);
-        if (ev.target.closest('.editStatus')) return onEditStatus(row);
-        if (ev.target.closest('.toggleObra')) return onToggleObra(row);
+        if (ev.target.closest('.historyBtn')) return showHistoryPopup(row.id);
+        if (ev.target.closest('.editStatus')) return showStatusEditPopup(row.id, row.status, row.status_since);
+        if (ev.target.closest('.toggleObra')) return showObraEditPopup(row.id, row.obra_termino_date, row.obra_concluida);
       });
     } catch (err) {
       box.innerHTML = '<div class="msg error">Falha ao carregar a lista.</div>';
