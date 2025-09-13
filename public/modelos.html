@@ -7,6 +7,8 @@
   <title>Painel DO-AGA</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./process_ring.css" />
+  <!-- CSS específico do módulo Modelos -->
+  <link rel="stylesheet" href="./styles.modelos.css" />
   <!-- App config -->
   <script src="./config.js" defer></script>
   <!-- Supabase library -->
@@ -47,14 +49,14 @@
 
     <main class="main">
       <section id="viewModelos" class="view">
-        <div class="split">
+        <div class="split modelos">
           <div class="card">
             <h2>Cadastrar / Atualizar Modelo</h2>
             <form id="formModelo" data-ajax>
               <input type="hidden" id="mdlId">
               <label>Categoria <input id="mdlCat" required></label>
               <label>Título <input id="mdlTit" required></label>
-              <label>Conteúdo <textarea id="mdlTxt" rows="8" required></textarea></label>
+              <label>Conteúdo <textarea id="mdlTxt" rows="8" required disabled></textarea></label>
               <div class="row">
                 <button id="btnSalvarModelo" type="button">Salvar</button>
                 <button id="btnCopiarModelo" type="button">Copiar</button>
