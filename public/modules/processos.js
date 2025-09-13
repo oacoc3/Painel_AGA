@@ -438,6 +438,25 @@ window.Modules.processos = (() => {
   async function loadProcessList({ page = PROC_PAGE, pageSize = PROC_PAGE_SIZE } = {}) {
     const box = el('procLista');
     if (!box) return;
+
+    // Garante sessão ativa antes de prosseguir
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) {
+        const { data: refreshed, error: refreshErr } = await sb.auth.refreshSession();
+        if (refreshErr || !refreshed.session) throw refreshErr || new Error('no-session');
+      }
+    } catch (err) {
+      U.setMsg('procMsg', 'Sessão expirada. Recarregue a página ou faça login novamente.', true);
+      console.warn('Falha ao recuperar sessão', err);
+      const reload = confirm('Sessão expirada. Recarregar a página? (Cancelar para fazer login novamente)');
+      if (!reload) {
+        try { await sb.auth.signOut(); } catch (_) {}
+      }
+      location.reload();
+      return;
+    }
+
     box.innerHTML = '<div class="msg">Carregando…</div>';
 
     try {
