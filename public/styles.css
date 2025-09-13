@@ -1,3 +1,5 @@
+/* public/styles.css */
+
 :root {
   --bg: #f3f2ef;
   --ink: #222;
@@ -14,7 +16,7 @@
 html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 14px var(--sans); }
 .vh { height: 100vh; display: flex; flex-direction: column; }
 
-.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #faf9f7; }
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #faf9f7; position: relative; z-index: 2; }
 .foot { border-top: 1px solid var(--line); border-bottom: 0; }
 
 .brand { display: flex; align-items: baseline; gap: 8px; font-family: var(--mono); font-size: 18px; }
@@ -77,10 +79,10 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .table th { font-family: var(--mono); font-weight: 600; }
 .table td .actions { display: flex; gap: 6px; }
 
-/* Scrollable content areas */
+/* Áreas com rolagem (scroll) */
 .scrolly { overflow-y: auto; overflow-x: hidden; }
 
-/* Let scrollable areas fill the remaining card space */
+/* Deixar áreas scrolláveis ocuparem o espaço restante do cartão */
 .card > .scrolly { flex: 1; min-height: 0; }
 
 .mono { font-family: var(--mono); }
@@ -96,3 +98,56 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .err   { color: #900; }
 
 footer { padding: 8px 12px; background: #faf9f7; }
+
+/* Navegação lateral fixa e responsiva */
+@media (min-width: 601px) {
+  #topNav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 200px;
+    padding: 60px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-right: 1px solid var(--line);
+    background: #faf9f7;
+  }
+
+  #topNav button {
+    flex: none;
+    text-align: left;
+  }
+
+  .main {
+    margin-left: 200px;
+  }
+
+  header.bar, footer.bar {
+    padding-left: calc(200px + 12px);
+  }
+}
+
+@media (max-width: 600px) {
+  #topNav {
+    position: static;
+    width: auto;
+    padding: 0;
+    flex-direction: row;
+    border-right: none;
+  }
+
+  #topNav button {
+    flex: 1 1 0;
+    text-align: center;
+  }
+
+  header.bar, footer.bar {
+    padding-left: 12px;
+  }
+
+  .main {
+    margin-left: 0;
+  }
+}
