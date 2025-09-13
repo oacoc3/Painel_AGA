@@ -327,9 +327,7 @@ window.Modules.processos = (() => {
       <form method="dialog" class="proc-popup">
         <h3>Alterar status</h3>
         <label>Novo status
-          <select id="stNovo">
-            <option>ANATEC-PRE</option><option>ANATEC</option><option>ANADOC</option><option>ANAICA</option><option>DIPEJ</option><option>ICA-PUB</option><option>OPEA</option><option>JJAER</option><option>DADOS</option><option>ARQ</option>
-          </select>
+          <select id="stNovo">${STATUS_OPTIONS}</select>
         </label>
         <label>Desde <input type="datetime-local" id="stDesde"></label>
         <menu>
@@ -339,7 +337,7 @@ window.Modules.processos = (() => {
       </form>`;
     document.body.appendChild(dlg);
     const sel = dlg.querySelector('#stNovo');
-    if (sel) sel.value = curStatus || 'ANATEC-PRE';
+    if (sel) sel.value = PROCESS_STATUSES.includes(curStatus) ? curStatus : 'ANATEC-PRE';
     const dt = dlg.querySelector('#stDesde');
     if (dt && curDate) dt.value = U.toDateTimeLocalValue(curDate);
     dlg.addEventListener('close', () => dlg.remove());
