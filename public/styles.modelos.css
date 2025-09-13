@@ -1,9 +1,9 @@
 /* ====== Ajustes específicos do módulo Modelos ====== */
 
-/* Formulário ocupando 80% da largura da tela */
+/* Formulário ocupando 65% da largura da tela */
 .split.modelos {
   display: grid;
-  grid-template-columns: 4fr 1fr; /* 80% para o formulário, 20% para a lista */
+  grid-template-columns: 13fr 7fr; /* 65% para o formulário, 35% para a lista */
   gap: 12px;
   height: 100%;
 }
@@ -13,3 +13,9 @@
 #formModelo {
   width: 100%;
 }
+
+/* Primeira linha do formulário: campos e ações lado a lado */
+#formModelo .mdl-top-row {
+  grid-template-columns: 1fr 1fr auto auto auto;
+}
+#formModelo .mdl-top-row label { min-width: 0; }
