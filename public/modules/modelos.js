@@ -3,6 +3,33 @@ window.Modules = window.Modules || {};
 window.Modules.modelos = (() => {
   let selectedId = null;
   let modelos = [];
+
+  function checkModeloFields() {
+    const cat = el('mdlCat').value.trim();
+    const tit = el('mdlTit').value.trim();
+    const txt = el('mdlTxt');
+    if (cat && tit) {
+      const mdl = modelos.find(m => m.category === cat && m.title === tit);
+      if (mdl) {
+        selectedId = mdl.id;
+        el('mdlId').value = mdl.id;
+        txt.value = mdl.content || '';
+        txt.disabled = false;
+        Utils.setMsg('mdlMsg', `Carregado: ${mdl.title}`);
+      } else {
+        selectedId = null;
+        el('mdlId').value = '';
+        txt.disabled = false;
+        Utils.setMsg('mdlMsg', '');
+      }
+    } else {
+      selectedId = null;
+      el('mdlId').value = '';
+      txt.value = '';
+      txt.disabled = true;
+    }
+  }
+
   function renderModelos() {
     const cat = el('mdlFiltroCat')?.value || '';
     let rows = modelos;
@@ -26,6 +53,7 @@ window.Modules.modelos = (() => {
             el('mdlId').value = r.id;
             el('mdlCat').value = r.category;
             el('mdlTit').value = r.title;
+            el('mdlTxt').disabled = false;
             el('mdlTxt').value = r.content;
             Utils.setMsg('mdlMsg', `Carregado: ${r.title}`);
           });
@@ -39,7 +67,11 @@ window.Modules.modelos = (() => {
             const { error } = await sb.from('models').delete().eq('id', r.id);
             if (error) return Utils.setMsg('mdlMsg', error.message, true);
             Utils.setMsg('mdlMsg', 'Excluído.');
-            if (selectedId === r.id) { selectedId = null; el('formModelo').reset(); }
+            if (selectedId === r.id) {
+              selectedId = null;
+              el('formModelo').reset();
+              el('mdlTxt').disabled = true;
+            }
             await loadModelos();
           });
 
@@ -57,6 +89,7 @@ window.Modules.modelos = (() => {
       el('mdlId').value = row.id;
       el('mdlCat').value = row.category;
       el('mdlTit').value = row.title;
+      el('mdlTxt').disabled = false;
       el('mdlTxt').value = row.content;
       Utils.setMsg('mdlMsg', `Carregado: ${row.title}`);
     });
@@ -80,6 +113,10 @@ window.Modules.modelos = (() => {
   }
 
   function bindForm() {
+    el('mdlTxt').disabled = true;
+    el('mdlCat').addEventListener('input', checkModeloFields);
+    el('mdlTit').addEventListener('input', checkModeloFields);
+
     el('btnSalvarModelo').addEventListener('click', async (ev) => {
       ev.preventDefault();
       const category = el('mdlCat').value.trim();
@@ -97,6 +134,7 @@ window.Modules.modelos = (() => {
       }
       Utils.setMsg('mdlMsg', 'Salvo.');
       selectedId = null; el('formModelo').reset();
+      el('mdlTxt').disabled = true;
       await loadModelos();
     });
 
@@ -116,6 +154,7 @@ window.Modules.modelos = (() => {
       ev.preventDefault();
       selectedId = null;
       el('formModelo').reset();
+      el('mdlTxt').disabled = true;
       Utils.setMsg('mdlMsg', '');
     });
 
