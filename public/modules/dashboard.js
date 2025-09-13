@@ -1,7 +1,7 @@
 // public/modules/dashboard.js
 window.Modules = window.Modules || {};
 window.Modules.dashboard = (() => {
-  const DASHBOARD_STATUSES = ['CONFEC','REV-OACO','APROV','ICA-PUB','EDICAO','AGD-LEIT','ANADOC','ANATEC-PRE','ANATEC','ANAICA','SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL','ARQ'];
+  const DASHBOARD_STATUSES = window.Modules.statuses.PROCESS_STATUSES;
 
   function init() {
     el('btnDashFilter').addEventListener('click', load);
