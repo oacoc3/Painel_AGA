@@ -29,7 +29,6 @@ window.Modules.prazos = (() => {
     const { tbody } = Utils.renderTable('prazoParec', [
       { key: 'nup', label: 'NUP' },
       { key: 'type', label: 'Tipo' },
-      { key: 'requested_at', label: 'Desde', value: r => Utils.fmtDate(r.requested_at) },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
       { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
     ], rows);
@@ -38,8 +37,8 @@ window.Modules.prazos = (() => {
 
   async function loadPareceres() {
     const [intRes, extRes] = await Promise.all([
-      sb.from('v_prazo_pareceres').select('nup,type,requested_at,due_date,days_remaining'),
-      sb.from('v_prazo_pareceres_externos').select('nup,type,requested_at,due_date,days_remaining')
+      sb.from('v_prazo_pareceres').select('nup,type,due_date,days_remaining'),
+      sb.from('v_prazo_pareceres_externos').select('nup,type,due_date,days_remaining')
     ]);
     pareceres = [...(intRes.data || []), ...(extRes.data || [])]
       .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
@@ -55,7 +54,6 @@ window.Modules.prazos = (() => {
     let rows = remocao;
     const { tbody } = Utils.renderTable('prazoRemocao', [
       { key: 'nup', label: 'NUP' },
-      { key: 'read_at', label: 'Lido em', value: r => Utils.fmtDate(r.read_at) },
       { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
       { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
     ], rows);
@@ -64,7 +62,7 @@ window.Modules.prazos = (() => {
 
   async function loadRemocao() {
     const { data } = await sb.from('v_prazo_remocao_rebaixamento')
-      .select('nup,read_at,due_date,days_remaining');
+      .select('nup,due_date,days_remaining');
     remocao = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
     renderRemocao();
   }
