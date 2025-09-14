@@ -114,8 +114,7 @@ window.Modules.prazos = (() => {
     let rows = doaga;
     const { tbody } = Utils.renderTable('prazoDOAGA', [
       { key: 'nup', label: 'NUP' },
-      { key: 'requested_at', label: 'Desde', value: r => Utils.fmtDate(r.requested_at) },
-      { key: 'status', label: 'Status/Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : r.status) },
+      { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
       { key: 'days_remaining', label: 'Dias rem.', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
     ], rows);
     bindRowLinks(tbody);
@@ -123,7 +122,7 @@ window.Modules.prazos = (() => {
 
   async function loadDOAGA() {
     const { data } = await sb.from('v_prazo_do_aga')
-      .select('nup,status,requested_at,due_date,days_remaining');
+      .select('nup,due_date,days_remaining');
     doaga = (data || []).sort((a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31'));
     renderDOAGA();
   }
