@@ -65,13 +65,11 @@
 #procLista .docIcon.on  { background: var(--brand); color: #fff; }
 
 #procLista .obsIcon { font-size: 0.65rem; }
-#procLista .obsIcon.on  { background: #0a0; color: #fff; }
-#procLista .obsIcon.off { background: #ccc; color: #000; }
 
 /* (patch) Botão de edição nas colunas Status e Término */
 #procLista .editBtn {
   padding: 2px 4px;
-  margin-left: 4px;
+  margin-top: 4px;
   border: none;
   border-radius: 3px;
   background: var(--brand);
