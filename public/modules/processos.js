@@ -530,7 +530,7 @@ window.Modules.processos = (() => {
         const sgBtn = `<button type="button" class="docIcon sgBtn ${hasSg ? 'on' : 'off'}">S</button>`;
         const obsBtn = `<button type="button" class="docIcon obsIcon obsBtn ${hasOb ? 'on' : 'off'}">OBS</button>`;
         tr.innerHTML = `
-          <td class="align-center"><button type="button" class="historyBtn">Ver</button></td>
+          <td class="align-center"><button type="button" class="historyBtn" aria-label="Histórico">👁️</button></td>
           <td>${r.nup || ''}</td>
           <td>${r.type || ''}</td>
           <td>${U.fmtDate(r.first_entry_date)}</td>
