@@ -64,14 +64,6 @@ window.Modules.dashboard = (() => {
     }));
     Utils.renderProcessRings('velocimetros', items);
 
-    const rows = items.filter(it => it.avg != null).map(it => ({
-      status: it.status,
-      avg: it.avg.toFixed(1)
-    }));
-    Utils.renderTable('speedTable', [
-      { key: 'status', label: 'Status' },
-      { key: 'avg', label: 'Dias/processo' }
-    ], rows);
   }
 
   return { init, load };
