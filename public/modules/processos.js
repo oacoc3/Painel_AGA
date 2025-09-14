@@ -505,8 +505,8 @@ window.Modules.processos = (() => {
       const thead = document.createElement('thead');
       thead.innerHTML = `
         <tr>
-          <th>Histórico</th><th>NUP</th><th>Tipo</th><th>1ª Entrada DO-AGA</th>
-          <th>Status</th><th>Término de Obra</th><th>Obs.</th><th></th><th></th><th></th><th></th>
+          <th>Histórico</th><th>NUP</th><th>Tipo</th><th>1ª Entrada</th>
+          <th>Status</th><th>Obra</th><th>Obs.</th><th></th><th></th><th></th><th></th><th></th>
         </tr>`;
       table.appendChild(thead);
 
@@ -539,6 +539,7 @@ window.Modules.processos = (() => {
           <td class="align-center">${ntBtn}</td>
           <td class="align-center">${sgBtn}</td>
           <td class="align-right"><button type="button" class="selectBtn">Selecionar</button></td>
+          <td class="align-right"><button type="button" class="deleteBtn">Excluir</button></td>
         `;
         tbody.appendChild(tr);
       });
@@ -560,6 +561,10 @@ window.Modules.processos = (() => {
         const idx = Array.from(tbody.children).indexOf(tr);
         const row = rows[idx];
         if (!row) return;
+        if (ev.target.closest('.deleteBtn')) {
+          if (confirm('Excluir este processo?')) deleteProcess(row.id);
+          return;
+        }
         if (ev.target.closest('.selectBtn')) return selectProcess(row);
         if (ev.target.closest('.historyBtn')) return showHistoryPopup(row.id);
         if (ev.target.closest('.opBtn')) return showOpiniaoPopup(row.id);
