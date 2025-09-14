@@ -52,7 +52,7 @@ window.Modules.admin = (() => {
     const slice = all.slice(from, to);
 
     Utils.renderTable('listaUsers', [
-      { key: 'name', label: 'Identificação' },
+      { key: 'name', label: 'Posto/Gad + Nome' },
       { key: 'email', label: 'E-mail' },
       { key: 'role', label: 'Perfil' },
       { key: 'created_at', label: 'Criado em', value: r => Utils.fmtDateTime(r.created_at) },
