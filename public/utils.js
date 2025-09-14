@@ -30,8 +30,13 @@
 
   function fmtDate(d) {
     if (!d) return '';
-    const x = (d instanceof Date) ? d : new Date(d);
-    if (Number.isNaN(+x)) return '';
+    let x;
+    if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      x = dateOnly(d);
+    } else {
+      x = (d instanceof Date) ? d : new Date(d);
+    }
+    if (!x || Number.isNaN(+x)) return '';
     return new Intl.DateTimeFormat('pt-BR', {
       timeZone: 'America/Sao_Paulo',
       day: '2-digit',
@@ -42,8 +47,13 @@
 
   function fmtDateTime(d) {
     if (!d) return '';
-    const x = (d instanceof Date) ? d : new Date(d);
-    if (Number.isNaN(+x)) return '';
+    let x;
+    if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      x = dateOnly(d);
+    } else {
+      x = (d instanceof Date) ? d : new Date(d);
+    }
+    if (!x || Number.isNaN(+x)) return '';
     const dt = new Intl.DateTimeFormat('pt-BR', {
       timeZone: 'America/Sao_Paulo',
       day: '2-digit',
@@ -59,8 +69,14 @@
   }
 
   function toDateInputValue(date) {
-    const x = (date instanceof Date) ? date : new Date(date);
-    if (Number.isNaN(+x)) return '';
+    if (!date) return '';
+    let x;
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      x = dateOnly(date);
+    } else {
+      x = (date instanceof Date) ? date : new Date(date);
+    }
+    if (!x || Number.isNaN(+x)) return '';
     const y = x.getFullYear();
     const m = String(x.getMonth() + 1).padStart(2, '0');
     const d = String(x.getDate()).padStart(2, '0');
@@ -68,8 +84,14 @@
   }
 
   function toDateTimeLocalValue(date) {
-    const x = (date instanceof Date) ? date : new Date(date);
-    if (Number.isNaN(+x)) return '';
+    if (!date) return '';
+    let x;
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      x = dateOnly(date);
+    } else {
+      x = (date instanceof Date) ? date : new Date(date);
+    }
+    if (!x || Number.isNaN(+x)) return '';
     const y = x.getFullYear();
     const m = String(x.getMonth() + 1).padStart(2, '0');
     const d = String(x.getDate()).padStart(2, '0');
