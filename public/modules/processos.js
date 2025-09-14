@@ -269,14 +269,25 @@ window.Modules.processos = (() => {
       });
       dlg.querySelector('#npSalvar')?.addEventListener('click', async (ev) => {
         ev.preventDefault();
+         const tipo = dlg.querySelector('#npTipo')?.value || '';
+        const status = dlg.querySelector('#npStatus')?.value || '';
+        const statusDateVal = dlg.querySelector('#npStatusDate')?.value || '';
+        const entrada = dlg.querySelector('#npEntrada')?.value || '';
+        const obraTermVal = dlg.querySelector('#npObraTermino')?.value || '';
+        const obraConcl = !!obraBtn?.classList.contains('active');
+        if (!tipo || !status || !statusDateVal || !entrada || (!obraConcl && !obraTermVal)) {
+          alert('Preencha todos os campos.');
+          return;
+        }
         const payload = {
           nup,
-          type: dlg.querySelector('#npTipo')?.value || 'PDIR',
-          status: dlg.querySelector('#npStatus')?.value || 'ANATEC-PRE',
-          status_since: dlg.querySelector('#npStatusDate')?.value ? new Date(dlg.querySelector('#npStatusDate').value).toISOString() : null,
-          first_entry_date: dlg.querySelector('#npEntrada')?.value || null,
-          obra_termino_date: dlg.querySelector('#npObraTermino')?.value || null,
-          obra_concluida: !!obraBtn?.classList.contains('active')
+          type: tipo,
+          status,
+          status_since: new Date(statusDateVal).toISOString(),
+          first_entry_date: entrada,
+          obra_termino_date: obraConcl ? null : obraTermVal,
+          obra_concluida: obraConcl
+
         };
         try {
           const u = await getUser();
