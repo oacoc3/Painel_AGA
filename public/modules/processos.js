@@ -521,19 +521,21 @@ window.Modules.processos = (() => {
         const hasOb = obSet.has(r.id);
         const stTxt = `${r.status || ''}${r.status_since ? '<br><small>' + U.fmtDateTime(r.status_since) + '</small>' : ''}`;
         const stBtn = isCurrent ? `<button type="button" class="editBtn editStatus">Editar</button>` : '';
+        const stCell = `${stTxt}${isCurrent ? '<br>' + stBtn : ''}`;
         const obTxt = r.obra_concluida ? 'Concluída' : (r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : '');
         const obBtn = isCurrent ? `<button type="button" class="editBtn toggleObra">${r.obra_concluida ? 'Desmarcar' : 'Marcar'}</button>` : '';
-        const opBtn = hasOp ? '<button type="button" class="docIcon opBtn on">P</button>' : '';
-        const ntBtn = hasNt ? '<button type="button" class="docIcon ntBtn on">N</button>' : '';
-        const sgBtn = hasSg ? '<button type="button" class="docIcon sgBtn on">S</button>' : '';
+        const obCell = `${obTxt}${isCurrent ? '<br>' + obBtn : ''}`;
+        const opBtn = `<button type="button" class="docIcon opBtn ${hasOp ? 'on' : 'off'}">P</button>`;
+        const ntBtn = `<button type="button" class="docIcon ntBtn ${hasNt ? 'on' : 'off'}">N</button>`;
+        const sgBtn = `<button type="button" class="docIcon sgBtn ${hasSg ? 'on' : 'off'}">S</button>`;
         const obsBtn = `<button type="button" class="docIcon obsIcon obsBtn ${hasOb ? 'on' : 'off'}">OBS</button>`;
         tr.innerHTML = `
           <td class="align-center"><button type="button" class="historyBtn">Ver</button></td>
           <td>${r.nup || ''}</td>
           <td>${r.type || ''}</td>
           <td>${U.fmtDate(r.first_entry_date)}</td>
-          <td>${stTxt} ${stBtn}</td>
-          <td>${obTxt} ${obBtn}</td>
+          <td>${stCell}</td>
+          <td>${obCell}</td>
           <td class="align-center">${obsBtn}</td>
           <td class="align-center">${opBtn}</td>
           <td class="align-center">${ntBtn}</td>
