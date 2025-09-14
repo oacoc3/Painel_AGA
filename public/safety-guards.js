@@ -57,12 +57,9 @@
     preventAjaxFormSubmit();
     installGlobalErrorTrap();
 
-    // Ao voltar para a aba, tenta recarregar listas conhecidas
+    // Ao voltar para a aba, força recarregamento no módulo de processos
     onVisibilityRefresh(() => {
-      if (window.Modules?.processos?.reloadLists) window.Modules.processos.reloadLists();
-      if (window.Modules?.prazos?.reloadLists) window.Modules.prazos.reloadLists();
-      if (window.Modules?.analise?.reloadLists) window.Modules.analise.reloadLists();
-      if (window.Modules?.dashboard?.reload) window.Modules.dashboard.reload?.();
+     if (document.body?.dataset.route === 'processos') location.reload();
     });
 
     // Ao retornar via histórico (bfcache), recarrega a lista de processos
