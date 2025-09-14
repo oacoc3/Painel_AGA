@@ -517,7 +517,7 @@ window.Modules.processos = (() => {
       const thead = document.createElement('thead');
       thead.innerHTML = `
         <tr>
-          <th>Histórico</th><th>NUP</th><th>Tipo</th><th>1ª Entrada</th>
+          <th></th><th>NUP</th><th>Tipo</th><th>1ª Entrada</th>
           <th>Status</th><th>Obra</th><th>Obs.</th><th></th><th></th><th></th><th></th><th></th>
         </tr>`;
       table.appendChild(thead);
@@ -532,10 +532,10 @@ window.Modules.processos = (() => {
         const hasSg = sgSet.has(r.id);
         const hasOb = obSet.has(r.id);
         const stTxt = `${r.status || ''}${r.status_since ? '<br><small>' + U.fmtDateTime(r.status_since) + '</small>' : ''}`;
-        const stBtn = isCurrent ? `<button type="button" class="editBtn editStatus">Editar</button>` : '';
+        const stBtn = isCurrent ? `<button type="button" class="editBtn editStatus">Editar Status</button>` : '';
         const stCell = `${stTxt}${isCurrent ? '<br>' + stBtn : ''}`;
         const obTxt = r.obra_concluida ? 'Concluída' : (r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : '');
-        const obBtn = isCurrent ? `<button type="button" class="editBtn toggleObra">${r.obra_concluida ? 'Desmarcar' : 'Marcar'}</button>` : '';
+        const obBtn = isCurrent ? `<button type="button" class="editBtn toggleObra">Editar Obra</button>` : '';
         const obCell = `${obTxt}${isCurrent ? '<br>' + obBtn : ''}`;
         const opBtn = `<button type="button" class="docIcon opBtn ${hasOp ? 'on' : 'off'}">P</button>`;
         const ntBtn = `<button type="button" class="docIcon ntBtn ${hasNt ? 'on' : 'off'}">N</button>`;
@@ -867,14 +867,15 @@ window.Modules.processos = (() => {
     try {
       const { data, error } = await sb
         .from('history')
-        .select('id,action,details,user_id,created_at')
+        .select('id,action,details,user_name,created_at')
         .eq('process_id', procId)
         .order('created_at', { ascending: false });
       if (error) throw error;
       const rows = Array.isArray(data)
         ? data.map(r => ({
             ...r,
-            details_text: formatHistoryDetails(r.details)
+              user_name: r.user_name || '',
+          details_text: formatHistoryDetails(r.details)
           }))
         : [];
       const content = document.createElement('div');
@@ -882,7 +883,7 @@ window.Modules.processos = (() => {
       Utils.renderTable(content, [
         { key: 'created_at', label: 'Data', value: r => U.fmtDateTime(r.created_at) },
         { key: 'action', label: 'Ação' },
-        { key: 'user_id', label: 'Usuário', value: r => r.user_id || '' },
+        { key: 'user_name', label: 'Usuário' },
         { key: 'details_text', label: 'Detalhes' }
       ], rows);
       const btn = document.createElement('button');
