@@ -64,6 +64,13 @@
       if (window.Modules?.analise?.reloadLists) window.Modules.analise.reloadLists();
       if (window.Modules?.dashboard?.reload) window.Modules.dashboard.reload?.();
     });
+
+    // Ao retornar via histórico (bfcache), recarrega a lista de processos
+    window.addEventListener('pageshow', (ev) => {
+      if (ev.persisted && document.body?.dataset.route === 'processos') {
+        try { window.Modules.processos?.reloadLists?.(); } catch (e) { console.error(e); }
+      }
+    });
   });
 
   // Expor utilidades p/ serem chamadas após renders dinâmicos:
