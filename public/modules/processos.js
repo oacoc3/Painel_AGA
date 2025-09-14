@@ -262,8 +262,8 @@ window.Modules.processos = (() => {
           type: dlg.querySelector('#npTipo')?.value || 'PDIR',
           status: dlg.querySelector('#npStatus')?.value || 'ANATEC-PRE',
           status_since: dlg.querySelector('#npStatusDate')?.value ? new Date(dlg.querySelector('#npStatusDate').value).toISOString() : null,
-          first_entry_date: dlg.querySelector('#npEntrada')?.value ? new Date(dlg.querySelector('#npEntrada').value).toISOString().slice(0,10) : null,
-          obra_termino_date: dlg.querySelector('#npObraTermino')?.value ? new Date(dlg.querySelector('#npObraTermino').value).toISOString().slice(0,10) : null,
+          first_entry_date: dlg.querySelector('#npEntrada')?.value || null,
+          obra_termino_date: dlg.querySelector('#npObraTermino')?.value || null,
           obra_concluida: !!obraBtn?.classList.contains('active')
         };
         try {
@@ -382,7 +382,7 @@ window.Modules.processos = (() => {
     dlg.querySelector('#obSalvar')?.addEventListener('click', async (ev) => {
       ev.preventDefault();
       const payload = {
-        obra_termino_date: term?.value ? new Date(term.value).toISOString().slice(0,10) : null,
+        obra_termino_date: term?.value || null,
         obra_concluida: !!chk?.checked
       };
       try {
