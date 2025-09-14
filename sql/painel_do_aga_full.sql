@@ -21,6 +21,7 @@ drop table if exists process_observations cascade;
 drop table if exists internal_opinions cascade;
 drop table if exists processes cascade;
 drop table if exists profiles cascade;
+drop table if exists history cascade;
 
 drop type if exists user_role cascade;
 drop type if exists process_type cascade;
@@ -86,7 +87,7 @@ language sql stable as $$
   select auth.uid();
 $$;
 
--- >>> NOVO: Leitura do papel a partir do JWT (JSON Web Token)
+-- >>> Leitura do papel a partir do JWT (JSON Web Token)
 -- Evita SELECT em 'profiles' dentro das policies de 'profiles' (sem recursão)
 create or replace function is_admin()
 returns boolean
@@ -139,7 +140,7 @@ create table processes (
   updated_at timestamptz not null default now(),
   constraint nup_format check (nup ~ '^[0-9]{5}\.[0-9]{6}/[0-9]{4}-[0-9]{2}$')
 );
-comment on column processes.do_aga_start_date is 'Data base do prazo de 60 dias da DO-AGA. Inicia em first_entry_date e reinicia quando sai de SOB-*.';
+comment on column processes.do_aga_start_date is 'Data base do prazo de 60 dias da DO-AGA. Inicia no dia seguinte a first_entry_date e reinicia no dia seguinte quando sai de SOB-*.';
 create trigger trg_processes_updated_at
 before update on processes
 for each row execute function extensions.moddatetime(updated_at);
@@ -162,7 +163,8 @@ create table internal_opinions (
   received_at timestamptz,
   created_by uuid not null references profiles(id),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  finalized_at timestamptz
 );
 create trigger trg_internal_opinions_updated_at
 before update on internal_opinions
@@ -270,16 +272,16 @@ returns trigger language plpgsql as $$
 begin
   if tg_op = 'INSERT' then
     if new.first_entry_date is not null then
-      new.do_aga_start_date := new.first_entry_date;
+      new.do_aga_start_date := new.first_entry_date + 1;
     end if;
   elsif tg_op = 'UPDATE' then
     if (old.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL'))
        and (new.status not in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')) then
-      new.do_aga_start_date := current_date;
+      new.do_aga_start_date := current_date + 1;
     elsif old.first_entry_date is null
           and new.first_entry_date is not null
           and new.do_aga_start_date is null then
-      new.do_aga_start_date := new.first_entry_date;
+      new.do_aga_start_date := new.first_entry_date + 1;
     end if;
   end if;
   return new;
@@ -446,14 +448,13 @@ where n.type = 'DESF-REM_REB' and n.status = 'LIDA';
 
 -- Prazo DO-AGA (60 dias; pausa em SOB-*)
 create or replace view v_prazo_do_aga as
-select p.id as process_id, p.nup, p.status,
-       p.do_aga_start_date as requested_at,
+select p.id as process_id, p.nup,
   case when p.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')
-            then null
-            else (p.do_aga_start_date + 60) end as due_date,
-       case when p.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')
-            then null
-            else (p.do_aga_start_date + 60) - current_date end as days_remaining
+          then null
+          else (p.do_aga_start_date + 60) end as due_date,
+  case when p.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')
+          then null
+          else (p.do_aga_start_date + 60) - current_date end as days_remaining
 from processes p
 where p.status <> 'ARQ';
 
@@ -648,16 +649,16 @@ returns trigger language plpgsql as $$
 begin
   if tg_op = 'INSERT' then
     if new.first_entry_date is not null then
-      new.do_aga_start_date := new.first_entry_date;
+      new.do_aga_start_date := new.first_entry_date + 1;
     end if;
   elsif tg_op = 'UPDATE' then
     if (old.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL'))
        and (new.status not in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')) then
-      new.do_aga_start_date := current_date;
+      new.do_aga_start_date := current_date + 1;
     elsif old.first_entry_date is null
           and new.first_entry_date is not null
           and new.do_aga_start_date is null then
-      new.do_aga_start_date := new.first_entry_date;
+      new.do_aga_start_date := new.first_entry_date + 1;
     end if;
   end if;
   return new;
@@ -675,7 +676,7 @@ end$$;
 -- Função RPC (SECURITY DEFINER) para listar todos os perfis quando o chamador for Administrador.
 -- Admin é reconhecido se: (a) JWT: user_metadata.role = 'Administrador'  OU
 --                         (b) Banco: profiles.role = 'Administrador' (via uid atual)
--- A função é SECURITY DEFINER para poder ler 'profiles' sem esbarrar nas policies de RLS (Rodízio de Linhas).
+-- A função é SECURITY DEFINER para poder ler 'profiles' sem esbarrar nas policies de RLS (Row Level Security).
 -- ATENÇÃO: defina o search_path para evitar hijack.
 
 create or replace function admin_list_profiles()
@@ -752,9 +753,10 @@ where p.id = u.id
 -- ============== Fim do arquivo 7: Painel_AGA-main/sql/06_backfill_profiles.sql ==============
 
 
+-- ===============================================
+-- Início do arquivo 8: Painel_AGA-main/sql/06_fix_history_and_opinions.sql
+-- ===============================================
 
-
--- sql/06_fix_history_and_opinions.sql
 -- 2025-09-07 — Ajustes para histórico e pareceres internos
 
 -- =========================================================
@@ -1015,8 +1017,8 @@ create trigger history_checklists
   for each row execute function add_history_event();
 
 -- =========================================================
--- (D) (Opcional) Backfill do histórico a partir do audit_log
---     Apenas para eventos de 'processes' (os demais exigiriam JOIN).
+-- (D) Backfill do histórico a partir do audit_log
+--     ✅ Com guarda para não violar FK (só insere se o processo existir)
 -- =========================================================
 insert into history (process_id, action, details, user_id, user_email, user_name, created_at)
 select
@@ -1028,6 +1030,7 @@ select
   p.name as user_name,
   al.occurred_at
 from audit_log al
+join processes proc on proc.id = al.entity_id
 left join profiles p on p.id = al.user_id
 where al.entity_type = 'processes'
   and not exists (
@@ -1036,3 +1039,5 @@ where al.entity_type = 'processes'
       and h.action     = al.action
       and h.created_at = al.occurred_at
   );
+
+-- ============== Fim do arquivo 8: Painel_AGA-main/sql/06_fix_history_and_opinions.sql ==============
