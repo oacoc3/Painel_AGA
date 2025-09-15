@@ -904,7 +904,25 @@ begin
         uname,
         now()
       );
-    end if;
+    elsif tg_op = 'DELETE' then
+      insert into history(process_id, action, details, user_id, user_email, user_name, created_at)
+      values (
+        pid,
+        'Parecer interno excluído',
+        json_build_object(
+          'id', old.id,
+          'type', old.type,
+          'status', old.status,
+          'requested_at', old.requested_at,
+          'received_at', old.received_at,
+          'finalized_at', old.finalized_at
+        ),
+        auth.uid(),
+        auth.jwt()->>'email',
+        uname,
+        now()
+      );
+end if;
 
   elsif tg_table_name = 'notifications' then
     pid := coalesce(new.process_id, old.process_id);
@@ -930,7 +948,24 @@ begin
         uname,
         now()
       );
-    end if;
+    elsif tg_op = 'DELETE' then
+      insert into history(process_id, action, details, user_id, user_email, user_name, created_at)
+      values (
+        pid,
+        'Notificação excluída',
+        json_build_object(
+          'id', old.id,
+          'type', old.type,
+          'status', old.status,
+          'requested_at', old.requested_at,
+          'read_at', old.read_at
+        ),
+        auth.uid(),
+        auth.jwt()->>'email',
+        uname,
+        now()
+      );
+end if;
 
   elsif tg_table_name = 'sigadaer' then
     pid := coalesce(new.process_id, old.process_id);
@@ -970,7 +1005,26 @@ begin
           now()
         );
       end if;
-    end if;
+    elsif tg_op = 'DELETE' then
+      insert into history(process_id, action, details, user_id, user_email, user_name, created_at)
+      values (
+        pid,
+        'SIGADAER excluído',
+        json_build_object(
+          'id', old.id,
+          'type', old.type,
+          'status', old.status,
+          'numbers', old.numbers,
+          'requested_at', old.requested_at,
+          'expedit_at', old.expedit_at,
+          'received_at', old.received_at
+        ),
+        auth.uid(),
+        auth.jwt()->>'email',
+        uname,
+        now()
+      );
+end if;
 
   elsif tg_table_name = 'checklist_responses' then
     pid := coalesce(new.process_id, old.process_id);
@@ -1004,6 +1058,11 @@ create trigger history_internal_opinions
   after insert or update on internal_opinions
   for each row execute function add_history_event();
 
+drop trigger if exists history_internal_opinions_del on internal_opinions;
+create trigger history_internal_opinions_del
+  after delete on internal_opinions
+  for each row execute function add_history_event();
+
 drop trigger if exists history_process_observations on process_observations;
 create trigger history_process_observations
   after insert or update on process_observations
@@ -1014,9 +1073,19 @@ create trigger history_notifications
   after insert or update on notifications
   for each row execute function add_history_event();
 
+drop trigger if exists history_notifications_del on notifications;
+create trigger history_notifications_del
+  after delete on notifications
+  for each row execute function add_history_event();
+
 drop trigger if exists history_sigadaer on sigadaer;
 create trigger history_sigadaer
   after insert or update on sigadaer
+  for each row execute function add_history_event();
+
+drop trigger if exists history_sigadaer_del on sigadaer;
+create trigger history_sigadaer_del
+  after delete on sigadaer
   for each row execute function add_history_event();
 
 drop trigger if exists history_checklists on checklist_responses;
