@@ -198,16 +198,25 @@
     if (!container) return;
     container.innerHTML = '';
 
-    const max = Math.max(30, ...items.map(it => it.avg || 0));
+    // PATCH aplicado: ignora avg não numérico no cálculo do max
+    const max = Math.max(
+      30,
+      ...items.map(it => (typeof it.avg === 'number' && Number.isFinite(it.avg)) ? it.avg : 0)
+    );
+
     items.forEach(it => {
+      // PATCH aplicado: valida avg e permite null (para o componente decidir o fallback)
+      const avg = (typeof it.avg === 'number' && Number.isFinite(it.avg)) ? it.avg : null;
+
       window.AppComponents.ProcessRing.create(container, {
-        nup: String(it.count ?? ''),
+        nup: String(it.count ?? ''), // "NUP" = Número Único de Protocolo (rotulo visual do anel)
         status: it.status,
-        speed: it.avg ?? 0,
+        speed: avg,
         min: 0,
         max,
-        sizeClass: 'sm',
-        ariaLabel: `Velocidade média de ${it.status}`
+        // PATCH aplicado: permite sobrescrever tamanho e rótulo de acessibilidade
+        sizeClass: it.sizeClass || 'sm',
+        ariaLabel: it.ariaLabel || `Velocidade média de ${it.status}`
       });
     });
   }
