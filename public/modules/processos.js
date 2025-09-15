@@ -980,7 +980,7 @@ window.Modules.processos = (() => {
       <form method="dialog" class="proc-popup">
         <label>Tipo
           <select id="ntTipo">
-            <option>FAV</option><option>FAV-TERM</option><option>TERM-ATRA</option><option>DESF-NAO_INI</option><option>DESF_JJAER</option><option>DESF-REM_REB</option><option>NCD</option><option>NCT</option>
+              <option>FAV</option><option>FAV-TERM</option><option>FAV-AD_HEL</option><option>TERM-ATRA</option><option>DESF-NAO_INI</option><option>DESF_JJAER</option><option>DESF-REM_REB</option><option>NCD</option><option>NCT</option>
           </select>
         </label>
         <label>Solicitada em <input type="datetime-local" id="ntSolic"></label>
