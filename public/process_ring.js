@@ -1,6 +1,9 @@
+// public/process_ring.js
 // Retro Elegant Process Ring (dias/processo)
-// API simples para criar e atualizar o anel.
-// Integração: window.AppComponents.ProcessRing.create(container, options)
+// API (Interface de Programação de Aplicações): window.AppComponents.ProcessRing.create(container, options)
+// NUP = Número Único de Protocolo
+// SVG = Scalable Vector Graphics
+// ARIA = Accessible Rich Internet Applications
 
 window.AppComponents = window.AppComponents || {};
 window.AppComponents.ProcessRing = (() => {
@@ -151,18 +154,27 @@ window.AppComponents.ProcessRing = (() => {
     function render() {
       const { speed, min, max, target: tgt } = options;
       const C = 2 * Math.PI * r;
-      const pct = clamp((speed - min) / Math.max(1e-6, max - min), 0, 1); // maior = arco maior
+
+      // PATCH: robustez quando speed for ausente/não numérico
+      const hasSpeed = typeof speed === 'number' && Number.isFinite(speed);
+      const safeSpeed = hasSpeed ? speed : 0;
+      const pct = hasSpeed
+        ? clamp((safeSpeed - min) / Math.max(1e-6, max - min), 0, 1)
+        : 0;
+
       progress.setAttribute('stroke-dasharray', `${(C * pct).toFixed(2)} ${(C * (1 - pct)).toFixed(2)}`);
 
-      // Cor por faixa
+      // Cor por faixa (somente se houver speed válido)
       root.classList.remove('ok', 'warn', 'bad');
-      root.classList.add(band(speed, min, max));
+      if (hasSpeed) {
+        root.classList.add(band(safeSpeed, min, max));
+      }
 
       // alvo
       setTargetLine(target, cx, cy, rOuter, tgt, min, max);
 
       // números e textos
-      center.querySelector('.value').textContent = formatValue(speed);
+      center.querySelector('.value').textContent = formatValue(hasSpeed ? safeSpeed : NaN);
       center.querySelector('.nup').textContent = options.nup || '';
       center.querySelector('.status').textContent = options.status || '';
     }
