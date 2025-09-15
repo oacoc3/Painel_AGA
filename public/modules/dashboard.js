@@ -2,6 +2,7 @@
 window.Modules = window.Modules || {};
 window.Modules.dashboard = (() => {
   const DASHBOARD_STATUSES = window.Modules.statuses.PROCESS_STATUSES;
+  const EXCLUDED_RING_STATUSES = new Set(['SOB-PDIR', 'SOB-EXPL', 'ARQ', 'EDICAO']);
 
   function init() {
     el('btnDashFilter').addEventListener('click', load);
@@ -11,7 +12,7 @@ window.Modules.dashboard = (() => {
     // Filtro por intervalo na 1ª entrada
     const from = el('dashFrom').value || null;
     const to = el('dashTo').value || null;
-    let q = sb.from('processes').select('id,status,first_entry_date');
+    let q = sb.from('processes').select('id,status,status_since,first_entry_date');
     if (from) q = q.gte('first_entry_date', from);
     if (to) q = q.lte('first_entry_date', to);
     const { data: procs } = await q;
@@ -57,13 +58,41 @@ window.Modules.dashboard = (() => {
       }
     });
 
-    const items = DASHBOARD_STATUSES.map(s => ({
+    const ringStatuses = DASHBOARD_STATUSES.filter(s => !EXCLUDED_RING_STATUSES.has(s));
+    const items = ringStatuses.map(s => ({
       status: s,
       count: countMap[s] || 0,
       avg: agg[s] ? (agg[s].sum / agg[s].n) : null
     }));
-    Utils.renderProcessRings('velocimetros', items);
 
+    const totalProcesses = (procs || []).length;
+    let archiveSum = 0;
+    let archiveCount = 0;
+    (procs || []).forEach(proc => {
+      if (!proc.first_entry_date) return;
+      const logList = byProc[proc.id] || [];
+      const archivedEvent = logList.find(entry => entry.status === 'ARQ');
+      let archivedStart = archivedEvent ? archivedEvent.start : null;
+      if (!archivedStart && proc.status === 'ARQ' && proc.status_since) {
+        archivedStart = proc.status_since;
+      }
+      if (!archivedStart) return;
+      const diff = Utils.daysBetween(proc.first_entry_date, archivedStart);
+      if (typeof diff === 'number' && Number.isFinite(diff)) {
+        archiveSum += diff;
+        archiveCount += 1;
+      }
+    });
+
+    const avgArchiveTime = archiveCount ? (archiveSum / archiveCount) : null;
+    items.unshift({
+      status: 'TOTAL',
+      count: totalProcesses,
+      avg: avgArchiveTime,
+      ariaLabel: 'Tempo médio até arquivamento (todos os processos)'
+    });
+
+    Utils.renderProcessRings('velocimetros', items);
   }
 
   return { init, load };
