@@ -528,6 +528,9 @@ for insert with check ( has_write_role() );
 create policy "opinions update" on internal_opinions
 for update using ( has_write_role() );
 
+create policy "opinions delete" on internal_opinions
+for delete using ( has_write_role() );
+
 -- notifications
 create policy "notifications read" on notifications
 for select using (auth.role() = 'authenticated');
@@ -538,6 +541,9 @@ for insert with check ( has_write_role() );
 create policy "notifications update" on notifications
 for update using ( has_write_role() );
 
+create policy "notifications delete" on notifications
+for delete using ( has_write_role() );
+
 -- sigadaer
 create policy "sigadaer read" on sigadaer
 for select using (auth.role() = 'authenticated');
@@ -547,6 +553,9 @@ for insert with check ( has_write_role() );
 
 create policy "sigadaer update" on sigadaer
 for update using ( has_write_role() );
+
+create policy "sigadaer delete" on sigadaer
+for delete using ( has_write_role() );
 
 -- models
 create policy "models read" on models
