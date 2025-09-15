@@ -325,9 +325,9 @@ returns trigger language plpgsql as $$
 begin
   if (tg_op = 'UPDATE') and (new.status = 'LIDA') then
     if new.type = 'NCD' then
-      update processes set status='SOB-DOC' where id = new.process_id;
+      update processes set status='SOB-DOC', status_since = coalesce(new.read_at, now()) where id = new.process_id;
     elsif new.type = 'NCT' then
-      update processes set status='SOB-TEC' where id = new.process_id;
+      update processes set status='SOB-TEC', status_since = coalesce(new.read_at, now()) where id = new.process_id;
     end if;
   end if;
   return new;
