@@ -448,14 +448,20 @@ where n.type = 'DESF-REM_REB' and n.status = 'LIDA';
 -- Prazo DO-AGA (60 dias; pausa em SOB-*)
 create or replace view v_prazo_do_aga as
 select p.id as process_id, p.nup,
-  case when p.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')
-          then null
-          else (p.do_aga_start_date + 60) end as due_date,
-  case when p.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')
-          then null
-          else (p.do_aga_start_date + 60) - current_date end as days_remaining
+       case when p.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')
+              then null
+              else calc.due_date end as due_date,
+       case when p.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')
+              then null
+              else calc.due_date - current_date end as days_remaining
 from processes p
-where p.status <> 'ARQ';
+cross join lateral (
+  select greatest(
+           coalesce(p.first_entry_date + 60, p.do_aga_start_date + 59),
+           coalesce(p.do_aga_start_date + 59, p.first_entry_date + 60)
+         ) as due_date
+) calc
+  where p.status <> 'ARQ';
 
 -- =========================
 -- RLS (Row Level Security)
