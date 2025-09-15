@@ -277,7 +277,7 @@ begin
   elsif tg_op = 'UPDATE' then
     if (old.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL'))
        and (new.status not in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')) then
-      new.do_aga_start_date := current_date + 1;
+      new.do_aga_start_date := coalesce(date(new.status_since), current_date) + 1;
     elsif old.first_entry_date is null
           and new.first_entry_date is not null
           and new.do_aga_start_date is null then
@@ -662,7 +662,7 @@ begin
   elsif tg_op = 'UPDATE' then
     if (old.status in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL'))
        and (new.status not in ('SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL')) then
-      new.do_aga_start_date := current_date + 1;
+      new.do_aga_start_date := coalesce(date(new.status_since), current_date) + 1;
     elsif old.first_entry_date is null
           and new.first_entry_date is not null
           and new.do_aga_start_date is null then
