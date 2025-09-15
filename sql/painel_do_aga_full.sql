@@ -308,12 +308,11 @@ for each row execute function check_opinion_allowed();
 -- Notificação só com status ANADOC, ANATEC-PRE, ANATEC, ANAICA
 create or replace function check_notification_allowed()
 returns trigger language plpgsql as $$
-declare ps process_status;
 begin
-  select status into ps from processes where id = new.process_id;
-  if ps not in ('ANADOC','ANATEC-PRE','ANATEC','ANAICA') then
-    raise exception 'Notificação só pode ser cadastrada quando processo está ANADOC, ANATEC-PRE, ANATEC ou ANAICA';
-  end if;
+  -- Previously, notifications could only be inserted when the related
+  -- process was in a specific set of statuses. To allow registering
+  -- notifications regardless of the process status, the validation was
+  -- removed and this trigger now simply returns the new row.
   return new;
 end$$;
 create trigger trg_notification_allowed
