@@ -69,7 +69,7 @@ create type opinion_status as enum ('SOLICITADO','RECEBIDO');
 
 create type notification_type as enum (
   'FAV','FAV-TERM','FAV-AD_HEL','TERM-ATRA',
-  'DESF-NAO_INI','DESF_JJAER','DESF-REM_REB',
+ 'DESF-INI','DESF-NAO_INI','DESF_JJAER','DESF-REM_REB',
   'NCD','NCT'
 );
 create type notification_status as enum ('SOLICITADA','LIDA');
