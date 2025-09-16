@@ -1115,6 +1115,51 @@ window.Modules.processos = (() => {
     }
   }
 
+
+  function showOpRecForm(id) {
+    editingOpId = id;
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Recebido em <input type="datetime-local" id="opRecInput"></label>
+        <menu>
+          <button id="btnSalvarOpRec" type="button">Salvar</button>
+          <button type="button" id="btnCancelarOpRec">Cancelar</button>
+        </menu>
+        <div id="opMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => { dlg.remove(); editingOpId = null; });
+    dlg.querySelector('#btnSalvarOpRec').addEventListener('click', async ev => {
+      ev.preventDefault();
+      await salvarOpRec(dlg);
+    });
+    dlg.querySelector('#btnCancelarOpRec').addEventListener('click', () => dlg.close());
+    dlg.showModal();
+  }
+
+  function showOpFinForm(id) {
+    editingOpId = id;
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Finalizado em <input type="datetime-local" id="opFinInput"></label>
+        <menu>
+          <button id="btnSalvarOpFin" type="button">Salvar</button>
+          <button type="button" id="btnCancelarOpFin">Cancelar</button>
+        </menu>
+        <div id="opMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => { dlg.remove(); editingOpId = null; });
+    dlg.querySelector('#btnSalvarOpFin').addEventListener('click', async ev => {
+      ev.preventDefault();
+      await salvarOpFin(dlg);
+    });
+    dlg.querySelector('#btnCancelarOpFin').addEventListener('click', () => dlg.close());
+    dlg.showModal();
+  }
+
   async function salvarOpRec(dlg) {
     if (!editingOpId) return;
     const input = dlg.querySelector('#opRecInput');
