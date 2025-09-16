@@ -53,7 +53,11 @@ button:hover { filter: brightness(0.98); }
 button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 100%; }
-#viewDashboard .grid { grid-template-columns: 1fr; }
+#viewDashboard .grid {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: stretch;
+  grid-auto-rows: minmax(0, 1fr);
+}
 .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .velocimetros { flex: 1; display: flex; flex-wrap: wrap; gap: 12px; overflow-y: auto; }
 .prazo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; height: 100%; grid-auto-rows: 1fr; }
@@ -82,7 +86,18 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 
 .card-title h2 { margin: 0; }
 .card-title label { margin-left: auto; }
+.chart-card .card-title { align-items: flex-end; }
+.chart-card .card-title label { font-size: 12px; }
+.chart-card .card-title label select { min-width: 120px; }
 
+.bar-chart { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.bar-chart-bars { flex: 1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; align-items: end; min-height: 200px; }
+.bar-chart-item { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
+.bar-chart-value { font-family: var(--mono); font-size: 12px; }
+.bar-chart-bar-wrapper { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; padding: 0 4px; border-radius: 4px; background: linear-gradient(180deg, rgba(75, 111, 145, 0.12), rgba(75, 111, 145, 0.03)); }
+.bar-chart-bar { width: 100%; border-radius: 4px 4px 0 0; background: var(--brand); transition: height 0.3s ease; }
+.bar-chart-label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--ink-soft); letter-spacing: 0.04em; }
+.chart-placeholder { margin: 0; font-size: 12px; text-align: center; }
 .tabs { display: flex; flex-direction: column; gap: 8px; }
 .tab-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
 .tab { display: none; }
