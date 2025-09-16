@@ -50,6 +50,10 @@ window.Modules.processos = (() => {
 
   const PROCESS_STATUSES = window.Modules.statuses.PROCESS_STATUSES;
   const STATUS_OPTIONS = PROCESS_STATUSES.map(s => `<option>${s}</option>`).join('');
+  const NOTIFICATION_TYPES = ['FAV', 'FAV-TERM', 'FAV-AD_HEL', 'TERM-ATRA', 'DESF-NAO_INI', 'DESF_JJAER', 'DESF-REM_REB', 'NCD', 'NCT'];
+  const NOTIFICATION_OPTIONS = NOTIFICATION_TYPES.map(t => `<option>${t}</option>`).join('');
+  const SIGADAER_TYPES = ['COMAE', 'COMPREP', 'COMGAP', 'GABAER', 'SAC', 'ANAC', 'OPR_AD', 'PREF', 'GOV', 'OUTRO'];
+  const SIGADAER_OPTIONS = SIGADAER_TYPES.map(t => `<option>${t}</option>`).join('');
 
   const el = (id) => document.getElementById(id);
 
@@ -1001,6 +1005,113 @@ window.Modules.processos = (() => {
       if (el('opListaPop')) await loadOpiniaoList(procId, 'opListaPop');
     } catch (e) {
       U.setMsg('opMsg', e.message || String(e), true);
+    }
+  }
+
+  function showCadNotifForm(procId = currentProcId) {
+    if (!procId) return;
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Tipo
+          <select id="ntTipo">${NOTIFICATION_OPTIONS}</select>
+        </label>
+        <label>Solicitada em <input type="datetime-local" id="ntSolic"></label>
+        <menu>
+          <button id="btnSalvarNt" type="button">Salvar</button>
+          <button type="button" id="btnCancelarNt">Cancelar</button>
+        </menu>
+        <div id="ntCadMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#btnSalvarNt')?.addEventListener('click', async ev => {
+      ev.preventDefault();
+      await cadNotif(dlg, procId);
+    });
+    dlg.querySelector('#btnCancelarNt')?.addEventListener('click', () => dlg.close());
+    dlg.showModal();
+  }
+
+  async function cadNotif(dlg, procId = currentProcId) {
+    if (!procId) return U.setMsg('ntCadMsg', 'Selecione um processo.', true);
+    const tipo = dlg.querySelector('#ntTipo')?.value || '';
+    if (!tipo) return U.setMsg('ntCadMsg', 'Selecione o tipo de notificação.', true);
+    const solicitadaEm = dlg.querySelector('#ntSolic')?.value || '';
+    const payload = {
+      process_id: procId,
+      type: tipo,
+      requested_at: solicitadaEm ? new Date(solicitadaEm).toISOString() : new Date().toISOString(),
+      status: 'SOLICITADA'
+    };
+    try {
+      const u = await getUser();
+      if (!u) return U.setMsg('ntCadMsg', 'Sessão expirada.', true);
+      const { error } = await sb.from('notifications').insert({ ...payload, created_by: u.id });
+      if (error) throw error;
+      dlg.close();
+      await loadProcessList();
+      if (procId && el('ntListaPop')) await loadNotifList(procId, 'ntListaPop');
+      if (procId && el('ntLista')) await loadNotifList(procId, 'ntLista');
+    } catch (e) {
+      U.setMsg('ntCadMsg', e.message || String(e), true);
+    }
+  }
+
+  function showCadSigForm(procId = currentProcId) {
+    if (!procId) return;
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Tipo
+          <select id="sgTipo">${SIGADAER_OPTIONS}</select>
+        </label>
+        <label>Números (separe com espaços, vírgulas ou ponto e vírgula)
+          <input type="text" id="sgNumeros" placeholder="123456; 654321">
+        </label>
+        <label>Solicitada em <input type="datetime-local" id="sgSolic"></label>
+        <menu>
+          <button id="btnSalvarSg" type="button">Salvar</button>
+          <button type="button" id="btnCancelarSg">Cancelar</button>
+        </menu>
+        <div id="sgCadMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#btnSalvarSg')?.addEventListener('click', async ev => {
+      ev.preventDefault();
+      await cadSig(dlg, procId);
+    });
+    dlg.querySelector('#btnCancelarSg')?.addEventListener('click', () => dlg.close());
+    dlg.showModal();
+  }
+
+  async function cadSig(dlg, procId = currentProcId) {
+    if (!procId) return U.setMsg('sgCadMsg', 'Selecione um processo.', true);
+    const tipo = dlg.querySelector('#sgTipo')?.value || '';
+    if (!tipo) return U.setMsg('sgCadMsg', 'Selecione o tipo de SIGADAER.', true);
+    const numerosTexto = dlg.querySelector('#sgNumeros')?.value || '';
+    const numeros = Array.from(new Set(parseSigNumbers(numerosTexto)));
+    if (!numeros.length) return U.setMsg('sgCadMsg', 'Informe ao menos um número SIGADAER válido.', true);
+    const solicitadaEm = dlg.querySelector('#sgSolic')?.value || '';
+    const payload = {
+      process_id: procId,
+      type: tipo,
+      requested_at: solicitadaEm ? new Date(solicitadaEm).toISOString() : new Date().toISOString(),
+      status: 'SOLICITADO',
+      numbers: numeros
+    };
+    try {
+      const u = await getUser();
+      if (!u) return U.setMsg('sgCadMsg', 'Sessão expirada.', true);
+      const { error } = await sb.from('sigadaer').insert({ ...payload, created_by: u.id });
+      if (error) throw error;
+      dlg.close();
+      await loadProcessList();
+      if (procId && el('sgListaPop')) await loadSIGList(procId, 'sgListaPop');
+      if (procId && el('sgLista')) await loadSIGList(procId, 'sgLista');
+    } catch (e) {
+      U.setMsg('sgCadMsg', e.message || String(e), true);
     }
   }
 
