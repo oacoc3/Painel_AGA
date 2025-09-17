@@ -193,31 +193,93 @@
     });
   }
 
-  function renderProcessRings(id, items) {
+  // Novas utilitárias para barras de processo
+  function band(value, min, max) {
+    const t = (value - min) / Math.max(1e-6, (max - min));
+    if (t <= 1 / 3) return 'ok';
+    if (t <= 2 / 3) return 'warn';
+    return 'bad';
+  }
+
+  function formatProcessSpeed(value) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+    return new Intl.NumberFormat('pt-BR', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1
+    }).format(value);
+  }
+
+  function renderProcessBars(id, items) {
     const container = el(id);
     if (!container) return;
     container.innerHTML = '';
 
-    // PATCH aplicado: ignora avg não numérico no cálculo do max
+    const list = Array.isArray(items) ? items : [];
     const max = Math.max(
       30,
-      ...items.map(it => (typeof it.avg === 'number' && Number.isFinite(it.avg)) ? it.avg : 0)
+      ...list.map(it => (typeof it.avg === 'number' && Number.isFinite(it.avg)) ? it.avg : 0)
     );
 
-    items.forEach(it => {
-      // PATCH aplicado: valida avg e permite null (para o componente decidir o fallback)
+    list.forEach(it => {
       const avg = (typeof it.avg === 'number' && Number.isFinite(it.avg)) ? it.avg : null;
+      const count = (typeof it.count === 'number' && Number.isFinite(it.count)) ? it.count : 0;
 
-      window.AppComponents.ProcessRing.create(container, {
-        nup: String(it.count ?? ''), // "NUP" = Número Único de Protocolo (rotulo visual do anel)
-        status: it.status,
-        speed: avg,
-        min: 0,
-        max,
-        // PATCH aplicado: permite sobrescrever tamanho e rótulo de acessibilidade
-        sizeClass: it.sizeClass || 'sm',
-        ariaLabel: it.ariaLabel || `Velocidade média de ${it.status}`
-      });
+      const bar = document.createElement('div');
+      bar.className = 'process-bar';
+      bar.setAttribute('role', 'img');
+      bar.setAttribute('aria-label', it.ariaLabel || `Velocidade média de ${it.status || 'status desconhecido'}`);
+
+      const header = document.createElement('div');
+      header.className = 'process-bar-header';
+
+      const status = document.createElement('span');
+      status.className = 'process-bar-status';
+      status.textContent = it.status || '';
+
+      const meta = document.createElement('div');
+      meta.className = 'process-bar-meta';
+
+      const countEl = document.createElement('span');
+      countEl.className = 'process-bar-count';
+      const countLabel = new Intl.NumberFormat('pt-BR').format(count);
+      countEl.textContent = `${countLabel} processo${count === 1 ? '' : 's'}`;
+
+      const valueEl = document.createElement('span');
+      valueEl.className = 'process-bar-value';
+      const formattedAvg = formatProcessSpeed(avg);
+      valueEl.textContent = formattedAvg === '—' ? '— dias' : `${formattedAvg} dias`;
+
+      meta.appendChild(countEl);
+      meta.appendChild(valueEl);
+
+      header.appendChild(status);
+      header.appendChild(meta);
+
+      const track = document.createElement('div');
+      track.className = 'process-bar-track';
+      track.setAttribute('role', 'presentation');
+      track.title = avg == null
+        ? 'Sem dados suficientes para calcular a média.'
+        : `Média de ${formattedAvg} dias para ${it.status || 'o status informado'}.`;
+
+      const fill = document.createElement('div');
+      fill.className = 'process-bar-fill';
+
+      if (avg != null) {
+        const pct = Math.max(0, Math.min(1, avg / Math.max(1e-6, max)));
+        fill.style.width = `${(pct * 100).toFixed(2)}%`;
+        bar.classList.add(band(avg, 0, max));
+      } else {
+        fill.style.width = '0%';
+        bar.classList.add('no-data');
+      }
+
+      track.appendChild(fill);
+
+      bar.appendChild(header);
+      bar.appendChild(track);
+
+      container.appendChild(bar);
     });
   }
 
@@ -234,7 +296,7 @@
     renderTable,
     callFn,
     bindNUPMask,
-    renderProcessRings,
+    renderProcessBars,
     dateOnly
   };
 })();
