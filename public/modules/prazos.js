@@ -6,7 +6,7 @@ window.Modules.prazos = (() => {
   let obras = [];
   let monitor = [];
   let doaga = [];
-
+  let adhel = [];
   function bindRowLinks(tbody) {
     if (!tbody) return;
     tbody.querySelectorAll('tr').forEach(tr => {
@@ -127,13 +127,30 @@ window.Modules.prazos = (() => {
     renderDOAGA();
   }
 
+  function renderADHEL() {
+    const rows = adhel;
+    const { tbody } = Utils.renderTable('prazoADHEL', [
+      { key: 'nup', label: 'NUP' },
+      { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : '') },
+      { key: 'days_remaining', label: 'Dias rem.', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
+    ], rows);
+    bindRowLinks(tbody);
+  }
+
+  async function loadADHEL() {
+    const { data } = await sb.from('v_prazo_ad_hel')
+      .select('nup,due_date,days_remaining');
+    adhel = (data || []).sort((a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31'));
+    renderADHEL();
+  }
+
   function init() {
     el('psTipo')?.addEventListener('change', renderPareceres);
     el('monTipo')?.addEventListener('change', renderMonitor);
   }
 
   async function load() {
-    await Promise.all([loadPareceres(), loadRemocao(), loadObra(), loadMonitor(), loadDOAGA()]);
+    await Promise.all([loadPareceres(), loadRemocao(), loadObra(), loadMonitor(), loadDOAGA(), loadADHEL()]);
   }
 
   return { init, load };
