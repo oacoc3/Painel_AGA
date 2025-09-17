@@ -463,6 +463,27 @@ cross join lateral (
 ) calc
   where p.status <> 'ARQ';
 
+-- AD/HEL - Deliberação Favorável (2 anos a partir do dia seguinte à leitura)
+create or replace view v_prazo_ad_hel as
+with fav as (
+  select n.process_id,
+         max(date(timezone('America/Sao_Paulo', n.read_at))) as read_date
+  from notifications n
+  join processes p on p.id = n.process_id
+  where n.type = 'FAV-AD_HEL'
+    and n.status = 'LIDA'
+    and p.type = 'Inscrição'
+  group by n.process_id
+)
+select p.id as process_id,
+       p.nup,
+       fav.read_date,
+       fav.read_date + 1 as start_count,
+       (fav.read_date + 1 + interval '2 years')::date as due_date,
+       (fav.read_date + 1 + interval '2 years')::date - current_date as days_remaining
+from fav
+join processes p on p.id = fav.process_id;
+
 -- =========================
 -- RLS (Row Level Security)
 -- =========================
