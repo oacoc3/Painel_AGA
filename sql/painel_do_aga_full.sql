@@ -61,7 +61,7 @@ create type process_status as enum (
   'CONFEC','REV-OACO','APROV','ICA-PUB','EDICAO','AGD-LEIT',
   'ANADOC','ANATEC-PRE','ANATEC','ANAICA',
   'SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL',
-  'ARQ'
+  'DECEA','ARQ'
 );
 
 create type opinion_type as enum ('ATM','DT','CGNA');
