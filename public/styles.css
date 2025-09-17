@@ -59,7 +59,70 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   grid-auto-rows: minmax(0, 1fr);
 }
 .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-.velocimetros { flex: 1; display: flex; flex-wrap: wrap; gap: 12px; overflow-y: auto; }
+.velocimetros {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.process-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  min-width: 0;
+}
+.process-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.process-bar-status {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.process-bar-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.process-bar-count,
+.process-bar-value {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.process-bar-track {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(31, 41, 55, 0.1);
+  overflow: hidden;
+}
+.process-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand);
+  transition: width 300ms ease;
+  width: 0;
+}
+.process-bar.ok .process-bar-fill { background: #1f7a1f; }
+.process-bar.warn .process-bar-fill { background: #b8860b; }
+.process-bar.bad .process-bar-fill { background: #8b0000; }
+.process-bar.no-data .process-bar-track {
+  background: repeating-linear-gradient(135deg, rgba(31, 41, 55, 0.1), rgba(31, 41, 55, 0.1) 8px, rgba(31, 41, 55, 0.05) 8px, rgba(31, 41, 55, 0.05) 16px);
+}
 .prazo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; height: 100%; grid-auto-rows: 1fr; }
 .prazo-grid > .card,
 .prazo-grid > .prazo-col { height: 100%; min-height: 0; }
