@@ -58,7 +58,7 @@ create type user_role as enum ('Administrador','Analista OACO','Analista OAGA','
 create type process_type as enum ('PDIR','Inscrição','Alteração','Exploração','OPEA');
 
 create type process_status as enum (
-  'CONFEC','REV-OACO','APROV','ICA-PUB','EDICAO','AGD-LEIT',
+  'CONFEC','REV-OACO','APROV','ICA-PUB','ICA-EXTR','EDICAO','AGD-LEIT',
   'ANADOC','ANATEC-PRE','ANATEC','ANAICA',
   'SOB-DOC','SOB-TEC','SOB-PDIR','SOB-EXPL',
   'DECEA','ARQ'
