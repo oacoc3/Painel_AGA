@@ -658,7 +658,7 @@ window.Modules.processos = (() => {
         return;
       }
       Utils.renderTable(box, [
-        { key: 'checklist', label: 'Checklist' },
+         { key: 'checklist', label: 'DOC' },
         { key: 'filled_at', label: 'Preenchida em', value: r => U.fmtDateTime(r.filled_at) },
         {
           label: 'PDF',
