@@ -47,10 +47,9 @@ window.Modules.processos = (() => {
     pager.querySelector('#procLastPage')?.addEventListener('click', () => loadProcessList({ page: pagesTotal }));
   }
 
-
   const PROCESS_STATUSES = window.Modules.statuses.PROCESS_STATUSES;
   const STATUS_OPTIONS = PROCESS_STATUSES.map(s => `<option>${s}</option>`).join('');
-   const NOTIFICATION_TYPES = ['FAV', 'FAV-TERM', 'FAV-AD_HEL', 'TERM-ATRA', 'DESF-INI', 'DESF-NAO_INI', 'DESF_JJAER', 'DESF-REM_REB', 'NCD', 'NCT', 'REVOG', 'ARQ-EXTR', 'ARQ-PRAZ'];
+  const NOTIFICATION_TYPES = ['FAV', 'FAV-TERM', 'FAV-AD_HEL', 'TERM-ATRA', 'DESF-INI', 'DESF-NAO_INI', 'DESF_JJAER', 'DESF-REM_REB', 'NCD', 'NCT', 'REVOG', 'ARQ-EXTR', 'ARQ-PRAZ'];
   const NOTIFICATION_OPTIONS = NOTIFICATION_TYPES.map(t => `<option>${t}</option>`).join('');
   const SIGADAER_TYPES = ['COMAE', 'COMPREP', 'COMGAP', 'GABAER', 'SAC', 'ANAC', 'OPR_AD', 'PREF', 'GOV', 'OUTRO'];
   const SIGADAER_OPTIONS = SIGADAER_TYPES.map(t => `<option>${t}</option>`).join('');
@@ -87,7 +86,7 @@ window.Modules.processos = (() => {
       try {
         let d;
         if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
-          const [y, m, dd] = iso.split('-').map(Number);
+          const [y, m, dd] = iso.split('-'). .map(Number);
           d = new Date(y, m - 1, dd);
         } else {
           d = new Date(iso);
@@ -273,7 +272,7 @@ window.Modules.processos = (() => {
       });
       dlg.querySelector('#npSalvar')?.addEventListener('click', async (ev) => {
         ev.preventDefault();
-         const tipo = dlg.querySelector('#npTipo')?.value || '';
+        const tipo = dlg.querySelector('#npTipo')?.value || '';
         const status = dlg.querySelector('#npStatus')?.value || '';
         const statusDateVal = dlg.querySelector('#npStatusDate')?.value || '';
         const entrada = dlg.querySelector('#npEntrada')?.value || '';
@@ -291,7 +290,6 @@ window.Modules.processos = (() => {
           first_entry_date: entrada,
           obra_termino_date: obraConcl ? null : obraTermVal,
           obra_concluida: obraConcl
-
         };
         try {
           const u = await getUser();
@@ -461,7 +459,6 @@ window.Modules.processos = (() => {
     await loadProcessList();
   }
 
-  
   async function loadProcessList({ page = PROC_PAGE, pageSize = PROC_PAGE_SIZE } = {}) {
     const box = el('procLista');
     if (!box) return;
@@ -512,16 +509,18 @@ window.Modules.processos = (() => {
       const ids = rows.map(r => r.id);
 
       // Busca presença nas tabelas relacionadas apenas para os IDs da página atual
-      const [op, nt, sg, ob] = await Promise.all([
+      const [op, nt, sg, ob, ck] = await Promise.all([
         sb.from('internal_opinions').select('process_id').in('process_id', ids),
         sb.from('notifications').select('process_id').in('process_id', ids),
         sb.from('sigadaer').select('process_id').in('process_id', ids),
-        sb.from('process_observations').select('process_id').in('process_id', ids)
+        sb.from('process_observations').select('process_id').in('process_id', ids),
+        sb.from('checklist_responses').select('process_id').in('process_id', ids)
       ]);
       const opSet = new Set((op.data || []).map(o => o.process_id));
       const ntSet = new Set((nt.data || []).map(o => o.process_id));
       const sgSet = new Set((sg.data || []).map(o => o.process_id));
       const obSet = new Set((ob.data || []).map(o => o.process_id));
+      const ckSet = new Set((ck.data || []).map(o => o.process_id));
 
       if (currentProcId) {
         const cur = String(currentProcId);
@@ -552,12 +551,14 @@ window.Modules.processos = (() => {
         const obTxt = r.obra_concluida ? 'Concluída' : (r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : '');
         const obBtn = isCurrent ? `<button type="button" class="editBtn toggleObra">Editar Obra</button>` : '';
         const obCell = `${obTxt}${isCurrent ? '<br>' + obBtn : ''}`;
+        const hasChecklist = ckSet.has(r.id);
+        const ckBtn = `<button type="button" class="docIcon ckBtn ${hasChecklist ? 'on' : 'off'}" title="Checklists" aria-label="Checklists">✓</button>`;
         const opBtn = `<button type="button" class="docIcon opBtn ${hasOp ? 'on' : 'off'}">P</button>`;
         const ntBtn = `<button type="button" class="docIcon ntBtn ${hasNt ? 'on' : 'off'}">N</button>`;
         const sgBtn = `<button type="button" class="docIcon sgBtn ${hasSg ? 'on' : 'off'}">S</button>`;
         const obsBtn = `<button type="button" class="docIcon obsIcon obsBtn ${hasOb ? 'on' : 'off'}">OBS</button>`;
         tr.innerHTML = `
-          <td class="align-center"><button type="button" class="historyBtn" aria-label="Histórico">👁️</button></td>
+          <td class="align-center"><div class="historyWrap"><button type="button" class="historyBtn" aria-label="Histórico">👁️</button>${ckBtn}</div></td>
           <td>${r.nup || ''}</td>
           <td>${r.type || ''}</td>
           <td>${U.fmtDate(r.first_entry_date)}</td>
@@ -596,6 +597,7 @@ window.Modules.processos = (() => {
         }
         if (ev.target.closest('.selectBtn')) return selectProcess(row);
         if (ev.target.closest('.historyBtn')) return showHistoryPopup(row.id);
+        if (ev.target.closest('.ckBtn')) return showChecklistPopup(row.id);
         if (ev.target.closest('.opBtn')) return showOpiniaoPopup(row.id);
         if (ev.target.closest('.ntBtn')) return showNotifPopup(row.id);
         if (ev.target.closest('.sgBtn')) return showSigPopup(row.id);
@@ -610,7 +612,6 @@ window.Modules.processos = (() => {
       console.error(err);
     }
   }
-
 
   async function loadObsList(procId, targetId = 'obsLista') {
     const box = el(targetId);
@@ -627,6 +628,49 @@ window.Modules.processos = (() => {
       Utils.renderTable(box, [
         { key: 'created_at', label: 'Data', value: r => U.fmtDateTime(r.created_at) },
         { key: 'text', label: 'Observação' }
+      ], rows);
+    } catch (e) {
+      box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
+    }
+  }
+
+  // === NOVO: lista de checklists preenchidas ===
+  async function loadChecklistList(procId, targetId = 'ckLista') {
+    const box = el(targetId);
+    if (!box) return;
+    box.innerHTML = '<div class="msg">Carregando…</div>';
+    try {
+      const { data, error } = await sb
+        .from('checklist_responses')
+        .select('id,filled_at,checklist_templates(name)')
+        .eq('process_id', procId)
+        .order('filled_at', { ascending: false });
+      if (error) throw error;
+      const rows = Array.isArray(data)
+        ? data.map(r => ({
+            id: r.id,
+            checklist: r.checklist_templates?.name || '',
+            filled_at: r.filled_at
+          }))
+        : [];
+      if (!rows.length) {
+        box.innerHTML = '<div class="msg">Nenhuma checklist preenchida.</div>';
+        return;
+      }
+      Utils.renderTable(box, [
+        { key: 'checklist', label: 'Checklist' },
+        { key: 'filled_at', label: 'Preenchida em', value: r => U.fmtDateTime(r.filled_at) },
+        {
+          label: 'PDF',
+          align: 'center',
+          render: (r) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = 'PDF';
+            b.addEventListener('click', () => abrirChecklistPDF(r.id));
+            return b;
+          }
+        }
       ], rows);
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
@@ -792,6 +836,74 @@ window.Modules.processos = (() => {
     }
   }
 
+  // === NOVO: abrir PDF de checklist ===
+  async function abrirChecklistPDF(id) {
+    const win = window.open('', '_blank');
+    if (win) win.opener = null;
+    try {
+      if (!window.jspdf?.jsPDF) throw new Error('Biblioteca de PDF indisponível.');
+      const { data, error } = await sb
+        .from('checklist_responses')
+        .select('answers,extra_obs,filled_at,processes(nup),checklist_templates(name,items)')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+
+      const doc = new window.jspdf.jsPDF();
+      let y = 10;
+      doc.setFontSize(12);
+      doc.text(`Checklist: ${data.checklist_templates?.name || ''}`, 10, y); y += 6;
+      doc.text(`NUP: ${data.processes?.nup || ''}`, 10, y); y += 6;
+      doc.text(`Preenchida em: ${Utils.fmtDateTime(data.filled_at)}`, 10, y); y += 10;
+
+      const answers = Array.isArray(data.answers) ? data.answers : [];
+      const tplItems = data.checklist_templates?.items;
+      const cats = Array.isArray(tplItems) ? tplItems : [];
+      cats.forEach(cat => {
+        if (y > 270) { doc.addPage(); y = 10; }
+        doc.setFont(undefined, 'bold');
+        doc.text(cat.categoria || '', 10, y); y += 6;
+        doc.setFont(undefined, 'normal');
+        (cat.itens || []).forEach(item => {
+          if (y > 270) { doc.addPage(); y = 10; }
+          const ans = answers.find(a => a.code === item.code) || {};
+          doc.text(`${item.code || ''} - ${item.requisito || ''}`, 10, y); y += 6;
+          doc.text(`Resultado: ${ans.value || ''}`, 10, y); y += 6;
+          if (ans.obs) { doc.text(`Obs: ${ans.obs}`, 10, y); y += 6; }
+          y += 4;
+        });
+      });
+
+      if (data.extra_obs) {
+        if (y > 270) { doc.addPage(); y = 10; }
+        doc.setFont(undefined, 'bold');
+        doc.text('Outras observações:', 10, y); y += 6;
+        doc.setFont(undefined, 'normal');
+        doc.text(String(data.extra_obs), 10, y); y += 6;
+      }
+
+      const url = doc.output('bloburl');
+      if (win) win.location.href = url;
+    } catch (err) {
+      if (win) win.close();
+      alert(err.message || String(err));
+    }
+  }
+
+  // === NOVO: popup de checklists ===
+  async function showChecklistPopup(procId = currentProcId) {
+    if (!procId) return;
+    popupProcId = procId;
+    const dlg = document.createElement('dialog');
+    dlg.className = 'hist-popup';
+    dlg.innerHTML = '<div id="ckListaPop" class="table scrolly">Carregando…</div><menu><button type="button" id="ckClose">Fechar</button></menu>';
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => { dlg.remove(); popupProcId = null; });
+    dlg.querySelector('#ckClose').addEventListener('click', () => dlg.close());
+    dlg.showModal();
+    await loadChecklistList(procId, 'ckListaPop');
+  }
+
   async function showOpiniaoPopup(procId = currentProcId) {
     if (!procId) return;
     popupProcId = procId;
@@ -920,8 +1032,8 @@ window.Modules.processos = (() => {
       const rows = Array.isArray(data)
         ? data.map(r => ({
             ...r,
-              user_name: r.user_name || '',
-          details_text: formatHistoryDetails(r.details)
+            user_name: r.user_name || '',
+            details_text: formatHistoryDetails(r.details)
           }))
         : [];
       const content = document.createElement('div');
@@ -1114,7 +1226,6 @@ window.Modules.processos = (() => {
       U.setMsg('sgCadMsg', e.message || String(e), true);
     }
   }
-
 
   function showOpRecForm(id) {
     editingOpId = id;
@@ -1368,6 +1479,7 @@ window.Modules.processos = (() => {
 
   async function reloadLists() {
     await loadProcessList();
+    if (popupProcId && el('ckListaPop')) await loadChecklistList(popupProcId, 'ckListaPop');
   }
 
   function bindEvents() {
