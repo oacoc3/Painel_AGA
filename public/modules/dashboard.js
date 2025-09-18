@@ -2,7 +2,16 @@
 window.Modules = window.Modules || {};
 window.Modules.dashboard = (() => {
   const DASHBOARD_STATUSES = window.Modules.statuses.PROCESS_STATUSES;
-   const EXCLUDED_RING_STATUSES = new Set(['SOB-PDIR', 'SOB-EXPL', 'ARQ', 'EDICAO', 'SOB-DOC', 'SOB-TEC']);
+  const EXCLUDED_RING_STATUSES = new Set([
+    'SOB-PDIR',
+    'SOB-EXPL',
+    'ARQ',
+    'EDICAO',
+    'SOB-DOC',
+    'SOB-TEC',
+    'DECEA',
+    'AGD-LEIT'
+  ]);
   const MONTH_LABELS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 
   let cachedProcesses = [];
