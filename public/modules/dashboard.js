@@ -201,40 +201,17 @@ window.Modules.dashboard = (() => {
     });
 
     const ringStatuses = DASHBOARD_STATUSES.filter(s => !EXCLUDED_RING_STATUSES.has(s));
-    const items = ringStatuses.map(s => ({
-      status: s,
-      count: countMap[s] || 0,
-      avg: agg[s] ? (agg[s].sum / agg[s].n) : null
-    }));
-
-    const totalProcesses = (procs || []).length;
-    let archiveSum = 0;
-    let archiveCount = 0;
-    (procs || []).forEach(proc => {
-      if (!proc.first_entry_date) return;
-      const logList = byProc[proc.id] || [];
-      const archivedEvent = logList.find(entry => entry.status === 'ARQ');
-      let archivedStart = archivedEvent ? archivedEvent.start : null;
-      if (!archivedStart && proc.status === 'ARQ' && proc.status_since) {
-        archivedStart = proc.status_since;
-      }
-      if (!archivedStart) return;
-      const diff = Utils.daysBetween(proc.first_entry_date, archivedStart);
-      if (typeof diff === 'number' && Number.isFinite(diff)) {
-        archiveSum += diff;
-        archiveCount += 1;
-      }
+    const items = ringStatuses.map(s => {
+      const label = STATUS_LABELS[s] || s;
+      return {
+        status: s,
+        label,
+        count: countMap[s] || 0,
+        avg: agg[s] ? (agg[s].sum / agg[s].n) : null,
+        ariaLabel: `Velocidade média de ${label}`
+      };
     });
 
-    const avgArchiveTime = archiveCount ? (archiveSum / archiveCount) : null;
-    items.unshift({
-      status: 'TOTAL',
-      count: totalProcesses,
-      avg: avgArchiveTime,
-      ariaLabel: 'Tempo médio até arquivamento (todos os processos)'
-    });
-
-    
     Utils.renderProcessBars('velocimetros', items);
 
   }
