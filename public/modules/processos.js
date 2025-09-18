@@ -86,7 +86,7 @@ window.Modules.processos = (() => {
       try {
         let d;
         if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
-          const [y, m, dd] = iso.split('-'). .map(Number);
+          const [y, m, dd] = iso.split('-').map(Number);
           d = new Date(y, m - 1, dd);
         } else {
           d = new Date(iso);
