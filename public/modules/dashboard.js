@@ -12,6 +12,16 @@ window.Modules.dashboard = (() => {
     'DECEA',
     'AGD-LEIT'
   ]);
+  const STATUS_LABELS = {
+    CONFEC: 'Confecção de Notificação',
+    'REV-OACO': 'Revisão Chefe OACO',
+    APROV: 'Aprovação Chefe AGA',
+    'ICA-PUB': 'ICA - Publicação de Portaria',
+    ANADOC: 'Análise Documental',
+    'ANATEC-PRE': 'Análise Técnica Preliminar',
+    ANATEC: 'Análise Técnica',
+    ANAICA: 'ICA - Análise Documental/Técnica'
+  };
   const MONTH_LABELS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 
   let cachedProcesses = [];
