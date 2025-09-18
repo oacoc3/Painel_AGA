@@ -22,14 +22,14 @@ window.Modules.analise = (() => {
   }
 
   function updateSaveState() {
-    const items = $$('#ckContainer [data-code]');
+    const items = $$('#ckContainer .ck-item[data-code]');
     let ok = items.length > 0;
     items.forEach(wrap => {
       const val = wrap.dataset.value;
       if (!val) { ok = false; return; }
       if (val !== 'Não aplicável') {
-        const obs = wrap.querySelector('input').value.trim();
-        if (!obs) ok = false;
+        const obs = wrap.querySelector('textarea');
+        if (!obs || !obs.value.trim()) ok = false;
       }
     });
     const btnSalvar = el('adBtnSalvarChecklist');
@@ -57,69 +57,152 @@ window.Modules.analise = (() => {
     }
 
     const frag = document.createDocumentFragment();
+
+    const title = document.createElement('h3');
+    title.className = 'ck-template-title';
+    title.textContent = template.name || 'Checklist';
+    frag.appendChild(title);
+
     (template.items || []).forEach(cat => {
-      const catDiv = document.createElement('div');
-      const h = document.createElement('h3');
-      h.textContent = cat.categoria || '';
-      catDiv.appendChild(h);
+      const catSection = document.createElement('section');
+      catSection.className = 'ck-category';
+
+      if (cat.categoria) {
+        const h = document.createElement('h4');
+        h.textContent = cat.categoria || '';
+        catSection.appendChild(h);
+      }
 
       (cat.itens || []).forEach(item => {
         const wrap = document.createElement('div');
-        wrap.style.margin = '6px 0';
-        wrap.dataset.code = item.code;
+        wrap.className = 'ck-item';
+        wrap.dataset.code = item.code || '';
 
-        const label = document.createElement('label');
-        label.innerHTML = `${item.code ? `<strong>${item.code}</strong> — ` : ''}${item.requisito || ''}`;
-        wrap.appendChild(label);
+        const header = document.createElement('div');
+        header.className = 'ck-item-header';
+        header.innerHTML = `${item.code ? `<strong>${item.code}</strong> — ` : ''}${item.requisito || ''}`;
+        wrap.appendChild(header);
 
-        const btns = document.createElement('div');
-        btns.className = 'ck-choice';
+        const grid = document.createElement('div');
+        grid.className = 'ck-item-grid';
+
+        const optionsCol = document.createElement('div');
+        optionsCol.className = 'ck-item-options';
+        const optionsList = document.createElement('div');
+        optionsList.className = 'ck-options';
+
         ['Conforme', 'Não conforme', 'Não aplicável'].forEach(v => {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.textContent = v;
-          b.dataset.value = v;
-          b.addEventListener('click', () => {
-            btns.querySelectorAll('button').forEach(x => x.classList.remove('active'));
-            b.classList.add('active');
-            wrap.dataset.value = v;
-            hint.style.display = (v === 'Não conforme' && item.texto_sugerido) ? 'block' : 'none';
+          const optLabel = document.createElement('label');
+          optLabel.className = 'ck-option';
+
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.value = v;
+          input.addEventListener('change', () => {
+            if (input.checked) {
+              optionsList.querySelectorAll('input[type="checkbox"]').forEach(other => {
+                if (other !== input) other.checked = false;
+              });
+              wrap.dataset.value = v;
+            } else {
+              const selected = Array.from(optionsList.querySelectorAll('input[type="checkbox"]')).find(ch => ch.checked);
+              wrap.dataset.value = selected ? selected.value : '';
+            }
+            wrap.classList.toggle('ck-has-nc', wrap.dataset.value === 'Não conforme');
             updateSaveState();
           });
-          btns.appendChild(b);
-        });
-        wrap.appendChild(btns);
 
-        const obs = document.createElement('input');
+          const labelText = document.createElement('span');
+          labelText.textContent = v;
+
+          optLabel.appendChild(input);
+          optLabel.appendChild(labelText);
+          optionsList.appendChild(optLabel);
+        });
+
+        optionsCol.appendChild(optionsList);
+        grid.appendChild(optionsCol);
+
+        const notesCol = document.createElement('div');
+        notesCol.className = 'ck-item-notes';
+
+        const notesRow = document.createElement('div');
+        notesRow.className = 'ck-notes-row';
+
+        const obsBox = document.createElement('label');
+        obsBox.className = 'ck-observacao';
+        const obsTitle = document.createElement('span');
+        obsTitle.textContent = 'Observação';
+        const obs = document.createElement('textarea');
+        obs.rows = 3;
         obs.placeholder = 'Observação';
         obs.addEventListener('input', updateSaveState);
-        wrap.appendChild(obs);
+        obsBox.appendChild(obsTitle);
+        obsBox.appendChild(obs);
 
-        const hint = document.createElement('div');
-        hint.className = 'hint';
-        hint.style.display = 'none';
-        if (item.texto_sugerido) {
-          const span = document.createElement('span');
-          span.textContent = item.texto_sugerido;
-          const use = document.createElement('button');
-          use.type = 'button';
-          use.textContent = 'Utilizar';
-          use.addEventListener('click', () => { obs.value = item.texto_sugerido; updateSaveState(); });
-          hint.appendChild(span);
-          hint.appendChild(use);
+        const suggestionsBox = document.createElement('div');
+        suggestionsBox.className = 'ck-sugestoes';
+        const sugTitle = document.createElement('strong');
+        sugTitle.textContent = 'Textos sugeridos para não conformidade';
+        suggestionsBox.appendChild(sugTitle);
+
+        const sugList = document.createElement('div');
+        sugList.className = 'ck-sugestoes-list';
+
+        const suggestions = Array.isArray(item.textos_sugeridos)
+          ? item.textos_sugeridos
+          : (item.texto_sugerido ? [item.texto_sugerido] : []);
+        if (suggestions.length) {
+          suggestions.forEach(texto => {
+            if (!texto) return;
+            const sugItem = document.createElement('div');
+            sugItem.className = 'ck-sugestao-item';
+
+            const sugText = document.createElement('span');
+            sugText.textContent = texto;
+
+            const useBtn = document.createElement('button');
+            useBtn.type = 'button';
+            useBtn.textContent = 'Usar';
+            useBtn.addEventListener('click', () => {
+              obs.value = texto;
+              obs.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+
+            sugItem.appendChild(sugText);
+            sugItem.appendChild(useBtn);
+            sugList.appendChild(sugItem);
+          });
+        } else {
+          const emptyMsg = document.createElement('p');
+          emptyMsg.className = 'muted';
+          emptyMsg.textContent = 'Nenhum texto sugerido cadastrado.';
+          sugList.appendChild(emptyMsg);
         }
-        wrap.appendChild(hint);
 
-        catDiv.appendChild(wrap);
+        suggestionsBox.appendChild(sugList);
+
+        notesRow.appendChild(obsBox);
+        notesRow.appendChild(suggestionsBox);
+        notesCol.appendChild(notesRow);
+
+        grid.appendChild(notesCol);
+
+        wrap.appendChild(grid);
+        catSection.appendChild(wrap);
       });
 
-      frag.appendChild(catDiv);
+      frag.appendChild(catSection);
     });
 
     const other = document.createElement('label');
-    other.textContent = 'Outras observações do analista';
+    other.className = 'ck-outros';
+    const otherTitle = document.createElement('span');
+    otherTitle.textContent = 'Outras observações do analista';
     const otherInput = document.createElement('textarea');
     otherInput.id = 'adOutrasObs';
+    otherInput.rows = 3;
+    other.appendChild(otherTitle);
     other.appendChild(otherInput);
     frag.appendChild(other);
 
@@ -140,7 +223,7 @@ window.Modules.analise = (() => {
       }
       currentProcessId = proc.id;
     } else {
-       const u = await getUser();
+      const u = await getUser();
       if (!u) return Utils.setMsg('adMsg', 'Sessão expirada.', true);
       const { data, error } = await sb.from('processes')
         .insert({ nup, type: tipo, created_by: u.id })
@@ -161,10 +244,11 @@ window.Modules.analise = (() => {
   async function salvarChecklist() {
     if (!currentProcessId || !currentTemplate) return;
     const answers = [];
-    $$('#ckContainer [data-code]').forEach(wrap => {
+    $$('#ckContainer .ck-item[data-code]').forEach(wrap => {
       const code = wrap.dataset.code;
       const value = wrap.dataset.value;
-      const obs = wrap.querySelector('input').value.trim();
+      const obsField = wrap.querySelector('textarea');
+      const obs = obsField ? obsField.value.trim() : '';
       answers.push({ code, value, obs: obs || null });
     });
     const extra = el('adOutrasObs')?.value.trim() || null;
@@ -293,8 +377,20 @@ window.Modules.analise = (() => {
 
     if (btnIniciar) btnIniciar.addEventListener('click', ev => { ev.preventDefault(); iniciarChecklist(); });
     if (btnLimparAD) btnLimparAD.addEventListener('click', ev => { ev.preventDefault(); clearForm(); });
-    if (btnLimparChecklist) btnLimparChecklist.addEventListener('click', ev => { ev.preventDefault(); clearChecklist(); });
-    if (btnSalvarChecklist) btnSalvarChecklist.addEventListener('click', ev => { ev.preventDefault(); salvarChecklist(); });
+    if (btnLimparChecklist) {
+      btnLimparChecklist.addEventListener('click', ev => {
+        ev.preventDefault();
+        if (!currentTemplate) return;
+        if (window.confirm('Deseja limpar a checklist atual?')) clearChecklist();
+      });
+    }
+    if (btnSalvarChecklist) {
+      btnSalvarChecklist.addEventListener('click', ev => {
+        ev.preventDefault();
+        if (!currentTemplate) return;
+        if (window.confirm('Deseja salvar esta checklist?')) salvarChecklist();
+      });
+    }
   }
 
   function init() { bind(); }
