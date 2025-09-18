@@ -215,6 +215,9 @@ window.Modules.dashboard = (() => {
       ariaLabel: 'Tempo médio até arquivamento (todos os processos)'
     });
 
+    
+    Utils.renderProcessBars('velocimetros', items);
+
   }
 
   return { init, load };
