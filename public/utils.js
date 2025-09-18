@@ -224,18 +224,20 @@
       const avg = (typeof it.avg === 'number' && Number.isFinite(it.avg)) ? it.avg : null;
       const count = (typeof it.count === 'number' && Number.isFinite(it.count)) ? it.count : 0;
 
+      const displayLabel = it.label || it.status || '';
+      const ariaLabel = it.ariaLabel || `Velocidade média de ${displayLabel || 'status desconhecido'}`;
+
       const bar = document.createElement('div');
       bar.className = 'process-bar';
       bar.setAttribute('role', 'img');
-      bar.setAttribute('aria-label', it.ariaLabel || `Velocidade média de ${it.status || 'status desconhecido'}`);
+        bar.setAttribute('aria-label', ariaLabel);
 
       const header = document.createElement('div');
       header.className = 'process-bar-header';
 
       const status = document.createElement('span');
       status.className = 'process-bar-status';
-      status.textContent = it.status || '';
-
+     status.textContent = displayLabel;
       const meta = document.createElement('div');
       meta.className = 'process-bar-meta';
 
