@@ -87,6 +87,17 @@
   font-size: 1rem;
 }
 
+#procLista .historyWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+#procLista .ckBtn {
+  font-size: 0.85rem;
+}
+
 #procLista .delProc {
   padding: 2px 4px;
   border: none;
