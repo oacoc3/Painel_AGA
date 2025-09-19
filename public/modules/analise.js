@@ -3,8 +3,20 @@ window.Modules = window.Modules || {};
 window.Modules.analise = (() => {
   let currentTemplate = null;
   let currentProcessId = null;
+  let currentDraftId = null;
+
   const CLIPBOARD_ICON = window.Modules?.processos?.CLIPBOARD_ICON
     || '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a 2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="m10 16 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+
+  function debounce(fn, wait = 500) {
+    let timer;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(null, args), wait);
+    };
+  }
+
+  const scheduleDraftSave = debounce(() => { saveChecklistDraft(); }, 600);
 
   async function loadTemplatesFor(tipo) {
     const { data, error } = await sb
@@ -66,12 +78,15 @@ window.Modules.analise = (() => {
       renderChecklist(currentTemplate);
     } else {
       el('ckContainer').innerHTML = '';
+      currentDraftId = null;
     }
     updateSaveState();
   }
 
   function renderChecklist(template) {
     currentTemplate = template || null;
+    currentDraftId = null;
+
     const box = el('ckContainer');
     box.innerHTML = '';
     if (!template) {
@@ -134,6 +149,7 @@ window.Modules.analise = (() => {
             }
             wrap.classList.toggle('ck-has-nc', wrap.dataset.value === 'Não conforme');
             updateSaveState();
+            scheduleDraftSave();
           });
 
           const labelText = document.createElement('span');
@@ -159,7 +175,10 @@ window.Modules.analise = (() => {
         const obs = document.createElement('textarea');
         obs.rows = 3;
         obs.placeholder = 'Observações';
-        obs.addEventListener('input', updateSaveState);
+        obs.addEventListener('input', () => {
+          updateSaveState();
+          scheduleDraftSave();
+        });
         obsBox.appendChild(obsTitle);
         obsBox.appendChild(obs);
 
@@ -226,12 +245,139 @@ window.Modules.analise = (() => {
     const otherInput = document.createElement('textarea');
     otherInput.id = 'adOutrasObs';
     otherInput.rows = 3;
+    otherInput.addEventListener('input', scheduleDraftSave);
     other.appendChild(otherTitle);
     other.appendChild(otherInput);
     frag.appendChild(other);
 
     box.appendChild(frag);
     updateSaveState();
+  }
+
+  async function loadChecklistDraft(processId, templateId) {
+    currentDraftId = null;
+    if (!processId || !templateId) return null;
+    try {
+      const { data, error } = await sb
+        .from('checklist_responses')
+        .select('id,answers,extra_obs')
+        .eq('process_id', processId)
+        .eq('template_id', templateId)
+        .eq('status', 'draft')
+        .maybeSingle();
+      if (error) throw error;
+      if (data?.id) currentDraftId = data.id;
+      return data || null;
+    } catch (err) {
+      console.error('Falha ao carregar rascunho da checklist.', err);
+      return null;
+    }
+  }
+
+  async function saveChecklistDraft() {
+    if (!currentProcessId || !currentTemplate) return;
+    const items = $$('#ckContainer .ck-item[data-code]');
+    if (!items.length) return;
+
+    const answers = items.map(wrap => {
+      const code = wrap.dataset.code;
+      const value = wrap.dataset.value || '';
+      const obsField = wrap.querySelector('textarea');
+      const obs = obsField ? obsField.value.trim() : '';
+      return {
+        code,
+        value: value ? value : null,
+        obs: obs ? obs : null
+      };
+    });
+
+    const extraField = el('adOutrasObs');
+    const extra = extraField ? extraField.value.trim() : '';
+
+    const u = await getUser();
+    if (!u) return;
+
+    const payload = {
+      answers,
+      extra_obs: extra ? extra : null,
+      filled_by: u.id
+    };
+
+    try {
+      if (currentDraftId) {
+        const { error } = await sb
+          .from('checklist_responses')
+          .update({ ...payload })
+          .eq('id', currentDraftId)
+          .eq('status', 'draft');
+        if (error) throw error;
+      } else {
+        const { data, error } = await sb
+          .from('checklist_responses')
+          .insert({
+            process_id: currentProcessId,
+            template_id: currentTemplate.id,
+            status: 'draft',
+            ...payload
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+        currentDraftId = data?.id || null;
+      }
+    } catch (err) {
+      console.error('Falha ao salvar rascunho da checklist.', err);
+    }
+  }
+
+  function applyDraftToUI(draft) {
+    if (!draft) {
+      updateSaveState();
+      return;
+    }
+    const answers = Array.isArray(draft.answers) ? draft.answers : [];
+    const map = new Map();
+    answers.forEach(ans => {
+      if (!ans || !ans.code) return;
+      map.set(ans.code, ans);
+    });
+
+    $$('#ckContainer .ck-item[data-code]').forEach(wrap => {
+      const code = wrap.dataset.code;
+      const ans = map.get(code) || {};
+      const value = ans.value || '';
+      wrap.dataset.value = value || '';
+      wrap.classList.toggle('ck-has-nc', value === 'Não conforme');
+      wrap.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+        chk.checked = !!value && chk.value === value;
+      });
+      const obsField = wrap.querySelector('textarea');
+      if (obsField) obsField.value = ans.obs || '';
+    });
+
+    const extraField = el('adOutrasObs');
+    if (extraField) extraField.value = draft.extra_obs || '';
+
+    updateSaveState();
+  }
+
+  async function discardDraft(processId = currentProcessId, templateId = currentTemplate?.id) {
+    if (!processId || !templateId) {
+      currentDraftId = null;
+      return;
+    }
+    try {
+      let query = sb.from('checklist_responses').delete().eq('status', 'draft');
+      if (currentDraftId) {
+        query = query.eq('id', currentDraftId);
+      } else {
+        query = query.eq('process_id', processId).eq('template_id', templateId);
+      }
+      await query;
+    } catch (err) {
+      console.error('Falha ao limpar rascunho da checklist.', err);
+    }
+    currentDraftId = null;
   }
 
   async function iniciarChecklist() {
@@ -261,7 +407,12 @@ window.Modules.analise = (() => {
     }
 
     const list = await loadTemplatesFor(tipo);
-    renderChecklist(list[0]);
+    const template = list[0] || null;
+    renderChecklist(template);
+    if (template && currentProcessId) {
+      const draft = await loadChecklistDraft(currentProcessId, template.id);
+      applyDraftToUI(draft);
+    }
     Utils.setMsg('adMsg', '');
   }
 
@@ -282,23 +433,63 @@ window.Modules.analise = (() => {
     });
     const extra = el('adOutrasObs')?.value.trim() || null;
     const u = await getUser();
+    if (!u) return Utils.setMsg('adMsg', 'Sessão expirada.', true);
+
     Utils.setMsg('adMsg', 'Salvando checklist...');
-    const { data, error } = await sb.from('checklist_responses')
-      .insert({ process_id: currentProcessId, template_id: currentTemplate.id, answers, extra_obs: extra, filled_by: u.id })
-      .select('id,filled_at')
-      .single();
-    if (error) return Utils.setMsg('adMsg', error.message, true);
+    const nowIso = new Date().toISOString();
+    const basePayload = {
+      answers,
+      extra_obs: extra,
+      filled_by: u.id,
+      status: 'final',
+      filled_at: nowIso
+    };
+    let action = 'INSERT';
+    let saved;
+    try {
+      if (currentDraftId) {
+        const { data, error } = await sb
+          .from('checklist_responses')
+          .update(basePayload)
+          .eq('id', currentDraftId)
+          .eq('status', 'draft')
+          .select('id,filled_at')
+          .single();
+        if (error) throw error;
+        saved = data;
+        action = 'UPDATE';
+        currentDraftId = null;
+      } else {
+        const { data, error } = await sb
+          .from('checklist_responses')
+          .insert({
+            process_id: currentProcessId,
+            template_id: currentTemplate.id,
+            ...basePayload
+          })
+          .select('id,filled_at')
+          .single();
+        if (error) throw error;
+        saved = data;
+      }
+    } catch (err) {
+      Utils.setMsg('adMsg', err.message || 'Falha ao salvar checklist.', true);
+      return;
+    }
+
+    const filledAt = saved?.filled_at || nowIso;
 
     await sb.from('audit_log').insert({
       user_id: u.id,
       user_email: u.email,
-      action: 'INSERT',
+      action,
       entity_type: 'checklist_responses',
-      entity_id: data.id,
-      details: { process_id: currentProcessId, checklist_name: currentTemplate.name, filled_at: data.filled_at }
+      entity_id: saved?.id,
+      details: { process_id: currentProcessId, checklist_name: currentTemplate.name, filled_at: filledAt }
     });
 
     Utils.setMsg('adMsg', 'Checklist salva.');
+    await discardDraft(currentProcessId, currentTemplate.id);
     await loadIndicador();
     if (window.Modules.processos?.reloadLists) {
       await window.Modules.processos.reloadLists();
@@ -306,7 +497,8 @@ window.Modules.analise = (() => {
     clearChecklist();
   }
 
-  function clearForm() {
+  async function clearForm() {
+    await discardDraft();
     el('adNUP').value = '';
     el('adTipo').value = 'PDIR';
     Utils.setMsg('adMsg', '');
@@ -323,6 +515,7 @@ window.Modules.analise = (() => {
       const { data, error } = await sb
         .from('checklist_responses')
         .select('process_id,filled_at,processes(nup)')
+        .eq('status', 'final')
         .order('filled_at', { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -380,6 +573,7 @@ window.Modules.analise = (() => {
         .from('checklist_responses')
         .select('id,filled_at,checklist_templates(name)')
         .eq('process_id', procId)
+        .eq('status', 'final')
         .order('filled_at', { ascending: false });
       if (error) throw error;
       const rows = Array.isArray(data)
@@ -488,12 +682,18 @@ window.Modules.analise = (() => {
     const btnSalvarChecklist = el('adBtnSalvarChecklist');
 
     if (btnIniciar) btnIniciar.addEventListener('click', ev => { ev.preventDefault(); iniciarChecklist(); });
-    if (btnLimparAD) btnLimparAD.addEventListener('click', ev => { ev.preventDefault(); clearForm(); });
+    if (btnLimparAD) btnLimparAD.addEventListener('click', async ev => {
+      ev.preventDefault();
+      await clearForm();
+    });
     if (btnLimparChecklist) {
-      btnLimparChecklist.addEventListener('click', ev => {
+      btnLimparChecklist.addEventListener('click', async ev => {
         ev.preventDefault();
         if (!currentTemplate) return;
-        if (window.confirm('Deseja limpar a checklist atual?')) clearChecklist();
+        if (window.confirm('Deseja limpar a checklist atual?')) {
+          await discardDraft();
+          clearChecklist();
+        }
       });
     }
     if (btnSalvarChecklist) {
