@@ -57,6 +57,7 @@ button:hover { filter: brightness(0.98); }
 button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 100%; }
+.admin-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1fr); }
 .grid > * { min-height: 0; }
 #viewDashboard .grid {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -365,6 +366,16 @@ footer { padding: 8px 12px; background: #faf9f7; }
   color: #8b0000;
 }
 
+@media (max-width: 1200px) {
+  .admin-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .admin-grid > .admin-col-checklists {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 900px) {
   .ck-item-grid {
     grid-template-columns: 1fr;
@@ -376,6 +387,14 @@ footer { padding: 8px 12px; background: #faf9f7; }
 
   .ck-sugestoes {
     flex: 1 1 auto;
+  }
+
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-grid > .admin-col-checklists {
+    grid-column: auto;
   }
 }
 
