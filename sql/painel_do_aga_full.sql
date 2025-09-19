@@ -246,8 +246,12 @@ create table checklist_responses (
   template_id uuid not null references checklist_templates(id),
   answers jsonb not null, -- [{code,value,obs?},...]
   extra_obs text,
+  status text not null default 'final',
   filled_by uuid not null references profiles(id),
-  filled_at timestamptz not null default now()
+  filled_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint checklist_responses_status_check
+    check (status in ('draft','final'))
 );
 
 -- Auditoria
@@ -616,6 +620,10 @@ for select using (auth.role() = 'authenticated');
 create policy "ck responses write" on checklist_responses
 for insert with check ( has_write_role() );
 
+create policy "ck responses update" on checklist_responses
+for update using ( has_write_role() )
+with check ( has_write_role() );
+
 -- audit (somente Admin)
 create policy "audit read admin" on audit_log
 for select using ( is_admin() );
@@ -660,6 +668,41 @@ where jsonb_typeof(items) = 'array'
 -- Adds the extra_obs column to store additional checklist comments
 alter table checklist_responses
   add column if not exists extra_obs text;
+
+-- Atualizações para suportar rascunhos de checklist
+alter table checklist_responses
+  add column if not exists status text default 'final';
+update checklist_responses
+  set status = 'final'
+  where status is null or status not in ('draft','final');
+alter table checklist_responses
+  alter column status set not null;
+
+alter table checklist_responses
+  add column if not exists updated_at timestamptz;
+update checklist_responses
+  set updated_at = coalesce(updated_at, filled_at, now())
+  where updated_at is null;
+alter table checklist_responses
+  alter column updated_at set default now();
+alter table checklist_responses
+  alter column updated_at set not null;
+
+alter table checklist_responses
+  drop constraint if exists checklist_responses_status_check;
+alter table checklist_responses
+  add constraint checklist_responses_status_check
+    check (status in ('draft','final'));
+
+drop trigger if exists trg_checklist_responses_updated_at on checklist_responses;
+create trigger trg_checklist_responses_updated_at
+  before update on checklist_responses
+  for each row execute function extensions.moddatetime(updated_at);
+
+drop index if exists uidx_checklist_responses_draft;
+create unique index if not exists uidx_checklist_responses_draft
+  on checklist_responses(process_id, template_id)
+  where status = 'draft';
 
 
 -- ============== Fim do arquivo 4: Painel_AGA-main/sql/03_add_extra_obs_to_checklist_responses.sql ==============
