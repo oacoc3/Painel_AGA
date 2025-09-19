@@ -553,6 +553,8 @@ window.Modules.processos = (() => {
         sb.from('sigadaer').select('process_id').in('process_id', ids),
         sb.from('process_observations').select('process_id').in('process_id', ids),
         sb.from('checklist_responses').select('process_id').in('process_id', ids)
+        sb.from('checklist_responses').select('process_id').in('process_id', ids).eq('status', 'final')
+
       ]);
       const opSet = new Set((op.data || []).map(o => o.process_id));
       const ntSet = new Set((nt.data || []).map(o => o.process_id));
@@ -686,6 +688,7 @@ window.Modules.processos = (() => {
         .from('checklist_responses')
         .select('id,filled_at,checklist_templates(name)')
         .eq('process_id', procId)
+       .eq('status', 'final')
         .order('filled_at', { ascending: false });
       if (error) throw error;
       const rows = Array.isArray(data)
