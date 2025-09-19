@@ -3,6 +3,8 @@ window.Modules = window.Modules || {};
 window.Modules.analise = (() => {
   let currentTemplate = null;
   let currentProcessId = null;
+  const CLIPBOARD_ICON = window.Modules?.processos?.CLIPBOARD_ICON
+    || '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a 2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="m10 16 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
   async function loadTemplatesFor(tipo) {
     const { data, error } = await sb
@@ -21,20 +23,31 @@ window.Modules.analise = (() => {
     return uniq;
   }
 
-  function updateSaveState() {
+  function getChecklistValidationState() {
     const items = $$('#ckContainer .ck-item[data-code]');
-    let ok = items.length > 0;
-    items.forEach(wrap => {
+    if (!items.length) {
+      return { ready: false, reason: 'Selecione um checklist com itens para preencher.' };
+    }
+    for (const wrap of items) {
       const val = wrap.dataset.value;
-      if (!val) { ok = false; return; }
-      if (val !== 'Não aplicável') {
-        const obs = wrap.querySelector('textarea');
-        if (!obs || !obs.value.trim()) ok = false;
+      if (!val) {
+        return { ready: false, reason: 'Selecione uma opção para todos os itens da checklist.' };
       }
-    });
+      if (val === 'Não conforme' || val === 'Não aplicável') {
+        const obsField = wrap.querySelector('textarea');
+        if (!obsField || !obsField.value.trim()) {
+          return { ready: false, reason: 'Informe uma observação para itens marcados como “Não conforme” ou “Não aplicável”.' };
+        }
+      }
+    }
+    return { ready: true };
+  }
+
+  function updateSaveState() {
+    const { ready } = getChecklistValidationState();
     const btnSalvar = el('adBtnSalvarChecklist');
     const btnLimpar = el('btnLimparChecklist');
-    if (btnSalvar) btnSalvar.disabled = !ok;
+    if (btnSalvar) btnSalvar.disabled = !ready;
     if (btnLimpar) btnLimpar.disabled = !currentTemplate;
   }
 
@@ -243,6 +256,11 @@ window.Modules.analise = (() => {
 
   async function salvarChecklist() {
     if (!currentProcessId || !currentTemplate) return;
+    const state = getChecklistValidationState();
+    if (!state.ready) {
+      Utils.setMsg('adMsg', state.reason || 'Checklist incompleta.', true);
+      return;
+    }
     const answers = [];
     $$('#ckContainer .ck-item[data-code]').forEach(wrap => {
       const code = wrap.dataset.code;
@@ -287,34 +305,117 @@ window.Modules.analise = (() => {
   }
 
   async function loadIndicador() {
-    const { data } = await sb
-      .from('checklist_responses')
-      .select('id,filled_at,process_id,processes(nup),template_id,checklist_templates(name)')
-      .order('filled_at', { ascending: false })
-      .limit(50);
-    const rows = (data || []).map(r => ({
-      id: r.id,
-      nup: r.processes?.nup || '',
-      checklist: r.checklist_templates?.name || '',
-      filled_at: Utils.fmtDateTime(r.filled_at)
-    }));
-    Utils.renderTable('listaAD', [
-      { key: 'nup', label: 'NUP' },
-      { key: 'checklist', label: 'Checklist' },
-      { key: 'filled_at', label: 'Concluída em' },
-      {
-        label: 'PDF',
-        align: 'center',
-        width: '60px',
-        render: r => {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.textContent = 'PDF';
-          b.addEventListener('click', () => abrirChecklistPDF(r.id));
-          return b;
-        }
+    const box = el('listaAD');
+    if (!box) return;
+    box.innerHTML = '<div class="msg">Carregando…</div>';
+    try {
+      const { data, error } = await sb
+        .from('checklist_responses')
+        .select('process_id,filled_at,processes(nup)')
+        .order('filled_at', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      const seen = new Set();
+      const rows = [];
+      (data || []).forEach(r => {
+        const procId = r.process_id;
+        if (!procId || seen.has(procId)) return;
+        seen.add(procId);
+        rows.push({
+          process_id: procId,
+          nup: r.processes?.nup || '',
+          filled_at: r.filled_at
+        });
+      });
+      if (!rows.length) {
+        box.innerHTML = '<div class="msg">Nenhuma checklist concluída.</div>';
+        return;
       }
-    ], rows);
+      Utils.renderTable(box, [
+        { key: 'nup', label: 'NUP' },
+        { key: 'filled_at', label: 'Última checklist', value: r => Utils.fmtDateTime(r.filled_at) },
+        {
+          label: 'Checklists',
+          align: 'center',
+          render: r => createChecklistButton(r.process_id)
+        }
+      ], rows);
+    } catch (err) {
+      box.innerHTML = `<div class="msg error">${err.message || String(err)}</div>`;
+    }
+  }
+
+  function createChecklistButton(processId) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'docIcon ckBtn on';
+    btn.innerHTML = CLIPBOARD_ICON;
+    btn.title = 'Checklists';
+    btn.setAttribute('aria-label', 'Checklists');
+    btn.addEventListener('click', ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      openChecklistPopup(processId);
+    });
+    return btn;
+  }
+
+  async function loadChecklistHistory(procId, targetId = 'ckListaPop') {
+    const box = el(targetId);
+    if (!box) return;
+    box.innerHTML = '<div class="msg">Carregando…</div>';
+    try {
+      const { data, error } = await sb
+        .from('checklist_responses')
+        .select('id,filled_at,checklist_templates(name)')
+        .eq('process_id', procId)
+        .order('filled_at', { ascending: false });
+      if (error) throw error;
+      const rows = Array.isArray(data)
+        ? data.map(r => ({
+            id: r.id,
+            checklist: r.checklist_templates?.name || '',
+            filled_at: r.filled_at
+          }))
+        : [];
+      if (!rows.length) {
+        box.innerHTML = '<div class="msg">Nenhuma checklist preenchida.</div>';
+        return;
+      }
+      Utils.renderTable(box, [
+        { key: 'checklist', label: 'Doc' },
+        { key: 'filled_at', label: 'Preenchida em', value: r => Utils.fmtDateTime(r.filled_at) },
+        {
+          label: 'PDF',
+          align: 'center',
+          render: r => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = 'PDF';
+            b.addEventListener('click', () => abrirChecklistPDF(r.id));
+            return b;
+          }
+        }
+      ], rows);
+    } catch (err) {
+      box.innerHTML = `<div class="msg error">${err.message || String(err)}</div>`;
+    }
+  }
+
+  async function openChecklistPopup(procId) {
+    if (!procId) return;
+    if (window.Modules.processos?.showChecklistPopup) {
+      window.Modules.processos.showChecklistPopup(procId);
+      return;
+    }
+    const dlg = document.createElement('dialog');
+    dlg.className = 'hist-popup';
+    dlg.innerHTML = '<div id="ckListaPop" class="table scrolly">Carregando…</div><menu><button type="button" id="ckClose">Fechar</button></menu>';
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#ckClose')?.addEventListener('click', () => dlg.close());
+    dlg.showModal();
+    await loadChecklistHistory(procId, 'ckListaPop');
   }
 
   async function abrirChecklistPDF(id) {
@@ -388,6 +489,13 @@ window.Modules.analise = (() => {
       btnSalvarChecklist.addEventListener('click', ev => {
         ev.preventDefault();
         if (!currentTemplate) return;
+        const state = getChecklistValidationState();
+        if (!state.ready) {
+          const msg = state.reason || 'Checklist incompleta.';
+          Utils.setMsg('adMsg', msg, true);
+          window.alert(msg);
+          return;
+        }
         if (window.confirm('Deseja salvar esta checklist?')) salvarChecklist();
       });
     }
