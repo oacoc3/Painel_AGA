@@ -28,7 +28,6 @@ window.Modules.dashboard = (() => {
   let cachedStatusHistory = {};
 
   function init() {
-    el('btnDashFilter')?.addEventListener('click', load);
     const yearSelect = el('entryYearSelect');
     yearSelect?.addEventListener('change', () => {
       renderEntryChart();
