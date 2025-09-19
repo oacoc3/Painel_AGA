@@ -1,3 +1,4 @@
+// public/modules/processos.js
 /* public/modules/processos.js
  * Módulo Processos — busca/cadastro/edição + controle de abas.
  * Requisitos:
@@ -53,6 +54,7 @@ window.Modules.processos = (() => {
   const NOTIFICATION_OPTIONS = NOTIFICATION_TYPES.map(t => `<option>${t}</option>`).join('');
   const SIGADAER_TYPES = ['COMAE', 'COMPREP', 'COMGAP', 'GABAER', 'SAC', 'ANAC', 'OPR_AD', 'PREF', 'GOV', 'OUTRO'];
   const SIGADAER_OPTIONS = SIGADAER_TYPES.map(t => `<option>${t}</option>`).join('');
+  const CLIPBOARD_ICON = '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="m10 16 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
   const el = (id) => document.getElementById(id);
 
@@ -384,6 +386,42 @@ window.Modules.processos = (() => {
     dlg.showModal();
   }
 
+  // NOVO: Popup para editar 1ª entrada
+  function showEntradaEditPopup(id, curDate) {
+    if (!id) return;
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <h3>Atualizar 1ª entrada</h3>
+        <label>Data <input type="date" id="feData"></label>
+        <menu>
+          <button value="cancel">Cancelar</button>
+          <button id="feSalvar" value="default">Salvar</button>
+        </menu>
+      </form>`;
+    document.body.appendChild(dlg);
+    const input = dlg.querySelector('#feData');
+    if (input && curDate) input.value = U.toDateInputValue(curDate);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#feSalvar')?.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const val = input?.value || '';
+      if (!val) {
+        alert('Informe a data da 1ª entrada.');
+        return;
+      }
+      try {
+        const { error } = await sb.from('processes').update({ first_entry_date: val }).eq('id', id);
+        if (error) throw error;
+        dlg.close();
+        await loadProcessList();
+      } catch (e) {
+        alert(e.message || e);
+      }
+    });
+    dlg.showModal();
+  }
+
   // Popup para editar término de obra
   function showObraEditPopup(id, curDate, concluida) {
     if (!id) return;
@@ -545,6 +583,9 @@ window.Modules.processos = (() => {
         const hasNt = ntSet.has(r.id);
         const hasSg = sgSet.has(r.id);
         const hasOb = obSet.has(r.id);
+        const entradaTxt = U.fmtDate(r.first_entry_date);
+        const entradaBtn = isCurrent ? `<button type="button" class="editBtn editEntrada">Editar 1ª Entrada</button>` : '';
+        const entradaCell = `${entradaTxt}${entradaBtn ? '<br>' + entradaBtn : ''}`;
         const stTxt = `${r.status || ''}${r.status_since ? '<br><small>' + U.fmtDateTime(r.status_since) + '</small>' : ''}`;
         const stBtn = isCurrent ? `<button type="button" class="editBtn editStatus">Editar Status</button>` : '';
         const stCell = `${stTxt}${isCurrent ? '<br>' + stBtn : ''}`;
@@ -552,7 +593,7 @@ window.Modules.processos = (() => {
         const obBtn = isCurrent ? `<button type="button" class="editBtn toggleObra">Editar Obra</button>` : '';
         const obCell = `${obTxt}${isCurrent ? '<br>' + obBtn : ''}`;
         const hasChecklist = ckSet.has(r.id);
-        const ckBtn = `<button type="button" class="docIcon ckBtn ${hasChecklist ? 'on' : 'off'}" title="Checklists" aria-label="Checklists">✓</button>`;
+        const ckBtn = `<button type="button" class="docIcon ckBtn ${hasChecklist ? 'on' : 'off'}" title="Checklists" aria-label="Checklists">${CLIPBOARD_ICON}</button>`;
         const opBtn = `<button type="button" class="docIcon opBtn ${hasOp ? 'on' : 'off'}">P</button>`;
         const ntBtn = `<button type="button" class="docIcon ntBtn ${hasNt ? 'on' : 'off'}">N</button>`;
         const sgBtn = `<button type="button" class="docIcon sgBtn ${hasSg ? 'on' : 'off'}">S</button>`;
@@ -561,7 +602,7 @@ window.Modules.processos = (() => {
           <td class="align-center"><div class="historyWrap"><button type="button" class="historyBtn" aria-label="Histórico">👁️</button>${ckBtn}</div></td>
           <td>${r.nup || ''}</td>
           <td>${r.type || ''}</td>
-          <td>${U.fmtDate(r.first_entry_date)}</td>
+          <td>${entradaCell}</td>
           <td>${stCell}</td>
           <td>${obCell}</td>
           <td class="align-center">${obsBtn}</td>
@@ -602,6 +643,7 @@ window.Modules.processos = (() => {
         if (ev.target.closest('.ntBtn')) return showNotifPopup(row.id);
         if (ev.target.closest('.sgBtn')) return showSigPopup(row.id);
         if (ev.target.closest('.obsBtn')) return showObsPopup(row.id);
+        if (ev.target.closest('.editEntrada')) return showEntradaEditPopup(row.id, row.first_entry_date);
         if (ev.target.closest('.editStatus')) return showStatusEditPopup(row.id, row.status, row.status_since);
         if (ev.target.closest('.toggleObra')) return showObraEditPopup(row.id, row.obra_termino_date, row.obra_concluida);
       });
