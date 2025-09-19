@@ -44,10 +44,20 @@ window.Modules.analise = (() => {
   }
 
   function updateSaveState() {
-    const { ready } = getChecklistValidationState();
+    const state = getChecklistValidationState();
+    const { ready, reason } = state;
     const btnSalvar = el('adBtnSalvarChecklist');
     const btnLimpar = el('btnLimparChecklist');
-    if (btnSalvar) btnSalvar.disabled = !ready;
+    if (btnSalvar) {
+      // Patch: botão só fica desabilitado quando não há checklist carregada;
+      // quando houver checklist, validação é rechecada no clique e mensagem é mostrada.
+      btnSalvar.disabled = !currentTemplate;
+      if (currentTemplate && !ready) {
+        btnSalvar.title = reason || 'Checklist incompleta.';
+      } else {
+        btnSalvar.removeAttribute('title');
+      }
+    }
     if (btnLimpar) btnLimpar.disabled = !currentTemplate;
   }
 
@@ -82,6 +92,7 @@ window.Modules.analise = (() => {
 
       if (cat.categoria) {
         const h = document.createElement('h4');
+        h.className = 'ck-category-title'; // Patch: adiciona classe (sem alterar visual)
         h.textContent = cat.categoria || '';
         catSection.appendChild(h);
       }
