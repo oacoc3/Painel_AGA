@@ -38,6 +38,10 @@ html, body {
 
 .main { flex: 1; display: flex; overflow: hidden; }
 .view { flex: 1; padding: 12px; overflow: hidden; }
+#viewAdmin {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 .centered { display: grid; place-items: center; }
 
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px; min-width: 320px; max-width: 420px; width: 100%; }
