@@ -213,13 +213,9 @@ window.Modules.dashboard = (() => {
 
     cachedStatusHistory = {};
 
-    // Filtro por intervalo na 1ª entrada
-    const from = el('dashFrom').value || null;
-    const to = el('dashTo').value || null;
-    let q = sb.from('processes').select('id,status,status_since,first_entry_date');
-    if (from) q = q.gte('first_entry_date', from);
-    if (to) q = q.lte('first_entry_date', to);
-    const { data: procs } = await q;
+    const { data: procs } = await sb
+      .from('processes')
+      .select('id,status,status_since,first_entry_date');
 
     cachedProcesses = procs || [];
     const hasYears = updateYearOptions();
