@@ -47,10 +47,10 @@
 
     <main class="main">
       <section id="viewAdmin" class="view">
-        <div class="grid">
-          <div class="admin-col">
+        <div class="grid admin-grid">
+          <div class="admin-col admin-col-users">
             <div class="card">
-              <h2>Criar usuário</h2>
+              <h2>Criar usuários</h2>
               <form id="formUser" data-ajax>
                 <label>E-mail <input id="adEmail" type="email" required></label>
                  <label>Posto/Gad + Nome <input id="adName" required></label>
@@ -75,7 +75,7 @@
             </div>
           </div>
 
-          <div class="admin-col">
+          <div class="admin-col admin-col-manage">
             <div class="card">
               <h2>Gerenciar Checklists</h2>
               <form id="formChecklist" data-ajax>
@@ -101,6 +101,9 @@
                 <div id="ckMsg" class="msg"></div>
               </form>
             </div>
+          </div>
+
+          <div class="admin-col admin-col-checklists">
             <div class="card">
               <h2>Checklists</h2>
               <div id="listaCk" class="table scrolly"></div>
