@@ -1553,5 +1553,5 @@ window.Modules.processos = (() => {
     }
   }
 
-  return { init, reloadLists };
+  return { init, reloadLists, CLIPBOARD_ICON };
 })();
