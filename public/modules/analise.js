@@ -123,27 +123,27 @@ window.Modules.analise = (() => {
         optionsCol.appendChild(optionsList);
         grid.appendChild(optionsCol);
 
-        const notesCol = document.createElement('div');
-        notesCol.className = 'ck-item-notes';
-
-        const notesRow = document.createElement('div');
-        notesRow.className = 'ck-notes-row';
+        // ====== BLOCO AJUSTADO PELO PATCH ======
+        const detailsCol = document.createElement('div');
+        detailsCol.className = 'ck-item-details';
 
         const obsBox = document.createElement('label');
-        obsBox.className = 'ck-observacao';
+        obsBox.className = 'ck-detail-card ck-observacao';
         const obsTitle = document.createElement('span');
-        obsTitle.textContent = 'Observação';
+        obsTitle.className = 'ck-detail-card-title';
+        obsTitle.textContent = 'Observações';
         const obs = document.createElement('textarea');
         obs.rows = 3;
-        obs.placeholder = 'Observação';
+        obs.placeholder = 'Observações';
         obs.addEventListener('input', updateSaveState);
         obsBox.appendChild(obsTitle);
         obsBox.appendChild(obs);
 
         const suggestionsBox = document.createElement('div');
-        suggestionsBox.className = 'ck-sugestoes';
-        const sugTitle = document.createElement('strong');
-        sugTitle.textContent = 'Textos sugeridos para não conformidade';
+        suggestionsBox.className = 'ck-detail-card ck-sugestoes';
+        const sugTitle = document.createElement('span');
+        sugTitle.className = 'ck-detail-card-title';
+        sugTitle.textContent = 'Texto(s) sugerido';
         suggestionsBox.appendChild(sugTitle);
 
         const sugList = document.createElement('div');
@@ -182,11 +182,11 @@ window.Modules.analise = (() => {
 
         suggestionsBox.appendChild(sugList);
 
-        notesRow.appendChild(obsBox);
-        notesRow.appendChild(suggestionsBox);
-        notesCol.appendChild(notesRow);
+        detailsCol.appendChild(obsBox);
+        detailsCol.appendChild(suggestionsBox);
 
-        grid.appendChild(notesCol);
+        grid.appendChild(detailsCol);
+        // ====== FIM DO BLOCO AJUSTADO ======
 
         wrap.appendChild(grid);
         catSection.appendChild(wrap);
