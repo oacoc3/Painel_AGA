@@ -55,19 +55,47 @@ window.Modules.analise = (() => {
     return { ready: true };
   }
 
+  function getDraftValidationState(draft, template) {
+    if (!draft || !template) {
+      return { ready: false, reason: 'Nenhum rascunho salvo para finalizar.' };
+    }
+    const items = [];
+    (template.items || []).forEach(cat => {
+      (cat.itens || []).forEach(item => { if (item) items.push(item); });
+    });
+    if (!items.length) {
+      return { ready: false, reason: 'Selecione um checklist com itens para preencher.' };
+    }
+    const answers = Array.isArray(draft.answers) ? draft.answers : [];
+    return items.reduce((state, item) => {
+      if (!state.ready) return state;
+      const ans = answers.find(entry => entry && entry.code === (item.code || '')) || {};
+      const value = ans.value || '';
+      if (!value) {
+        return { ready: false, reason: 'O rascunho ainda não possui todas as respostas salvas. Aguarde o salvamento automático antes de finalizar.' };
+      }
+      if ((value === 'Não conforme' || value === 'Não aplicável') && !(ans.obs || '').trim()) {
+        return { ready: false, reason: 'Preencha as observações para itens marcados como “Não conforme” ou “Não aplicável”.' };
+      }
+      return state;
+    }, { ready: true });
+  }
+
   function updateSaveState() {
     const state = getChecklistValidationState();
     const { ready, reason } = state;
-    const btnSalvar = el('adBtnSalvarChecklist');
+    const btnFinalizar = el('adBtnFinalizarChecklist');
     const btnLimpar = el('btnLimparChecklist');
-    if (btnSalvar) {
-      // Patch: botão só fica desabilitado quando não há checklist carregada;
-      // quando houver checklist, validação é rechecada no clique e mensagem é mostrada.
-      btnSalvar.disabled = !currentTemplate;
-      if (currentTemplate && !ready) {
-        btnSalvar.title = reason || 'Checklist incompleta.';
+    if (btnFinalizar) {
+      // Botão só fica desabilitado quando não há checklist carregada;
+      // quando houver checklist, validação é verificada no clique e mensagem é mostrada.
+      btnFinalizar.disabled = !currentTemplate;
+      if (!currentTemplate) {
+        btnFinalizar.removeAttribute('title');
+      } else if (!ready) {
+        btnFinalizar.title = reason || 'Finalize a checklist apenas após preencher todos os itens obrigatórios.';
       } else {
-        btnSalvar.removeAttribute('title');
+        btnFinalizar.title = 'As respostas são salvas automaticamente como rascunho. Clique para finalizar.';
       }
     }
     if (btnLimpar) btnLimpar.disabled = !currentTemplate;
@@ -416,64 +444,61 @@ window.Modules.analise = (() => {
     Utils.setMsg('adMsg', '');
   }
 
-  async function salvarChecklist() {
+  async function finalizarChecklist() {
     if (!currentProcessId || !currentTemplate) return;
+
     const state = getChecklistValidationState();
     if (!state.ready) {
       Utils.setMsg('adMsg', state.reason || 'Checklist incompleta.', true);
       return;
     }
-    const answers = [];
-    $$('#ckContainer .ck-item[data-code]').forEach(wrap => {
-      const code = wrap.dataset.code;
-      const value = wrap.dataset.value;
-      const obsField = wrap.querySelector('textarea');
-      const obs = obsField ? obsField.value.trim() : '';
-      answers.push({ code, value, obs: obs || null });
-    });
-    const extra = el('adOutrasObs')?.value.trim() || null;
-    const u = await getUser();
-    if (!u) return Utils.setMsg('adMsg', 'Sessão expirada.', true);
 
-    Utils.setMsg('adMsg', 'Salvando checklist...');
+    Utils.setMsg('adMsg', 'Finalizando checklist...');
+    await saveChecklistDraft();
+
+    const draft = await loadChecklistDraft(currentProcessId, currentTemplate.id);
+    if (!draft) {
+      const msg = 'Nenhum rascunho encontrado. Aguarde o salvamento automático e tente novamente.';
+      Utils.setMsg('adMsg', msg, true);
+      window.alert(msg);
+      return;
+    }
+
+    const draftState = getDraftValidationState(draft, currentTemplate);
+    if (!draftState.ready) {
+      const msg = draftState.reason || 'Rascunho incompleto.';
+      Utils.setMsg('adMsg', msg, true);
+      window.alert(msg);
+      return;
+    }
+
+    const u = await getUser();
+    if (!u) {
+      Utils.setMsg('adMsg', 'Sessão expirada.', true);
+      return;
+    }
+
     const nowIso = new Date().toISOString();
-    const basePayload = {
-      answers,
-      extra_obs: extra,
-      filled_by: u.id,
-      status: 'final',
-      filled_at: nowIso
-    };
-    let action = 'INSERT';
     let saved;
     try {
-      if (currentDraftId) {
-        const { data, error } = await sb
-          .from('checklist_responses')
-          .update(basePayload)
-          .eq('id', currentDraftId)
-          .eq('status', 'draft')
-          .select('id,filled_at')
-          .single();
-        if (error) throw error;
-        saved = data;
-        action = 'UPDATE';
-        currentDraftId = null;
-      } else {
-        const { data, error } = await sb
-          .from('checklist_responses')
-          .insert({
-            process_id: currentProcessId,
-            template_id: currentTemplate.id,
-            ...basePayload
-          })
-          .select('id,filled_at')
-          .single();
-        if (error) throw error;
-        saved = data;
-      }
+      const { data, error } = await sb
+        .from('checklist_responses')
+        .update({
+          answers: draft.answers || [],
+          extra_obs: draft.extra_obs || null,
+          filled_by: u.id,
+          status: 'final',
+          filled_at: nowIso
+        })
+        .eq('id', draft.id)
+        .eq('status', 'draft')
+        .select('id,filled_at')
+        .single();
+      if (error) throw error;
+      saved = data;
+      currentDraftId = null;
     } catch (err) {
-      Utils.setMsg('adMsg', err.message || 'Falha ao salvar checklist.', true);
+      Utils.setMsg('adMsg', err.message || 'Falha ao finalizar checklist.', true);
       return;
     }
 
@@ -482,14 +507,14 @@ window.Modules.analise = (() => {
     await sb.from('audit_log').insert({
       user_id: u.id,
       user_email: u.email,
-      action,
+      action: 'UPDATE',
       entity_type: 'checklist_responses',
       entity_id: saved?.id,
       details: { process_id: currentProcessId, checklist_name: currentTemplate.name, filled_at: filledAt }
     });
 
-    Utils.setMsg('adMsg', 'Checklist salva.');
     await discardDraft(currentProcessId, currentTemplate.id);
+    Utils.setMsg('adMsg', 'Checklist finalizada.');
     await loadIndicador();
     if (window.Modules.processos?.reloadLists) {
       await window.Modules.processos.reloadLists();
@@ -679,7 +704,7 @@ window.Modules.analise = (() => {
     const btnIniciar = el('btnIniciarAD');
     const btnLimparAD = el('btnLimparAD');
     const btnLimparChecklist = el('btnLimparChecklist');
-    const btnSalvarChecklist = el('adBtnSalvarChecklist');
+    const btnFinalizarChecklist = el('adBtnFinalizarChecklist');
 
     if (btnIniciar) btnIniciar.addEventListener('click', ev => { ev.preventDefault(); iniciarChecklist(); });
     if (btnLimparAD) btnLimparAD.addEventListener('click', async ev => {
@@ -696,18 +721,18 @@ window.Modules.analise = (() => {
         }
       });
     }
-    if (btnSalvarChecklist) {
-      btnSalvarChecklist.addEventListener('click', ev => {
+    if (btnFinalizarChecklist) {
+      btnFinalizarChecklist.addEventListener('click', ev => {
         ev.preventDefault();
         if (!currentTemplate) return;
         const state = getChecklistValidationState();
         if (!state.ready) {
-          const msg = state.reason || 'Checklist incompleta.';
+          const msg = state.reason || 'Checklist incompleta. Finalize apenas após preencher todos os itens obrigatórios.';
           Utils.setMsg('adMsg', msg, true);
           window.alert(msg);
           return;
         }
-        if (window.confirm('Deseja salvar esta checklist?')) salvarChecklist();
+        if (window.confirm('Deseja finalizar esta checklist? As respostas salvas serão registradas como versão final e o rascunho será removido.')) finalizarChecklist();
       });
     }
   }
