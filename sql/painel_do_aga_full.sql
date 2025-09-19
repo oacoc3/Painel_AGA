@@ -878,7 +878,20 @@ begin
         );
       end if;
 
-      if (new.obra_termino_date is distinct from old.obra_termino_date) or (new.obra_concluida is distinct from old.obra_concluida) then
+      if (new.first_entry_date is distinct from old.first_entry_date) then
+        insert into history(process_id, action, details, user_id, user_email, user_name, created_at)
+        values (
+          pid,
+          '1ª entrada atualizada',
+          json_build_object('first_entry_date', new.first_entry_date),
+          auth.uid(),
+          auth.jwt()->>'email',
+          uname,
+          now()
+        );
+      end if;
+
+if (new.obra_termino_date is distinct from old.obra_termino_date) or (new.obra_concluida is distinct from old.obra_concluida) then
         insert into history(process_id, action, details, user_id, user_email, user_name, created_at)
         values (
           pid,
