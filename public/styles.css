@@ -57,7 +57,12 @@ button:hover { filter: brightness(0.98); }
 button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 100%; }
-.admin-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1fr); }
+.admin-grid {
+  grid-template-columns:
+    clamp(300px, 28vw, 360px)
+    minmax(0, 1fr)
+    clamp(300px, 28vw, 360px);
+}
 .grid > * { min-height: 0; }
 #viewDashboard .grid {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -184,6 +189,20 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .table th { font-family: var(--mono); font-weight: 600; }
 .table td .actions { display: flex; gap: 6px; }
 
+#listaUsers table,
+#listaCk table {
+  table-layout: auto;
+}
+
+#listaUsers th,
+#listaUsers td,
+#listaCk th,
+#listaCk td {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 /* Áreas com rolagem (scroll) */
 .scrolly { overflow-y: auto; overflow-x: hidden; }
 
@@ -252,27 +271,27 @@ footer { padding: 8px 12px; background: #faf9f7; }
 
 .ck-item-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: minmax(140px, 20%) minmax(0, 1fr);
+  gap: 16px;
   align-items: stretch;
 }
 
 .ck-item-options {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .ck-options {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .ck-option {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-weight: 500;
 }
 
@@ -281,28 +300,27 @@ footer { padding: 8px 12px; background: #faf9f7; }
   height: 16px;
 }
 
-.ck-item-notes {
+.ck-item-details {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-
-.ck-notes-row {
-  display: flex;
   gap: 12px;
-  align-items: stretch;
-  flex-wrap: wrap;
 }
 
-.ck-observacao {
-  flex: 1 1 320px;
+.ck-detail-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(75, 111, 145, 0.06);
 }
 
-.ck-observacao span {
-  font-weight: 500;
+.ck-detail-card-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .ck-observacao textarea {
@@ -312,26 +330,15 @@ footer { padding: 8px 12px; background: #faf9f7; }
 }
 
 .ck-sugestoes {
-  flex: 0 0 220px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: rgba(75, 111, 145, 0.06);
-}
-
-.ck-sugestoes strong {
-  font-family: var(--mono);
-  font-size: 12px;
-  text-transform: uppercase;
+  gap: 8px;
 }
 
 .ck-sugestoes-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .ck-sugestao-item {
@@ -368,7 +375,7 @@ footer { padding: 8px 12px; background: #faf9f7; }
 
 @media (max-width: 1200px) {
   .admin-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
   }
 
   .admin-grid > .admin-col-checklists {
@@ -379,14 +386,6 @@ footer { padding: 8px 12px; background: #faf9f7; }
 @media (max-width: 900px) {
   .ck-item-grid {
     grid-template-columns: 1fr;
-  }
-
-  .ck-notes-row {
-    flex-direction: column;
-  }
-
-  .ck-sugestoes {
-    flex: 1 1 auto;
   }
 
   .admin-grid {
