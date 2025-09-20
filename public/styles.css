@@ -101,8 +101,9 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 /* ===== PATCH aplicado no bloco de métricas ===== */
 .metrics-card .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  align-items: stretch;
 }
 .metric {
   display: flex;
@@ -117,6 +118,7 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   min-height: 0;
   width: 100%;
   box-sizing: border-box;
+  height: 100%;
 }
 .metric-label {
   display: flex;
@@ -127,6 +129,7 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   letter-spacing: 0.05em;
   color: var(--ink-soft);
   line-height: 1.1;
+  min-height: calc(3 * 1.1em);
 }
 .metric-label-line {
   display: block;
