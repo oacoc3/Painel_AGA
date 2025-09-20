@@ -77,6 +77,9 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .dashboard-col {
@@ -194,20 +197,40 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 }
 
 /* PATCH: seletor mais específico para rótulos diretos e novos auxiliares */
-.card-title > label { margin-left: auto; }
+.card-title > label:not(.card-select) {
+  margin-left: auto;
+}
 .card-title-meta {
   display: flex;
-  flex-direction: column;
   align-items: flex-end;
-  gap: 8px;
+  gap: 16px;
   margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.card-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+.card-select-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+.card-select select {
+  min-width: 140px;
 }
 .chart-total {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
   color: var(--ink-soft);
   font-size: 12px;
+  text-align: right;
 }
 .chart-total strong {
   font-family: var(--mono);
@@ -216,8 +239,6 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 }
 
 .chart-card .card-title { align-items: flex-end; }
-.chart-card .card-title label { font-size: 12px; }
-.chart-card .card-title label select { min-width: 120px; }
 
 .bar-chart { flex: 1; display: flex; flex-direction: column; gap: 12px; }
 .bar-chart-bars { flex: 1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; align-items: end; min-height: 200px; }
