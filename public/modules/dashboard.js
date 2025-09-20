@@ -39,6 +39,7 @@ window.Modules.dashboard = (() => {
   let cachedProcesses = [];
   let cachedStatusHistory = {};
   let cachedNotifications = [];
+  let cachedSigadaer = [];
 
   function init() {
     const yearSelect = el('entryYearSelect');
@@ -240,7 +241,9 @@ window.Modules.dashboard = (() => {
       anadoc: el('dashboardMetricAnadoc'),
       anatecPre: el('dashboardMetricAnatecPre'),
       anatec: el('dashboardMetricAnatec'),
-      notifications: el('dashboardMetricNotifications')
+      notifications: el('dashboardMetricNotifications'),
+      sigadaerJjaer: el('dashboardMetricSigadaerJjaer'),
+      sigadaerAgu: el('dashboardMetricSigadaerAgu')
     };
 
     Object.values(metricEls).forEach(node => {
@@ -251,7 +254,14 @@ window.Modules.dashboard = (() => {
     const year = select && select.value ? Number(select.value) : NaN;
     if (!Number.isFinite(year)) return;
 
-    const counters = { anadoc: 0, anatecPre: 0, anatec: 0, notifications: 0 };
+    const counters = {
+      anadoc: 0,
+      anatecPre: 0,
+      anatec: 0,
+      notifications: 0,
+      sigadaerJjaer: 0,
+      sigadaerAgu: 0
+    };
 
     Object.values(cachedStatusHistory || {}).forEach(list => {
       if (!Array.isArray(list)) return;
@@ -267,7 +277,7 @@ window.Modules.dashboard = (() => {
         if (Number.isNaN(+startDate) || startDate.getFullYear() !== year) continue;
 
         if (cur.status === 'ANADOC') counters.anadoc += 1;
-          if (cur.status === 'ANATEC-PRE') counters.anatecPre += 1;
+        if (cur.status === 'ANATEC-PRE') counters.anatecPre += 1;
         if (cur.status === 'ANATEC') counters.anatec += 1;
       }
     });
@@ -291,6 +301,19 @@ window.Modules.dashboard = (() => {
       }
     });
 
+    (cachedSigadaer || []).forEach(sigadaer => {
+      if (!sigadaer) return;
+      const { type, status, expedit_at: expeditAt } = sigadaer;
+      if (!expeditAt || status !== 'EXPEDIDO') return;
+
+      const expeditDate = new Date(expeditAt);
+      if (Number.isNaN(+expeditDate) || expeditDate.getFullYear() !== year) return;
+
+      const normalizedType = typeof type === 'string' ? type.toUpperCase() : '';
+      if (normalizedType === 'JJAER') counters.sigadaerJjaer += 1;
+      if (normalizedType === 'AGU') counters.sigadaerAgu += 1;
+    });
+
     Object.entries(metricEls).forEach(([key, node]) => {
       if (!node) return;
       node.textContent = YEARLY_COUNTER_FORMATTER.format(counters[key] || 0);
@@ -304,6 +327,7 @@ window.Modules.dashboard = (() => {
 
     cachedStatusHistory = {};
     cachedNotifications = [];
+    cachedSigadaer = [];
 
     const { data: procs } = await sb
       .from('processes')
@@ -318,6 +342,11 @@ window.Modules.dashboard = (() => {
       .from('notifications')
       .select('requested_at, read_at');
     cachedNotifications = notifications || [];
+
+    const { data: sigadaer } = await sb
+      .from('sigadaer')
+      .select('type, status, expedit_at');
+    cachedSigadaer = sigadaer || [];
 
     // Velocidade média — montar histórico de status por processo
     const ids = (procs || []).map(p => p.id);
