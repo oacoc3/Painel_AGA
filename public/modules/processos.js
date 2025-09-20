@@ -553,7 +553,6 @@ window.Modules.processos = (() => {
         sb.from('sigadaer').select('process_id').in('process_id', ids),
         sb.from('process_observations').select('process_id').in('process_id', ids),
         sb.from('checklist_responses').select('process_id').in('process_id', ids)
-        sb.from('checklist_responses').select('process_id').in('process_id', ids).eq('status', 'final')
 
       ]);
       const opSet = new Set((op.data || []).map(o => o.process_id));
