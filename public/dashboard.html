@@ -52,16 +52,35 @@
             <h2>Tempo médio por etapa</h2>
             <div id="velocimetros" class="velocimetros"></div>
           </div>
-          <div class="card chart-card">
-            <div class="card-title">
-              <h2>Novos processos</h2>
-              <label>
-                Ano
-                <select id="entryYearSelect" disabled></select>
-              </label>
+          <div class="dashboard-col">
+            <div class="card chart-card">
+              <div class="card-title">
+                <h2>Novos processos</h2>
+                <label>
+                  Ano
+                  <select id="entryYearSelect" disabled></select>
+                </label>
+              </div>
+              <div id="entryChart" class="bar-chart">
+                <p class="muted chart-placeholder">Carregando…</p>
+              </div>
             </div>
-            <div id="entryChart" class="bar-chart">
-              <p class="muted chart-placeholder">Carregando…</p>
+            <div class="card metrics-card">
+              <h2>Atividades no ano</h2>
+              <div class="metrics-grid">
+                <div class="metric">
+                  <span class="metric-label">Análises documentais</span>
+                  <strong class="metric-value" id="dashboardMetricAnadoc">—</strong>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">Notificações Confeccionadas</span>
+                  <strong class="metric-value" id="dashboardMetricNotifications">—</strong>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">Análises técnicas</span>
+                  <strong class="metric-value" id="dashboardMetricAnatec">—</strong>
+                </div>
+              </div>
             </div>
           </div>
         </div>
