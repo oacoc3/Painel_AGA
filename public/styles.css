@@ -72,11 +72,47 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .velocimetros {
   flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  align-content: start;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.dashboard-col {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow-y: auto;
-  padding-right: 4px;
+  min-height: 0;
+}
+.dashboard-col > .chart-card {
+  flex: 1;
+}
+.metrics-card .metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(75, 111, 145, 0.08);
+  min-height: 0;
+}
+.metric-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+.metric-value {
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 600;
 }
 .process-bar {
   display: flex;
