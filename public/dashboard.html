@@ -56,17 +56,23 @@
             <div class="card chart-card">
               <div class="card-title">
                 <h2>Novos processos</h2>
-                <label>
-                  Ano
-                  <select id="entryYearSelect" disabled></select>
-                </label>
+                <div class="card-title-meta">
+                  <div class="chart-total" aria-live="polite">
+                    <span>Total no ano</span>
+                    <strong id="entryYearTotal">—</strong>
+                  </div>
+                  <label>
+                    Ano
+                    <select id="entryYearSelect" disabled></select>
+                  </label>
+                </div>
               </div>
               <div id="entryChart" class="bar-chart">
                 <p class="muted chart-placeholder">Carregando…</p>
               </div>
             </div>
             <div class="card metrics-card">
-              <h2>Atividades no ano</h2>
+               <h2>Atividades</h2>
               <div class="metrics-grid">
                 <div class="metric">
                   <span class="metric-label">Análises documentais</span>
