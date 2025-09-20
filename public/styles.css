@@ -65,9 +65,15 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 }
 .grid > * { min-height: 0; }
 #viewDashboard .grid {
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: minmax(280px, 0.4fr) minmax(320px, 0.6fr);
   align-items: stretch;
   grid-auto-rows: minmax(0, 1fr);
+}
+
+@media (max-width: 960px) {
+  #viewDashboard .grid {
+    grid-template-columns: 1fr;
+  }
 }
 .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 
