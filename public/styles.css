@@ -70,15 +70,15 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   grid-auto-rows: minmax(0, 1fr);
 }
 .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+
+/* PATCH: velocímetros agora em coluna (flex), removendo grid/scroll extras */
 .velocimetros {
   flex: 1;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  align-content: start;
-  overflow-y: auto;
-  padding-right: 4px;
 }
+
 .dashboard-col {
   display: flex;
   flex-direction: column;
@@ -137,19 +137,14 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.process-bar-meta {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.process-bar-count,
+
+/* PATCH: removido .process-bar-meta e .process-bar-count; mantido apenas .process-bar-value */
 .process-bar-value {
   font-family: var(--mono);
   font-size: 12px;
   color: var(--ink-soft);
 }
+
 .process-bar-track {
   position: relative;
   height: 12px;
@@ -170,6 +165,7 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .process-bar.no-data .process-bar-track {
   background: repeating-linear-gradient(135deg, rgba(31, 41, 55, 0.1), rgba(31, 41, 55, 0.1) 8px, rgba(31, 41, 55, 0.05) 8px, rgba(31, 41, 55, 0.05) 16px);
 }
+
 .prazo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; height: 100%; grid-auto-rows: 1fr; }
 .prazo-grid > .card,
 .prazo-grid > .prazo-col { height: 100%; min-height: 0; }
@@ -197,8 +193,28 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   margin-bottom: 8px;
 }
 
-.card-title h2 { margin: 0; }
-.card-title label { margin-left: auto; }
+/* PATCH: seletor mais específico para rótulos diretos e novos auxiliares */
+.card-title > label { margin-left: auto; }
+.card-title-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+.chart-total {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.chart-total strong {
+  font-family: var(--mono);
+  font-size: 20px;
+  color: var(--ink);
+}
+
 .chart-card .card-title { align-items: flex-end; }
 .chart-card .card-title label { font-size: 12px; }
 .chart-card .card-title label select { min-width: 120px; }
