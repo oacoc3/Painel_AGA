@@ -95,13 +95,13 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 /* ===== PATCH aplicado no bloco de métricas ===== */
 .metrics-card .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
 }
 .metric {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
   padding: 12px;
   border: 1px solid var(--line);
@@ -109,6 +109,8 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   background: rgba(75, 111, 145, 0.08);
   min-width: 0;
   min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 .metric-label {
   display: flex;
@@ -127,7 +129,8 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   font-family: var(--mono);
   font-size: 24px;
   font-weight: 600;
-  text-align: right;
+  text-align: left;
+  align-self: stretch;
 }
 /* ===== fim do patch de métricas ===== */
 
