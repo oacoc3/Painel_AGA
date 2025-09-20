@@ -91,15 +91,22 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .dashboard-col > .chart-card {
   flex: 1;
 }
+
+/* ===== PATCH aplicado no bloco de métricas ===== */
 .metrics-card .metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
   gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
 .metric {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex: 1 1 0;
+  min-width: 180px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -107,23 +114,33 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   min-height: 0;
 }
 .metric-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--ink-soft);
+  line-height: 1.1;
+}
+.metric-label-line {
+  display: block;
 }
 .metric-value {
   font-family: var(--mono);
   font-size: 24px;
   font-weight: 600;
+  text-align: right;
 }
+/* ===== fim do patch de métricas ===== */
+
 .process-bar {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;                /* PATCH: 8px -> 6px */
+  padding: 8px 10px;       /* PATCH: 10px 12px -> 8px 10px */
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 6px;      /* PATCH: 8px -> 6px */
   background: var(--card);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
   min-width: 0;
@@ -132,7 +149,7 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 12px;
+  gap: 8px;                /* PATCH: 12px -> 8px */
   flex-wrap: wrap;
 }
 .process-bar-status {
@@ -150,7 +167,7 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 
 .process-bar-track {
   position: relative;
-  height: 12px;
+  height: 8px;             /* PATCH: 12px -> 8px */
   border-radius: 999px;
   background: rgba(31, 41, 55, 0.1);
   overflow: hidden;
