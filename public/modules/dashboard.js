@@ -52,11 +52,22 @@ window.Modules.dashboard = (() => {
   function renderEntryChartEmpty(message = 'Nenhum dado para exibir.') {
     const container = el('entryChart');
     if (!container) return;
+    setEntryYearTotal(null);
     container.innerHTML = '';
     const msg = document.createElement('p');
     msg.className = 'muted chart-placeholder';
     msg.textContent = message;
     container.appendChild(msg);
+  }
+
+  function setEntryYearTotal(value) {
+    const node = el('entryYearTotal');
+    if (!node) return;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      node.textContent = YEARLY_COUNTER_FORMATTER.format(value);
+    } else {
+      node.textContent = '—';
+    }
   }
 
   function updateYearOptions() {
@@ -113,6 +124,9 @@ window.Modules.dashboard = (() => {
       if (d.getFullYear() !== year) return;
       counts[d.getMonth()] += 1;
     });
+
+    const totalCount = counts.reduce((sum, value) => sum + value, 0);
+    setEntryYearTotal(totalCount);
 
     container.innerHTML = '';
     const bars = document.createElement('div');
