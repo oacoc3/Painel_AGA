@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
   <!-- App config -->
   <script src="./config.js" defer></script>
-  <!-- Supabase library -->
+  <!-- Supabase library (Biblioteca cliente do Supabase) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
   <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
@@ -57,14 +57,14 @@
               <div class="card-title">
                 <h2>Novos processos</h2>
                 <div class="card-title-meta">
+                  <label class="card-select">
+                    <span class="card-select-label">Ano</span>
+                    <select id="entryYearSelect" disabled></select>
+                  </label>
                   <div class="chart-total" aria-live="polite">
                     <span>Total no ano</span>
                     <strong id="entryYearTotal">—</strong>
                   </div>
-                  <label>
-                    Ano
-                    <select id="entryYearSelect" disabled></select>
-                  </label>
                 </div>
               </div>
               <div id="entryChart" class="bar-chart">
@@ -72,19 +72,23 @@
               </div>
             </div>
             <div class="card metrics-card">
-               <h2>Atividades</h2>
+              <h2>Atividades</h2>
               <div class="metrics-grid">
                 <div class="metric">
                   <span class="metric-label">Análises documentais</span>
                   <strong class="metric-value" id="dashboardMetricAnadoc">—</strong>
                 </div>
                 <div class="metric">
-                  <span class="metric-label">Notificações Confeccionadas</span>
-                  <strong class="metric-value" id="dashboardMetricNotifications">—</strong>
+                  <span class="metric-label">Análises técnicas preliminares</span>
+                  <strong class="metric-value" id="dashboardMetricAnatecPre">—</strong>
                 </div>
                 <div class="metric">
                   <span class="metric-label">Análises técnicas</span>
                   <strong class="metric-value" id="dashboardMetricAnatec">—</strong>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">Notificações confeccionadas</span>
+                  <strong class="metric-value" id="dashboardMetricNotifications">—</strong>
                 </div>
               </div>
             </div>
