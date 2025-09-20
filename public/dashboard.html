@@ -5,48 +5,53 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <base href="/" />
   <title>Painel DO-AGA</title>
-
-  <!-- CSS (Cascading Style Sheets) -->
   <link rel="stylesheet" href="./styles.css" />
-
-  <!-- Fonte -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
-
   <!-- App config -->
   <script src="./config.js" defer></script>
-
-  <!-- Supabase (cliente UMD) -->
+  <!-- Supabase library (Biblioteca cliente do Supabase) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
-
   <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
-
   <!-- Sessão pronta antes de inicializar a página -->
   <script src="./auth-ready.js" defer></script>
-
-  <!-- Utilitários -->
   <script src="./utils.js" defer></script>
-
-  <!-- Guardas de segurança (não alteram visual) -->
+  <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
+  <script src="./mpa.js" defer></script>
+  <script src="./modules/statuses.js" defer></script>
+  <script src="./modules/dashboard.js" defer></script>
 </head>
-<body>
-  <div class="vh">
-    <header class="bar head">
-      <span>Retro-UI</span>
-      <strong>DO-AGA</strong>
-      <span id="headBuild"></span>
+<body data-route="dashboard">
+  <div id="app" class="vh">
+    <header class="bar">
+      <div class="brand">
+        <span class="logo">■</span>
+        <strong>Painel DO-AGA</strong>
+        <small class="build" id="buildInfo">build: carregando…</small>
+      </div>
+      <nav id="topNav" class="nav hidden">
+        <button data-route="dashboard" class="active">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise">Documental</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+      </nav>
+      <div id="userBox" class="user hidden">
+        <span id="userName"></span>
+        <small id="userRole" class="muted"></small>
+        <button id="btnLogout" class="danger" type="button">Sair</button>
+      </div>
     </header>
 
     <main class="main">
-      <section class="dashboard">
-        <h1 class="sr-only">Painel</h1>
-
-        <div class="dashboard-grid">
-          <div class="dashboard-col">
+      <section id="viewDashboard" class="view">
+        <div class="grid">
+          <div class="card">
+            <h2>Tempo médio por etapa</h2>
             <div id="velocimetros" class="velocimetros"></div>
           </div>
-
           <div class="dashboard-col">
             <div class="card chart-card">
               <div class="card-title">
@@ -66,36 +71,23 @@
                 <p class="muted chart-placeholder">Carregando…</p>
               </div>
             </div>
-
             <div class="card metrics-card">
               <h2>Atividades</h2>
               <div class="metrics-grid">
                 <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Análises</span>
-                    <span class="metric-label-line">documentais</span>
-                  </span>
+                  <span class="metric-label">Análises documentais</span>
                   <strong class="metric-value" id="dashboardMetricAnadoc">—</strong>
                 </div>
                 <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Análises técnicas</span>
-                    <span class="metric-label-line">preliminares</span>
-                  </span>
+                  <span class="metric-label">Análises técnicas preliminares</span>
                   <strong class="metric-value" id="dashboardMetricAnatecPre">—</strong>
                 </div>
                 <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Análises</span>
-                    <span class="metric-label-line">técnicas</span>
-                  </span>
+                  <span class="metric-label">Análises técnicas</span>
                   <strong class="metric-value" id="dashboardMetricAnatec">—</strong>
                 </div>
                 <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Notificações</span>
-                    <span class="metric-label-line">confeccionadas</span>
-                  </span>
+                  <span class="metric-label">Notificações confeccionadas</span>
                   <strong class="metric-value" id="dashboardMetricNotifications">—</strong>
                 </div>
               </div>
