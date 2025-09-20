@@ -10,8 +10,19 @@ window.Modules.dashboard = (() => {
     'SOB-DOC',
     'SOB-TEC',
     'DECEA',
-    'AGD-LEIT'
+    'AGD-LEIT',
+    'ICA-EXTR'
   ]);
+  const SPEED_STATUS_ORDER = [
+    'ANADOC',
+    'ANAICA',
+    'ANATEC-PRE',
+    'ANATEC',
+    'CONFEC',
+    'REV-OACO',
+    'APROV',
+    'ICA-PUB'
+  ];
   const STATUS_LABELS = {
     CONFEC: 'Confecção de Notificação',
     'REV-OACO': 'Revisão Chefe OACO',
@@ -23,15 +34,18 @@ window.Modules.dashboard = (() => {
     ANAICA: 'ICA - Análise Documental/Técnica'
   };
   const MONTH_LABELS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+  const YEARLY_COUNTER_FORMATTER = new Intl.NumberFormat('pt-BR');
 
   let cachedProcesses = [];
   let cachedStatusHistory = {};
+  let cachedNotifications = [];
 
   function init() {
     const yearSelect = el('entryYearSelect');
     yearSelect?.addEventListener('change', () => {
       renderEntryChart();
       renderOverview();
+      renderYearlyActivity();
     });
   }
 
@@ -190,7 +204,9 @@ window.Modules.dashboard = (() => {
       });
     }
 
-    const ringStatuses = DASHBOARD_STATUSES.filter(s => !EXCLUDED_RING_STATUSES.has(s));
+    const ringStatuses = SPEED_STATUS_ORDER.filter(
+      status => !EXCLUDED_RING_STATUSES.has(status) && DASHBOARD_STATUSES.includes(status)
+    );
     const items = ringStatuses.map(s => {
       const label = STATUS_LABELS[s] || s;
       return {
@@ -205,12 +221,73 @@ window.Modules.dashboard = (() => {
     Utils.renderProcessBars('velocimetros', items);
   }
 
+  function renderYearlyActivity() {
+    const metricEls = {
+      anadoc: el('dashboardMetricAnadoc'),
+      notifications: el('dashboardMetricNotifications'),
+      anatec: el('dashboardMetricAnatec')
+    };
+
+    Object.values(metricEls).forEach(node => {
+      if (node) node.textContent = '—';
+    });
+
+    const select = el('entryYearSelect');
+    const year = select && select.value ? Number(select.value) : NaN;
+    if (!Number.isFinite(year)) return;
+
+    const counters = { anadoc: 0, notifications: 0, anatec: 0 };
+
+    Object.values(cachedStatusHistory || {}).forEach(list => {
+      if (!Array.isArray(list)) return;
+      for (let i = 0; i < list.length; i++) {
+        const cur = list[i];
+        if (!cur || !cur.start || !cur.status) continue;
+        if (i > 0) {
+          const prev = list[i - 1];
+          if (prev && prev.start === cur.start && prev.status === cur.status) continue;
+        }
+
+        const startDate = new Date(cur.start);
+        if (Number.isNaN(+startDate) || startDate.getFullYear() !== year) continue;
+
+        if (cur.status === 'ANADOC') counters.anadoc += 1;
+        if (cur.status === 'ANATEC') counters.anatec += 1;
+      }
+    });
+
+    (cachedNotifications || []).forEach(notification => {
+      if (!notification) return;
+      const { requested_at: requestedAt, read_at: readAt } = notification;
+
+      if (requestedAt) {
+        const requestedDate = new Date(requestedAt);
+        if (!Number.isNaN(+requestedDate) && requestedDate.getFullYear() === year) {
+          counters.notifications += 1;
+        }
+      }
+
+      if (readAt) {
+        const readDate = new Date(readAt);
+        if (!Number.isNaN(+readDate) && readDate.getFullYear() === year) {
+          counters.notifications += 1;
+        }
+      }
+    });
+
+    Object.entries(metricEls).forEach(([key, node]) => {
+      if (!node) return;
+      node.textContent = YEARLY_COUNTER_FORMATTER.format(counters[key] || 0);
+    });
+  }
+
   async function load() {
     renderEntryChartEmpty('Carregando…');
     const yearSelect = el('entryYearSelect');
     if (yearSelect) yearSelect.disabled = true;
 
     cachedStatusHistory = {};
+    cachedNotifications = [];
 
     const { data: procs } = await sb
       .from('processes')
@@ -220,6 +297,11 @@ window.Modules.dashboard = (() => {
     const hasYears = updateYearOptions();
     if (hasYears) renderEntryChart();
     else renderEntryChartEmpty('Nenhum dado para exibir.');
+
+    const { data: notifications } = await sb
+      .from('notifications')
+      .select('requested_at, read_at');
+    cachedNotifications = notifications || [];
 
     // Velocidade média — montar histórico de status por processo
     const ids = (procs || []).map(p => p.id);
@@ -247,6 +329,7 @@ window.Modules.dashboard = (() => {
     cachedStatusHistory = byProc;
 
     renderOverview();
+    renderYearlyActivity();
   }
 
   return { init, load };
