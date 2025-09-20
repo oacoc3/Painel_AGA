@@ -222,7 +222,6 @@
 
     list.forEach(it => {
       const avg = (typeof it.avg === 'number' && Number.isFinite(it.avg)) ? it.avg : null;
-      const count = (typeof it.count === 'number' && Number.isFinite(it.count)) ? it.count : 0;
 
       const displayLabel = it.label || it.status || '';
       const ariaLabel = it.ariaLabel || `Velocidade média de ${displayLabel || 'status desconhecido'}`;
@@ -230,32 +229,22 @@
       const bar = document.createElement('div');
       bar.className = 'process-bar';
       bar.setAttribute('role', 'img');
-        bar.setAttribute('aria-label', ariaLabel);
+      bar.setAttribute('aria-label', ariaLabel);
 
       const header = document.createElement('div');
       header.className = 'process-bar-header';
 
       const status = document.createElement('span');
       status.className = 'process-bar-status';
-     status.textContent = displayLabel;
-      const meta = document.createElement('div');
-      meta.className = 'process-bar-meta';
-
-      const countEl = document.createElement('span');
-      countEl.className = 'process-bar-count';
-      const countLabel = new Intl.NumberFormat('pt-BR').format(count);
-      countEl.textContent = `${countLabel} processo${count === 1 ? '' : 's'}`;
+      status.textContent = displayLabel;
 
       const valueEl = document.createElement('span');
       valueEl.className = 'process-bar-value';
       const formattedAvg = formatProcessSpeed(avg);
       valueEl.textContent = formattedAvg === '—' ? '— dias' : `${formattedAvg} dias`;
 
-      meta.appendChild(countEl);
-      meta.appendChild(valueEl);
-
       header.appendChild(status);
-      header.appendChild(meta);
+      header.appendChild(valueEl);
 
       const track = document.createElement('div');
       track.className = 'process-bar-track';
