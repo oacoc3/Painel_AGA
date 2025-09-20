@@ -238,8 +238,9 @@ window.Modules.dashboard = (() => {
   function renderYearlyActivity() {
     const metricEls = {
       anadoc: el('dashboardMetricAnadoc'),
-      notifications: el('dashboardMetricNotifications'),
-      anatec: el('dashboardMetricAnatec')
+      anatecPre: el('dashboardMetricAnatecPre'),
+      anatec: el('dashboardMetricAnatec'),
+      notifications: el('dashboardMetricNotifications')
     };
 
     Object.values(metricEls).forEach(node => {
@@ -250,7 +251,7 @@ window.Modules.dashboard = (() => {
     const year = select && select.value ? Number(select.value) : NaN;
     if (!Number.isFinite(year)) return;
 
-    const counters = { anadoc: 0, notifications: 0, anatec: 0 };
+    const counters = { anadoc: 0, anatecPre: 0, anatec: 0, notifications: 0 };
 
     Object.values(cachedStatusHistory || {}).forEach(list => {
       if (!Array.isArray(list)) return;
@@ -266,6 +267,7 @@ window.Modules.dashboard = (() => {
         if (Number.isNaN(+startDate) || startDate.getFullYear() !== year) continue;
 
         if (cur.status === 'ANADOC') counters.anadoc += 1;
+          if (cur.status === 'ANATEC-PRE') counters.anatecPre += 1;
         if (cur.status === 'ANATEC') counters.anatec += 1;
       }
     });
