@@ -894,36 +894,65 @@ window.Modules.processos = (() => {
       if (error) throw error;
 
       const doc = new window.jspdf.jsPDF();
-      let y = 10;
+      const marginLeft = 10;
+      const topMargin = 10;
+      const bottomMargin = 20;
+      const lineHeight = 6;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const contentWidth = pageWidth - (marginLeft * 2);
+      const maxY = pageHeight - bottomMargin;
+      let y = topMargin;
+
+      const ensurePage = () => {
+        if (y > maxY) {
+          doc.addPage();
+          y = topMargin;
+        }
+      };
+
+      const addVerticalSpace = (amount = lineHeight) => {
+        y += amount;
+        ensurePage();
+      };
+
+      const addWrappedText = (text, options = {}) => {
+        if (text == null || text === '') return;
+        const lines = doc.splitTextToSize(String(text), contentWidth);
+        lines.forEach(line => {
+          ensurePage();
+          doc.text(line, marginLeft, y, options);
+          y += lineHeight;
+        });
+      };
+
       doc.setFontSize(12);
-      doc.text(`Checklist: ${data.checklist_templates?.name || ''}`, 10, y); y += 6;
-      doc.text(`NUP: ${data.processes?.nup || ''}`, 10, y); y += 6;
-      doc.text(`Preenchida em: ${Utils.fmtDateTime(data.filled_at)}`, 10, y); y += 10;
+      addWrappedText(`Checklist: ${data.checklist_templates?.name || ''}`);
+      addWrappedText(`NUP: ${data.processes?.nup || ''}`);
+      addWrappedText(`Preenchida em: ${Utils.fmtDateTime(data.filled_at)}`);
+      addVerticalSpace(4);
 
       const answers = Array.isArray(data.answers) ? data.answers : [];
       const tplItems = data.checklist_templates?.items;
       const cats = Array.isArray(tplItems) ? tplItems : [];
       cats.forEach(cat => {
-        if (y > 270) { doc.addPage(); y = 10; }
         doc.setFont(undefined, 'bold');
-        doc.text(cat.categoria || '', 10, y); y += 6;
+        addWrappedText(cat.categoria || '');
         doc.setFont(undefined, 'normal');
         (cat.itens || []).forEach(item => {
-          if (y > 270) { doc.addPage(); y = 10; }
           const ans = answers.find(a => a.code === item.code) || {};
-          doc.text(`${item.code || ''} - ${item.requisito || ''}`, 10, y); y += 6;
-          doc.text(`Resultado: ${ans.value || ''}`, 10, y); y += 6;
-          if (ans.obs) { doc.text(`Obs: ${ans.obs}`, 10, y); y += 6; }
-          y += 4;
+          addWrappedText(`${item.code || ''} - ${item.requisito || ''}`);
+          addWrappedText(`Resultado: ${ans.value || ''}`);
+          if (ans.obs) addWrappedText(`Obs: ${ans.obs}`);
+          addVerticalSpace(4);
         });
       });
 
       if (data.extra_obs) {
-        if (y > 270) { doc.addPage(); y = 10; }
         doc.setFont(undefined, 'bold');
-        doc.text('Outras observações:', 10, y); y += 6;
+        addWrappedText('Outras observações:');
         doc.setFont(undefined, 'normal');
-        doc.text(String(data.extra_obs), 10, y); y += 6;
+        addWrappedText(String(data.extra_obs));
       }
 
       const url = doc.output('bloburl');
