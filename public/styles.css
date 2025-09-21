@@ -101,7 +101,7 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 /* ===== PATCH aplicado no bloco de métricas ===== */
 .metrics-card .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 12px;
   align-items: stretch;
 }
