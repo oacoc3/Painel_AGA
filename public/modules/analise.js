@@ -345,6 +345,7 @@ window.Modules.analise = (() => {
           .insert({
             process_id: currentProcessId,
             template_id: currentTemplate.id,
+            started_at: new Date().toISOString(),
             status: 'draft',
             ...payload
           })
@@ -656,48 +657,73 @@ window.Modules.analise = (() => {
     try {
       const { data, error } = await sb
         .from('checklist_responses')
-        .select('answers,extra_obs,filled_at,processes(nup),checklist_templates(name,items)')
+        .select('answers,extra_obs,started_at,filled_at,filled_by,profiles:filled_by(name),processes(nup),checklist_templates(name,items)')
         .eq('id', id)
         .single();
       if (error) throw error;
 
       const doc = new window.jspdf.jsPDF();
-      const marginLeft = 10;
-      const topMargin = 10;
+      const marginLeft = 20;
+      const marginRight = 20;
+      const topMargin = 20;
       const bottomMargin = 20;
       const lineHeight = 6;
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      const contentWidth = pageWidth - (marginLeft * 2);
+      const contentWidth = pageWidth - marginLeft - marginRight;
       const maxY = pageHeight - bottomMargin;
       let y = topMargin;
 
-      const ensurePage = () => {
-        if (y > maxY) {
+      const ensureSpace = (height = lineHeight) => {
+        if (y + height > maxY) {
           doc.addPage();
           y = topMargin;
         }
       };
 
       const addVerticalSpace = (amount = lineHeight) => {
-        y += amount;
-        ensurePage();
+        if (y + amount > maxY) {
+          doc.addPage();
+          y = topMargin;
+        } else {
+          y += amount;
+        }
       };
 
       const addWrappedText = (text, options = {}) => {
         if (text == null || text === '') return;
-        const lines = doc.splitTextToSize(String(text), contentWidth);
-        lines.forEach(line => {
-          ensurePage();
-          doc.text(line, marginLeft, y, options);
-          y += lineHeight;
+        const paragraphs = String(text).split(/\n+/);
+        const baseOptions = {
+          maxWidth: contentWidth,
+          align: options.align || 'justify',
+          ...options
+        };
+        paragraphs.forEach((paragraph, index) => {
+          if (!paragraph.trim()) {
+            addVerticalSpace(lineHeight);
+            return;
+          }
+          const lines = doc.splitTextToSize(paragraph, contentWidth);
+          lines.forEach(line => {
+            ensureSpace(lineHeight);
+            doc.text(line, marginLeft, y, baseOptions);
+            y += lineHeight;
+          });
+          if (index < paragraphs.length - 1) {
+            addVerticalSpace(lineHeight);
+          }
         });
       };
 
       doc.setFontSize(12);
+      const startedAt = data.started_at ? Utils.fmtDateTime(data.started_at) : '—';
+      const finishedAt = data.filled_at ? Utils.fmtDateTime(data.filled_at) : '—';
+      const responsible = data.profiles?.name || '—';
       addWrappedText(`Checklist: ${data.checklist_templates?.name || ''}`);
       addWrappedText(`NUP: ${data.processes?.nup || ''}`);
-      addWrappedText(`Preenchida em: ${Utils.fmtDateTime(data.filled_at)}`);
+      addWrappedText(`Início: ${startedAt}`);
+      addWrappedText(`Término: ${finishedAt}`);
+      addWrappedText(`Responsável: ${responsible}`);
       addVerticalSpace(4);
 
       const answers = data.answers || [];
