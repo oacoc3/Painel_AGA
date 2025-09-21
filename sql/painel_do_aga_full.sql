@@ -1113,12 +1113,15 @@ begin
 
   elsif tg_table_name = 'checklist_responses' then
     pid := coalesce(new.process_id, old.process_id);
-    if tg_op = 'UPDATE'
-       and coalesce(old.status, '') = 'draft'
-       and coalesce(new.status, '') = 'final' then
-      evento := 'Checklist - Preenchimento finalizado';
+
+    if tg_op = 'INSERT' then
+      evento := 'Checklist - Início de preenchimento';
+    elsif tg_op = 'UPDATE'
+          and coalesce(old.status, '') = 'draft'
+          and coalesce(new.status, '') = 'final' then
+      evento := 'Checklist finalizado';
     else
-      evento := 'Checklist - Rascunho salvo';
+      return coalesce(new, old);
     end if;
 
     insert into history(process_id, action, details, user_id, user_email, user_name, created_at)
@@ -1233,7 +1236,7 @@ set started_at = coalesce(
     select min(h.created_at)
     from history h
     where h.process_id = cr.process_id
-      and h.action in ('Checklist - Rascunho salvo', 'Checklist - Preenchimento finalizado')
+      and h.action in ('Checklist - Início de preenchimento', 'Checklist finalizado')
   ),
   cr.filled_at,
   now()
@@ -1247,4 +1250,3 @@ alter table checklist_responses
   alter column started_at set not null;
 
 -- ============== Fim do arquivo 9: Painel_AGA-main/sql/07_add_started_at_to_checklist_responses.sql ==============
-
