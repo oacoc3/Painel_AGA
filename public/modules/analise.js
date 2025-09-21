@@ -662,93 +662,23 @@ window.Modules.analise = (() => {
         .single();
       if (error) throw error;
 
-      const doc = new window.jspdf.jsPDF();
-      const marginLeft = 20;
-      const marginRight = 20;
-      const topMargin = 20;
-      const bottomMargin = 20;
-      const lineHeight = 6;
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const contentWidth = pageWidth - marginLeft - marginRight;
-      const maxY = pageHeight - bottomMargin;
-      let y = topMargin;
-
-      const ensureSpace = (height = lineHeight) => {
-        if (y + height > maxY) {
-          doc.addPage();
-          y = topMargin;
-        }
-      };
-
-      const addVerticalSpace = (amount = lineHeight) => {
-        if (y + amount > maxY) {
-          doc.addPage();
-          y = topMargin;
-        } else {
-          y += amount;
-        }
-      };
-
-      const addWrappedText = (text, options = {}) => {
-        if (text == null || text === '') return;
-        const paragraphs = String(text).split(/\n+/);
-        const baseOptions = {
-          maxWidth: contentWidth,
-          align: options.align || 'justify',
-          ...options
-        };
-        paragraphs.forEach((paragraph, index) => {
-          if (!paragraph.trim()) {
-            addVerticalSpace(lineHeight);
-            return;
-          }
-          const lines = doc.splitTextToSize(paragraph, contentWidth);
-          lines.forEach(line => {
-            ensureSpace(lineHeight);
-            doc.text(line, marginLeft, y, baseOptions);
-            y += lineHeight;
-          });
-          if (index < paragraphs.length - 1) {
-            addVerticalSpace(lineHeight);
-          }
-        });
-      };
-
-      doc.setFontSize(12);
-      const startedAt = data.started_at ? Utils.fmtDateTime(data.started_at) : '—';
-      const finishedAt = data.filled_at ? Utils.fmtDateTime(data.filled_at) : '—';
-      const responsible = data.profiles?.name || '—';
-      addWrappedText(`Checklist: ${data.checklist_templates?.name || ''}`);
-      addWrappedText(`NUP: ${data.processes?.nup || ''}`);
-      addWrappedText(`Início: ${startedAt}`);
-      addWrappedText(`Término: ${finishedAt}`);
-      addWrappedText(`Responsável: ${responsible}`);
-      addVerticalSpace(4);
-
-      const answers = data.answers || [];
-      const cats = data.checklist_templates?.items || [];
-      cats.forEach(cat => {
-        doc.setFont(undefined, 'bold');
-        addWrappedText(cat.categoria || '');
-        doc.setFont(undefined, 'normal');
-        (cat.itens || []).forEach(item => {
-          const ans = answers.find(a => a.code === item.code) || {};
-          addWrappedText(`${item.code || ''} - ${item.requisito || ''}`);
-          addWrappedText(`Resultado: ${ans.value || ''}`);
-          if (ans.obs) addWrappedText(`Obs: ${ans.obs}`);
-          addVerticalSpace(4);
-        });
-      });
-
-      if (data.extra_obs) {
-        doc.setFont(undefined, 'bold');
-        addWrappedText('Outras observações:');
-        doc.setFont(undefined, 'normal');
-        addWrappedText(String(data.extra_obs));
+      const render = window.Modules?.checklistPDF?.renderChecklistPDF;
+      if (typeof render !== 'function') {
+        throw new Error('Utilitário de PDF indisponível.');
       }
 
-      const url = doc.output('bloburl');
+      const startedAt = data.started_at ? Utils.fmtDateTime(data.started_at) : '—';
+      const finishedAt = data.filled_at ? Utils.fmtDateTime(data.filled_at) : '—';
+      const responsible = data.profiles?.name || data.filled_by || '—';
+
+      const url = render(data, {
+        metadata: [
+          { label: 'Início', value: startedAt || '—' },
+          { label: 'Término', value: finishedAt || '—' },
+          { label: 'Responsável', value: responsible || '—' }
+        ]
+      });
+
       if (win) win.location.href = url;
     } catch (err) {
       if (win) win.close();
