@@ -885,77 +885,29 @@ window.Modules.processos = (() => {
     const win = window.open('', '_blank');
     if (win) win.opener = null;
     try {
-      if (!window.jspdf?.jsPDF) throw new Error('Biblioteca de PDF indisponível.');
       const { data, error } = await sb
         .from('checklist_responses')
-        .select('answers,extra_obs,filled_at,processes(nup),checklist_templates(name,items)')
+        .select('answers,extra_obs,started_at,filled_at,filled_by,profiles:filled_by(name),processes(nup),checklist_templates(name,items)')
         .eq('id', id)
         .single();
       if (error) throw error;
 
-      const doc = new window.jspdf.jsPDF();
-      const marginLeft = 10;
-      const topMargin = 10;
-      const bottomMargin = 20;
-      const lineHeight = 6;
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const contentWidth = pageWidth - (marginLeft * 2);
-      const maxY = pageHeight - bottomMargin;
-      let y = topMargin;
-
-      const ensurePage = () => {
-        if (y > maxY) {
-          doc.addPage();
-          y = topMargin;
-        }
-      };
-
-      const addVerticalSpace = (amount = lineHeight) => {
-        y += amount;
-        ensurePage();
-      };
-
-      const addWrappedText = (text, options = {}) => {
-        if (text == null || text === '') return;
-        const lines = doc.splitTextToSize(String(text), contentWidth);
-        lines.forEach(line => {
-          ensurePage();
-          doc.text(line, marginLeft, y, options);
-          y += lineHeight;
-        });
-      };
-
-      doc.setFontSize(12);
-      addWrappedText(`Checklist: ${data.checklist_templates?.name || ''}`);
-      addWrappedText(`NUP: ${data.processes?.nup || ''}`);
-      addWrappedText(`Preenchida em: ${Utils.fmtDateTime(data.filled_at)}`);
-      addVerticalSpace(4);
-
-      const answers = Array.isArray(data.answers) ? data.answers : [];
-      const tplItems = data.checklist_templates?.items;
-      const cats = Array.isArray(tplItems) ? tplItems : [];
-      cats.forEach(cat => {
-        doc.setFont(undefined, 'bold');
-        addWrappedText(cat.categoria || '');
-        doc.setFont(undefined, 'normal');
-        (cat.itens || []).forEach(item => {
-          const ans = answers.find(a => a.code === item.code) || {};
-          addWrappedText(`${item.code || ''} - ${item.requisito || ''}`);
-          addWrappedText(`Resultado: ${ans.value || ''}`);
-          if (ans.obs) addWrappedText(`Obs: ${ans.obs}`);
-          addVerticalSpace(4);
-        });
-      });
-
-      if (data.extra_obs) {
-        doc.setFont(undefined, 'bold');
-        addWrappedText('Outras observações:');
-        doc.setFont(undefined, 'normal');
-        addWrappedText(String(data.extra_obs));
+      const render = window.Modules?.checklistPDF?.renderChecklistPDF;
+      if (typeof render !== 'function') {
+        throw new Error('Utilitário de PDF indisponível.');
       }
 
-      const url = doc.output('bloburl');
+      const startedAt = data.started_at ? U.fmtDateTime(data.started_at) : '—';
+      const finishedAt = data.filled_at ? U.fmtDateTime(data.filled_at) : '—';
+      const responsible = data.profiles?.name || data.filled_by || '—';
+
+      const url = render(data, {
+        metadata: [
+          { label: 'Início', value: startedAt || '—' },
+          { label: 'Término', value: finishedAt || '—' },
+          { label: 'Responsável', value: responsible || '—' }
+        ]
+      });
       if (win) win.location.href = url;
     } catch (err) {
       if (win) win.close();
