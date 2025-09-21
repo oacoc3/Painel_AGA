@@ -890,6 +890,7 @@ as $$
 declare
   pid uuid;
   uname text;
+  evento text;
 begin
   select name into uname from profiles where id = auth.uid();
   -- Deriva o process_id conforme a tabela que disparou o trigger
@@ -934,7 +935,7 @@ begin
         );
       end if;
 
-if (new.obra_termino_date is distinct from old.obra_termino_date) or (new.obra_concluida is distinct from old.obra_concluida) then
+      if (new.obra_termino_date is distinct from old.obra_termino_date) or (new.obra_concluida is distinct from old.obra_concluida) then
         insert into history(process_id, action, details, user_id, user_email, user_name, created_at)
         values (
           pid,
@@ -1005,7 +1006,7 @@ if (new.obra_termino_date is distinct from old.obra_termino_date) or (new.obra_c
         uname,
         now()
       );
-end if;
+    end if;
 
   elsif tg_table_name = 'notifications' then
     pid := coalesce(new.process_id, old.process_id);
@@ -1048,7 +1049,7 @@ end if;
         uname,
         now()
       );
-end if;
+    end if;
 
   elsif tg_table_name = 'sigadaer' then
     pid := coalesce(new.process_id, old.process_id);
@@ -1107,15 +1108,23 @@ end if;
         uname,
         now()
       );
-end if;
+    end if;
 
   elsif tg_table_name = 'checklist_responses' then
     pid := coalesce(new.process_id, old.process_id);
+    if tg_op = 'UPDATE'
+       and coalesce(old.status, '') = 'draft'
+       and coalesce(new.status, '') = 'final' then
+      evento := 'Checklist - Preenchimento finalizado';
+    else
+      evento := 'Checklist - Rascunho salvo';
+    end if;
+
     insert into history(process_id, action, details, user_id, user_email, user_name, created_at)
     values (
       pid,
-      tg_op,
-      row_to_json(coalesce(new, old)),
+      evento,
+      jsonb_build_object('status', coalesce(new.status, old.status)),
       auth.uid(),
       auth.jwt()->>'email',
       uname,
