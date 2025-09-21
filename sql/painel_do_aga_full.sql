@@ -69,7 +69,7 @@ create type opinion_status as enum ('SOLICITADO','RECEBIDO');
 
 create type notification_type as enum (
   'FAV','FAV-TERM','FAV-AD_HEL','TERM-ATRA',
- 'DESF-INI','DESF-NAO_INI','DESF_JJAER','DESF-REM_REB',
+  'DESF-INI','DESF-NAO_INI','DESF_JJAER','DESF-REM_REB',
   'NCD','NCT','REVOG','ARQ-EXTR','ARQ-PRAZ'
 );
 create type notification_status as enum ('SOLICITADA','LIDA');
@@ -247,6 +247,7 @@ create table checklist_responses (
   answers jsonb not null, -- [{code,value,obs?},...]
   extra_obs text,
   status text not null default 'final',
+  started_at timestamptz not null default now(),
   filled_by uuid not null references profiles(id),
   filled_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -1101,7 +1102,7 @@ begin
           'numbers', old.numbers,
           'requested_at', old.requested_at,
           'expedit_at', old.expedit_at,
-          'received_at', old.received_at
+          'received_at', old.recebido_at
         ),
         auth.uid(),
         auth.jwt()->>'email',
@@ -1210,3 +1211,40 @@ where al.entity_type = 'processes'
   );
 
 -- ============== Fim do arquivo 8: Painel_AGA-main/sql/06_fix_history_and_opinions.sql ==============
+
+
+-- ===============================================
+-- Início do arquivo 9: Painel_AGA-main/sql/07_add_started_at_to_checklist_responses.sql
+-- ===============================================
+
+-- sql/07_add_started_at_to_checklist_responses.sql
+alter table checklist_responses
+  add column if not exists started_at timestamptz;
+
+update checklist_responses cr
+set started_at = coalesce(
+  (
+    select min(al.occurred_at)
+    from audit_log al
+    where al.entity_type = 'checklist_responses'
+      and al.entity_id = cr.id
+  ),
+  (
+    select min(h.created_at)
+    from history h
+    where h.process_id = cr.process_id
+      and h.action in ('Checklist - Rascunho salvo', 'Checklist - Preenchimento finalizado')
+  ),
+  cr.filled_at,
+  now()
+)
+where cr.started_at is null;
+
+alter table checklist_responses
+  alter column started_at set default now();
+
+alter table checklist_responses
+  alter column started_at set not null;
+
+-- ============== Fim do arquivo 9: Painel_AGA-main/sql/07_add_started_at_to_checklist_responses.sql ==============
+
