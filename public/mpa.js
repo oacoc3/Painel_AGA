@@ -82,6 +82,7 @@
     const u = await getUser();
     if (!u) {
       state.profile = null;
+      window.APP_PROFILE = null;
       renderHeaderStamp();
       const a = document.getElementById('btnAdmin'); if (a) a.classList.add('hidden');
       return null;
@@ -90,11 +91,13 @@
     if (error) {
       console.error(error);
       state.profile = null;
+      window.APP_PROFILE = null;
       renderHeaderStamp();
       const a = document.getElementById('btnAdmin'); if (a) a.classList.add('hidden');
       return null;
     }
     state.profile = data;
+    window.APP_PROFILE = data;
     renderHeaderStamp();
     const isAdmin = data.role === 'Administrador';
     const a = document.getElementById('btnAdmin'); if (a) a.classList.toggle('hidden', !isAdmin);
@@ -164,6 +167,10 @@
       window.location.replace('dashboard.html');
       return false;
     }
+    if (state.route === 'admin' && state.profile?.role !== 'Administrador') {
+      window.location.replace('dashboard.html');
+      return false;
+    }
     setActiveNav();
     return true;
   }
@@ -175,13 +182,14 @@
       return;
     }
     Object.values(window.Modules || {}).forEach(m => m.init?.());
+    const isAdmin = (state.profile?.role || window.APP_PROFILE?.role) === 'Administrador';
     switch (state.route) {
       case 'dashboard':  window.Modules.dashboard?.load?.(); break;
       case 'processos':  window.Modules.processos?.load?.(); break;
       case 'prazos':     window.Modules.prazos?.load?.(); break;
       case 'modelos':    window.Modules.modelos?.load?.(); break;
       case 'analise':    window.Modules.analise?.load?.(); break;
-      case 'admin':      window.Modules.admin?.load?.(); window.Modules.checklists?.load?.(); break;
+      case 'admin':      if (isAdmin) { window.Modules.admin?.load?.(); window.Modules.checklists?.load?.(); } break;
     }
   }
 
