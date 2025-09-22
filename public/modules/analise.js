@@ -611,7 +611,15 @@ window.Modules.analise = (() => {
           approved_by_name: row.profiles?.name || ''
         }))
         : [];
-      if (!rows.length) {
+      const latestRows = [];
+      const seen = new Set();
+      rows.forEach(row => {
+        const key = `${row.category}:::${row.name}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        latestRows.push(row);
+      });
+      if (!latestRows.length) {
         box.innerHTML = '<div class="msg">Nenhuma checklist aprovada.</div>';
         return;
       }
