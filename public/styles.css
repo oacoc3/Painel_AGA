@@ -59,8 +59,8 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 100%; }
 .admin-grid {
   grid-template-columns:
-    clamp(300px, 28vw, 360px)
-    minmax(0, 1fr);
+    minmax(320px, 2fr)
+    minmax(0, 3fr);
 }
 .grid > * { min-height: 0; }
 #viewDashboard .grid {
@@ -278,6 +278,13 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .tab { display: none; }
 .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; align-items: end; }
 .ck-manage-actions { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+#ckManageMsg {
+  min-height: 1.4em;
+  color: var(--ink-soft);
+}
+#ckManageMsg.error {
+  color: var(--warn);
+}
 .row.stretch { align-items: stretch; }
 .row .grow { grid-column: 1 / -1; }
 .actions { display: flex; gap: 8px; align-items: center; }
@@ -556,7 +563,7 @@ footer { padding: 8px 12px; background: #faf9f7; }
 
 @media (max-width: 1200px) {
   .admin-grid {
-    grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
+    grid-template-columns: minmax(280px, 2fr) minmax(280px, 3fr);
   }
 
   .admin-grid > .admin-col-checklists {
