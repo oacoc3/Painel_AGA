@@ -630,7 +630,7 @@ window.Modules.analise = (() => {
           align: 'center',
           render: r => createApprovedChecklistPdfButton(r.id)
         }
-      ], rows);
+      ], latestRows);
     } catch (err) {
       box.innerHTML = `<div class="msg error">${err.message || String(err)}</div>`;
     }
