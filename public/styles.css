@@ -60,8 +60,7 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .admin-grid {
   grid-template-columns:
     clamp(300px, 28vw, 360px)
-    minmax(0, 1fr)
-    clamp(300px, 28vw, 360px);
+    minmax(0, 1fr);
 }
 .grid > * { min-height: 0; }
 #viewDashboard .grid {
