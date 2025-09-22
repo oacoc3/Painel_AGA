@@ -87,7 +87,7 @@ window.Modules.analise = (() => {
       if (!extraObs || !extraObs.value.trim()) {
         return {
           ready: false,
-          reason: 'Descreva a não conformidade em “Outras observações do analista” ao assinalar a opção adicional.'
+          reason: 'Descreva a não conformidade em “Outras observações do(a) Analista” ao assinalar a opção adicional.'
         };
       }
     }
@@ -113,7 +113,7 @@ window.Modules.analise = (() => {
       if (!(draft.extra_obs || '').trim()) {
         return {
           ready: false,
-          reason: 'Preencha “Outras observações do analista” ao indicar não conformidade não abarcada pela checklist.'
+          reason: 'Preencha “Outras observações do(a) Analista” ao indicar não conformidade não abarcada pela checklist.'
         };
       }
     }
@@ -183,8 +183,7 @@ window.Modules.analise = (() => {
     // Aviso do patch (texto institucional, não altera estilo além da classe)
     const warning = document.createElement('div');
     warning.className = 'ck-warning';
-    warning.innerHTML = '<strong>Atenção!</strong> Esta checklist apresenta uma relação não exaustiva de verificações a serem realizadas. Ao detectar não conformidade não abarcada pelos itens a seguir, o Analista deve assinalar a opção &quot;Identificada não conformidade não abarcada pelos itens anteriores&quot; e realizar o registro pertinente no campo &quot;Outras observações do Analista&quot;, ao final do formulário.';
-    frag.appendChild(warning);
+    warning.innerHTML = '<strong>Atenção!</strong> Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, haverá o pertinente registro no campo &quot;Outras observações do(a) Analista&quot;.';
 
     (template.items || []).forEach(cat => {
       const catSection = document.createElement('section');
@@ -342,7 +341,7 @@ window.Modules.analise = (() => {
     const other = document.createElement('label');
     other.className = 'ck-outros';
     const otherTitle = document.createElement('span');
-    otherTitle.textContent = 'Outras observações do analista';
+    otherTitle.textContent = 'Outras observações do(a) Analista';
     const otherInput = document.createElement('textarea');
     otherInput.id = 'adOutrasObs';
     otherInput.rows = 3;
