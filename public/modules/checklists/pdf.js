@@ -2,8 +2,7 @@
 // Utilitário compartilhado para renderização de PDFs de checklists.
 (() => {
   const EXTRA_NON_CONFORMITY_CODE = '__ck_extra_nc__';
-  const CHECKLIST_NOTICE = 'Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, houve o pertinente registro no campo "Outras observações do Analista".';
-
+  const CHECKLIST_NOTICE = 'Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, haverá o pertinente registro no campo "Outras observações do(a) Analista".';
   const normalizeValue = (value) => (
     typeof value === 'string'
       ? value
@@ -205,7 +204,7 @@
 
     if (!isApproved && response?.extra_obs) {
       doc.setFont(undefined, 'bold');
-      addWrappedText('Outras observações:');
+          reason: 'Descreva a não conformidade em “Outras observações do(a) Analista” ao assinalar a opção adicional.'
       doc.setFont(undefined, 'normal');
       addWrappedText(String(response.extra_obs));
     }
