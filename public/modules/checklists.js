@@ -4,6 +4,11 @@ window.Modules.checklists = (() => {
   let selected = null;
   let selectedRowEl = null;
   let templates = [];
+  const CARD_MSG_ID = 'ckManageMsg';
+
+  function setCardMsg(message, isError = false) {
+    Utils.setMsg(CARD_MSG_ID, message, isError);
+  }
 
   const getDialog = () => el('ckFormDialog');
   const getForm = () => el('formChecklist');
@@ -86,8 +91,15 @@ window.Modules.checklists = (() => {
   }
 
   function updateActionButtons() {
+    const hasSelection = !!selected;
     const btnEdit = el('btnEditChecklist');
-    if (btnEdit) btnEdit.disabled = !selected;
+    if (btnEdit) btnEdit.disabled = !hasSelection;
+    const btnDelete = el('btnDeleteChecklist');
+    if (btnDelete) btnDelete.disabled = !hasSelection;
+    const btnDialogDelete = el('btnExcluirChecklist');
+    if (btnDialogDelete) btnDialogDelete.disabled = !hasSelection;
+    const btnApprove = el('btnAprovarChecklist');
+    if (btnApprove) btnApprove.disabled = !hasSelection;
   }
 
   function openChecklistDialog(row = selected) {
@@ -136,6 +148,7 @@ window.Modules.checklists = (() => {
       selected = row;
       highlightRow(tr);
       updateActionButtons();
+      setCardMsg('');
     });
     tbody?.addEventListener('dblclick', ev => {
       const tr = ev.target.closest('tr'); if (!tr) return;
@@ -143,8 +156,33 @@ window.Modules.checklists = (() => {
       selected = row;
       highlightRow(tr);
       updateActionButtons();
+      setCardMsg('');
       openChecklistDialog(row);
     });
+  }
+
+  async function deleteSelectedChecklist(context = 'dialog') {
+    const targetMsg = context === 'card' ? CARD_MSG_ID : 'ckMsg';
+    if (!selected) {
+      Utils.setMsg(targetMsg, 'Selecione um checklist antes de excluir.', true);
+      return;
+    }
+    if (context === 'card') {
+      setCardMsg('');
+      const confirmed = window.confirm('Deseja excluir o checklist selecionado?');
+      if (!confirmed) return;
+    }
+    const { error } = await sb.from('checklist_templates').delete().eq('id', selected.id);
+    if (error) {
+      Utils.setMsg(targetMsg, error.message, true);
+      return;
+    }
+    Utils.setMsg(targetMsg, 'Excluído.');
+    selected = null;
+    highlightRow(null);
+    closeChecklistDialog();
+    updateActionButtons();
+    await loadTemplates();
   }
 
   async function loadTemplates() {
@@ -165,11 +203,16 @@ window.Modules.checklists = (() => {
 
     el('btnAddCat').addEventListener('click', () => addCategory(catsContainer));
     el('btnCloseChecklist').addEventListener('click', () => closeChecklistDialog());
-    el('btnNewChecklist').addEventListener('click', () => openChecklistDialog());
+    el('btnNewChecklist').addEventListener('click', () => {
+      setCardMsg('');
+      openChecklistDialog();
+    });
     el('btnEditChecklist').addEventListener('click', () => {
       if (!selected) return;
+      setCardMsg('');
       openChecklistDialog(selected);
     });
+    el('btnDeleteChecklist').addEventListener('click', () => deleteSelectedChecklist('card'));
 
     dlg.addEventListener('cancel', ev => {
       ev.preventDefault();
@@ -205,17 +248,7 @@ window.Modules.checklists = (() => {
       await loadTemplates();
     });
 
-    el('btnExcluirChecklist').addEventListener('click', async () => {
-      if (!selected) return Utils.setMsg('ckMsg', 'Selecione um checklist antes de excluir.', true);
-      const { error } = await sb.from('checklist_templates').delete().eq('id', selected.id);
-      if (error) return Utils.setMsg('ckMsg', error.message, true);
-      Utils.setMsg('ckMsg', 'Excluído.');
-      selected = null;
-      highlightRow(null);
-      closeChecklistDialog();
-      updateActionButtons();
-      await loadTemplates();
-    });
+    el('btnExcluirChecklist').addEventListener('click', () => deleteSelectedChecklist('dialog'));
 
     el('btnAprovarChecklist').addEventListener('click', async () => {
       if (!selected) return Utils.setMsg('ckMsg', 'Selecione um checklist antes de aprovar.', true);
