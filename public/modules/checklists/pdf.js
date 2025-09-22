@@ -204,7 +204,7 @@
 
     if (!isApproved && response?.extra_obs) {
       doc.setFont(undefined, 'bold');
-          reason: 'Descreva a não conformidade em “Outras observações do(a) Analista” ao assinalar a opção adicional.'
+      addWrappedText('Outras observações do(a) Analista');
       doc.setFont(undefined, 'normal');
       addWrappedText(String(response.extra_obs));
     }
