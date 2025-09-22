@@ -103,7 +103,16 @@ language sql
 stable
 as $$
   select (auth.jwt() -> 'user_metadata' ->> 'role') in
-         ('Administrador','Analista OACO','Analista OAGA','CH OACO','CH OAGA','CH AGA');
+         ('Administrador','Analista OAGA','CH OACO','CH OAGA','CH AGA');
+$$;
+
+create or replace function can_fill_checklists()
+returns boolean
+language sql
+stable
+as $$
+  select has_write_role()
+         or (auth.jwt() -> 'user_metadata' ->> 'role') = 'Analista OACO';
 $$;
 
 -- =========================
@@ -619,11 +628,11 @@ create policy "ck responses read" on checklist_responses
 for select using (auth.role() = 'authenticated');
 
 create policy "ck responses write" on checklist_responses
-for insert with check ( has_write_role() );
+for insert with check ( can_fill_checklists() );
 
 create policy "ck responses update" on checklist_responses
-for update using ( has_write_role() )
-with check ( has_write_role() );
+for update using ( can_fill_checklists() )
+with check ( can_fill_checklists() );
 
 -- audit (somente Admin)
 create policy "audit read admin" on audit_log
