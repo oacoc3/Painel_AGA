@@ -174,7 +174,11 @@ window.Modules.checklists = (() => {
     }
     const { error } = await sb.from('checklist_templates').delete().eq('id', selected.id);
     if (error) {
-      Utils.setMsg(targetMsg, error.message, true);
+      let message = error.message || 'Falha ao excluir checklist.';
+      if (error.code === '23503') {
+        message = 'Não é possível excluir: existe checklist preenchida vinculada a esta versão.';
+      }
+      Utils.setMsg(targetMsg, message, true);
       return;
     }
     Utils.setMsg(targetMsg, 'Excluído.');
