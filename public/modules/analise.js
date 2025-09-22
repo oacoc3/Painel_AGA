@@ -21,8 +21,8 @@ window.Modules.analise = (() => {
   async function loadTemplatesFor(tipo) {
     const { data, error } = await sb
       .from('checklist_templates')
-      .select('id,name,category,version,items')
-      .eq('category', tipo)
+      .select('id,name,type,version,items')
+      .eq('type', tipo)
       .not('approved_by', 'is', null)
       .order('name')
       .order('version', { ascending: false });
@@ -596,25 +596,25 @@ window.Modules.analise = (() => {
     try {
       const { data, error } = await sb
         .from('checklist_templates')
-        .select('id,name,category,version,approved_at,profiles:approved_by(name)')
+        .select('id,name,type,version,approved_at,profiles:approved_by(name)')
         .not('approved_by', 'is', null)
         .order('approved_at', { ascending: false })
         .order('name');
       if (error) throw error;
       const rows = Array.isArray(data)
         ? data.map(row => ({
-          id: row.id,
-          name: row.name || '',
-          category: row.category || '',
-          version: row.version,
-          approved_at: row.approved_at,
-          approved_by_name: row.profiles?.name || ''
-        }))
+            id: row.id,
+            name: row.name || '',
+            type: row.type || '',
+            version: row.version,
+            approved_at: row.approved_at,
+            approved_by_name: row.profiles?.name || ''
+          }))
         : [];
       const latestRows = [];
       const seen = new Set();
       rows.forEach(row => {
-        const key = `${row.category}:::${row.name}`;
+        const key = `${row.type}:::${row.name}`;
         if (seen.has(key)) return;
         seen.add(key);
         latestRows.push(row);
@@ -625,7 +625,7 @@ window.Modules.analise = (() => {
       }
       Utils.renderTable(box, [
         { key: 'name', label: 'Nome' },
-        { key: 'category', label: 'Categoria' },
+        { key: 'type', label: 'Tipo' },
         { key: 'version', label: 'Versão', align: 'center' },
         { key: 'approved_by_name', label: 'Aprovada por' },
         {
@@ -733,7 +733,7 @@ window.Modules.analise = (() => {
     try {
       const { data, error } = await sb
         .from('checklist_templates')
-        .select('id,name,category,version,items,approved_at,profiles:approved_by(name)')
+        .select('id,name,type,version,items,approved_at,profiles:approved_by(name)')
         .eq('id', templateId)
         .single();
       if (error) throw error;
@@ -744,7 +744,7 @@ window.Modules.analise = (() => {
       }
 
       const metadata = [
-        { label: 'Categoria', value: data?.category || '—' },
+        { label: 'Tipo', value: data?.type || '—' },
         { label: 'Versão', value: data?.version != null ? String(data.version) : '—' },
         { label: 'Aprovada em', value: data?.approved_at ? Utils.fmtDateTime(data.approved_at) : '—' },
         { label: 'Aprovada por', value: data?.profiles?.name || '—' }
