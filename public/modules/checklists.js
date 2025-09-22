@@ -112,7 +112,8 @@ window.Modules.checklists = (() => {
       selected = row;
       form.querySelector('#ckId').value = row.id;
       form.querySelector('#ckName').value = row.name;
-      form.querySelector('#ckCat').value = row.category;
+      // category -> type
+      form.querySelector('#ckCat').value = row.type || '';
       renderCats(catsContainer, row.items || []);
     } else {
       selected = null;
@@ -137,7 +138,8 @@ window.Modules.checklists = (() => {
     const rows = templates;
     const { tbody } = Utils.renderTable('listaCk', [
       { key: 'name', label: 'Nome' },
-      { key: 'category', label: 'Categoria' },
+      // category -> type
+      { key: 'type', label: 'Tipo' },
       { key: 'version', label: 'Versão', align: 'center' },
       { key: 'created_at', label: 'Criado em', value: r => Utils.fmtDateTime(r.created_at) },
       { key: 'approved_at', label: 'Aprovada em', value: r => r.approved_at ? Utils.fmtDateTime(r.approved_at) : '' }
@@ -191,7 +193,8 @@ window.Modules.checklists = (() => {
 
   async function loadTemplates() {
     const { data, error } = await sb.from('checklist_templates')
-      .select('id,name,category,version,items,created_at,approved_at')
+      // category -> type
+      .select('id,name,type,version,items,created_at,approved_at')
       .order('created_at', { ascending: false });
     if (error) { Utils.setMsg('ckMsg', error.message, true); return; }
     templates = (data || []);
@@ -231,8 +234,9 @@ window.Modules.checklists = (() => {
       const form = getForm();
       const items = collectItems(catsContainer);
       const name = form.querySelector('#ckName').value.trim();
-      const category = form.querySelector('#ckCat').value.trim();
-      if (!name || !category || !items.length) return Utils.setMsg('ckMsg', 'Preencha todos os campos.', true);
+      // category -> type
+      const type = form.querySelector('#ckCat').value.trim();
+      if (!name || !type || !items.length) return Utils.setMsg('ckMsg', 'Preencha todos os campos.', true);
       const u = await getUser();
       if (!u) return Utils.setMsg('ckMsg', 'Sessão expirada.', true);
       let version = 1;
@@ -242,7 +246,8 @@ window.Modules.checklists = (() => {
         const max = Math.max(0, ...templates.filter(t => t.name === name).map(t => t.version || 0));
         version = max + 1;
       }
-      const { error } = await sb.from('checklist_templates').insert({ name, category, items, version, created_by: u.id });
+      // category -> type
+      const { error } = await sb.from('checklist_templates').insert({ name, type, items, version, created_by: u.id });
       if (error) return Utils.setMsg('ckMsg', error.message, true);
       Utils.setMsg('ckMsg', 'Salvo.');
       selected = null;
