@@ -183,7 +183,8 @@ window.Modules.analise = (() => {
     // Aviso do patch (texto institucional, não altera estilo além da classe)
     const warning = document.createElement('div');
     warning.className = 'ck-warning';
-    warning.innerHTML = '<strong>Atenção!</strong> Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, haverá o pertinente registro no campo &quot;Outras observações do(a) Analista&quot;.';
+    warning.innerHTML = '<strong>Atenção!</strong> Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, marque a opção "Identificada não conformidade não abarcada pelos itens anteriores" e realize o registro pertinente no campo “Outras observações do(a) Analista”.';
+    frag.appendChild(warning);
 
     (template.items || []).forEach(cat => {
       const catSection = document.createElement('section');
