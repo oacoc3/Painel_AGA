@@ -136,7 +136,6 @@ window.Modules.checklists = (() => {
   function renderList() {
     const rows = templates;
     const { tbody } = Utils.renderTable('listaCk', [
-      { key: 'name', label: 'Nome' },
       // category -> type
       { key: 'type', label: 'Tipo' },
       { key: 'version', label: 'Versão', align: 'center' },
