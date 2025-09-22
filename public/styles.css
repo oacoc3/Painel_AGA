@@ -278,6 +278,7 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .tab-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
 .tab { display: none; }
 .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; align-items: end; }
+.ck-manage-actions { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .row.stretch { align-items: stretch; }
 .row .grow { grid-column: 1 / -1; }
 .actions { display: flex; gap: 8px; align-items: center; }
@@ -307,6 +308,47 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 
 /* Deixar áreas scrolláveis ocuparem o espaço restante do cartão */
 .card > .scrolly { flex: 1; min-height: 0; }
+
+#ckFormDialog {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+  max-width: min(720px, 90vw);
+  width: min(720px, 90vw);
+  background: var(--card);
+}
+
+#ckFormDialog::backdrop {
+  background: rgba(31, 41, 55, 0.35);
+}
+
+#ckFormDialog form {
+  padding: 16px;
+  max-height: 80vh;
+  overflow: hidden;
+}
+
+#ckFormDialog menu {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+#ckFormDialog textarea {
+  resize: vertical;
+  min-height: calc(1.2em * 2 + 16px);
+  overflow: hidden;
+}
+
+#ckFormDialog textarea.item-txt {
+  min-height: calc(1.2em * 3 + 16px);
+}
+
+#listaCk tr.ck-selected {
+  background: rgba(75, 111, 145, 0.12);
+}
 
 #formChecklist {
   flex: 1;
