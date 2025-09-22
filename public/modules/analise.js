@@ -8,6 +8,34 @@ window.Modules.analise = (() => {
   const CLIPBOARD_ICON = window.Modules?.processos?.CLIPBOARD_ICON
     || '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a 2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="m10 16 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
+  // ==== Novos utilitários do patch (resultado da checklist e flag extra) ====
+  const CHECKLIST_PDF = window.Modules?.checklistPDF || {};
+  const EXTRA_NC_CODE = CHECKLIST_PDF.EXTRA_NON_CONFORMITY_CODE || '__ck_extra_nc__';
+
+  const normalizeValue = (value) => (
+    typeof value === 'string'
+      ? value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+      : ''
+  );
+
+  function evaluateChecklistResult(source) {
+    if (typeof CHECKLIST_PDF.getChecklistResult === 'function') {
+      return CHECKLIST_PDF.getChecklistResult(source);
+    }
+    const answers = Array.isArray(source?.answers) ? source.answers : [];
+    const hasTemplateNonConformity = answers.some(ans => normalizeValue(ans?.value) === 'nao conforme');
+    const extraEntry = answers.find(ans => ans?.code === EXTRA_NC_CODE);
+    const hasExtraNonConformity = normalizeValue(extraEntry?.value) === 'sim';
+    const hasNonConformity = hasTemplateNonConformity || hasExtraNonConformity;
+    return {
+      answers,
+      extraFlag: hasExtraNonConformity,
+      hasNonConformity,
+      summary: hasNonConformity ? 'Processo não conforme' : 'Processo conforme'
+    };
+  }
+  // ========================================================================
+
   function debounce(fn, wait = 500) {
     let timer;
     return (...args) => {
@@ -52,6 +80,17 @@ window.Modules.analise = (() => {
         }
       }
     }
+    // Validação adicional do patch: se marcar NC extra, exigir observação
+    const extraFlag = el('adNCExtra');
+    if (extraFlag?.checked) {
+      const extraObs = el('adOutrasObs');
+      if (!extraObs || !extraObs.value.trim()) {
+        return {
+          ready: false,
+          reason: 'Descreva a não conformidade em “Outras observações do analista” ao assinalar a opção adicional.'
+        };
+      }
+    }
     return { ready: true };
   }
 
@@ -67,6 +106,18 @@ window.Modules.analise = (() => {
       return { ready: false, reason: 'Selecione um checklist com itens para preencher.' };
     }
     const answers = Array.isArray(draft.answers) ? draft.answers : [];
+
+    // Validação adicional do patch: se houver flag extra, exigir extra_obs
+    const draftEvaluation = evaluateChecklistResult(draft);
+    if (draftEvaluation.extraFlag) {
+      if (!(draft.extra_obs || '').trim()) {
+        return {
+          ready: false,
+          reason: 'Preencha “Outras observações do analista” ao indicar não conformidade não abarcada pela checklist.'
+        };
+      }
+    }
+
     return items.reduce((state, item) => {
       if (!state.ready) return state;
       const ans = answers.find(entry => entry && entry.code === (item.code || '')) || {};
@@ -128,6 +179,12 @@ window.Modules.analise = (() => {
     title.className = 'ck-template-title';
     title.textContent = template.name || 'Checklist';
     frag.appendChild(title);
+
+    // Aviso do patch (texto institucional, não altera estilo além da classe)
+    const warning = document.createElement('div');
+    warning.className = 'ck-warning';
+    warning.innerHTML = '<strong>Atenção!</strong> Esta checklist apresenta uma relação não exaustiva de verificações a serem realizadas. Ao detectar não conformidade não abarcada pelos itens a seguir, o Analista deve assinalar a opção &quot;Identificada não conformidade não abarcada pelos itens anteriores&quot; e realizar o registro pertinente no campo &quot;Outras observações do Analista&quot;, ao final do formulário.';
+    frag.appendChild(warning);
 
     (template.items || []).forEach(cat => {
       const catSection = document.createElement('section');
@@ -266,6 +323,22 @@ window.Modules.analise = (() => {
       frag.appendChild(catSection);
     });
 
+    // Flag extra do patch: não conformidade não abarcada pelos itens
+    const extraFlag = document.createElement('label');
+    extraFlag.className = 'ck-extra-flag';
+    const extraInput = document.createElement('input');
+    extraInput.type = 'checkbox';
+    extraInput.id = 'adNCExtra';
+    extraInput.addEventListener('change', () => {
+      updateSaveState();
+      scheduleDraftSave();
+    });
+    const extraText = document.createElement('span');
+    extraText.textContent = 'Identificada não conformidade não abarcada pelos itens anteriores';
+    extraFlag.appendChild(extraInput);
+    extraFlag.appendChild(extraText);
+    frag.appendChild(extraFlag);
+
     const other = document.createElement('label');
     other.className = 'ck-outros';
     const otherTitle = document.createElement('span');
@@ -273,7 +346,10 @@ window.Modules.analise = (() => {
     const otherInput = document.createElement('textarea');
     otherInput.id = 'adOutrasObs';
     otherInput.rows = 3;
-    otherInput.addEventListener('input', scheduleDraftSave);
+    otherInput.addEventListener('input', () => {
+      updateSaveState();
+      scheduleDraftSave();
+    });
     other.appendChild(otherTitle);
     other.appendChild(otherInput);
     frag.appendChild(other);
@@ -318,6 +394,16 @@ window.Modules.analise = (() => {
         obs: obs ? obs : null
       };
     });
+
+    // Grava a resposta da flag extra do patch
+    const extraNcField = el('adNCExtra');
+    if (extraNcField) {
+      answers.push({
+        code: EXTRA_NC_CODE,
+        value: extraNcField.checked ? 'Sim' : 'Não',
+        obs: null
+      });
+    }
 
     const extraField = el('adOutrasObs');
     const extra = extraField ? extraField.value.trim() : '';
@@ -383,6 +469,13 @@ window.Modules.analise = (() => {
       const obsField = wrap.querySelector('textarea');
       if (obsField) obsField.value = ans.obs || '';
     });
+
+    // Restaura a flag extra a partir da avaliação do rascunho (patch)
+    const extraFlagField = el('adNCExtra');
+    if (extraFlagField) {
+      const draftEvaluation = evaluateChecklistResult(draft);
+      extraFlagField.checked = !!draftEvaluation.extraFlag;
+    }
 
     const extraField = el('adOutrasObs');
     if (extraField) extraField.value = draft.extra_obs || '';
@@ -674,17 +767,26 @@ window.Modules.analise = (() => {
     try {
       const { data, error } = await sb
         .from('checklist_responses')
-        .select('id,filled_at,checklist_templates(name)')
+        .select('id,filled_at,answers,checklist_templates(name,version)')
         .eq('process_id', procId)
         .eq('status', 'final')
         .order('filled_at', { ascending: false });
       if (error) throw error;
       const rows = Array.isArray(data)
-        ? data.map(r => ({
-            id: r.id,
-            checklist: r.checklist_templates?.name || '',
-            filled_at: r.filled_at
-          }))
+        ? data.map(r => {
+            const evaluation = evaluateChecklistResult(r);
+            const version = r.checklist_templates?.version;
+            const checklistName = r.checklist_templates?.name || '';
+            const checklistWithVersion = version != null
+              ? `${checklistName} (v${version})`
+              : checklistName;
+            return {
+              id: r.id,
+              checklist: checklistWithVersion,
+              filled_at: r.filled_at,
+              result: evaluation.summary || ''
+            };
+          })
         : [];
       if (!rows.length) {
         box.innerHTML = '<div class="msg">Nenhuma checklist preenchida.</div>';
@@ -693,6 +795,7 @@ window.Modules.analise = (() => {
       Utils.renderTable(box, [
         { key: 'checklist', label: 'Doc' },
         { key: 'filled_at', label: 'Preenchida em', value: r => Utils.fmtDateTime(r.filled_at) },
+        { key: 'result', label: 'Resultado' },
         {
           label: 'PDF',
           align: 'center',
@@ -775,7 +878,7 @@ window.Modules.analise = (() => {
     try {
       const { data, error } = await sb
         .from('checklist_responses')
-        .select('answers,extra_obs,started_at,filled_at,filled_by,profiles:filled_by(name),processes(nup),checklist_templates(name,items)')
+        .select('answers,extra_obs,started_at,filled_at,filled_by,profiles:filled_by(name),processes(nup),checklist_templates(name,version,items)')
         .eq('id', id)
         .single();
       if (error) throw error;
