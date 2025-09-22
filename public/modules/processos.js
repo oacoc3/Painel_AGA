@@ -270,7 +270,7 @@ window.Modules.processos = (() => {
           <h3>Novo Processo ${nup}</h3>
           <label>Tipo
             <select id="npTipo">
-              <option>PDIR</option><option>Inscrição</option><option>Alteração</option><option>Exploração</option><option>OPEA</option>
+              <option>PDIR - Documental</option><option>Inscrição - Documental</option><option>Alteração - Documental</option><option>Exploração - Documental</option><option>OPEA - Documental</option>
             </select>
           </label>
           <label>Status
@@ -909,7 +909,7 @@ window.Modules.processos = (() => {
             wrap.appendChild(del);
             return wrap;
           }
-        }
+        ]
       ], rows);
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
@@ -923,7 +923,7 @@ window.Modules.processos = (() => {
     try {
       const { data, error } = await sb
         .from('checklist_responses')
-        .select('answers,extra_obs,started_at,filled_at,filled_by,profiles:filled_by(name),processes(nup),checklist_templates(name,version,items)')
+        .select('answers,extra_obs,started_at,filled_at,filled_by,profiles:filled_by(name),processes(nup),checklist_templates(name,type,version,items)')
         .eq('id', id)
         .single();
       if (error) throw error;
@@ -938,11 +938,10 @@ window.Modules.processos = (() => {
       const responsible = data.profiles?.name || data.filled_by || '—';
 
       const url = render(data, {
-        metadata: [
-          { label: 'Início', value: startedAt || '—' },
-          { label: 'Término', value: finishedAt || '—' },
-          { label: 'Responsável', value: responsible || '—' }
-        ]
+        mode: 'final',
+        startedAt: startedAt || '—',
+        finishedAt: finishedAt || '—',
+        responsible: responsible || '—'
       });
       if (win) win.location.href = url;
     } catch (err) {
