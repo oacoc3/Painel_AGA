@@ -521,6 +521,33 @@ footer { padding: 8px 12px; background: #faf9f7; }
   white-space: nowrap;
 }
 
+.ck-warning {
+  margin-top: 12px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-left: 4px solid #f59e0b;
+  background: #fff4e5;
+  line-height: 1.4;
+}
+
+.ck-warning strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.ck-extra-flag {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-weight: 500;
+}
+
+.ck-extra-flag input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
 .ck-outros {
   display: flex;
   flex-direction: column;
