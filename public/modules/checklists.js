@@ -2,22 +2,45 @@
 window.Modules = window.Modules || {};
 window.Modules.checklists = (() => {
   let selected = null;
+  let selectedRowEl = null;
   let templates = [];
 
-  function addItem(catEl, item = {}) {
+  const getDialog = () => el('ckFormDialog');
+  const getForm = () => el('formChecklist');
+  const getCatsContainer = () => getDialog().querySelector('#ckCats');
+
+  function setupAutoResize(textarea) {
+    const minRows = parseInt(textarea.getAttribute('rows') || '2', 10);
+    const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 18;
+    const minHeight = lineHeight * minRows;
+    const resize = () => {
+      textarea.style.height = 'auto';
+      const next = Math.max(minHeight, textarea.scrollHeight);
+      textarea.style.height = `${next}px`;
+    };
+    textarea.addEventListener('input', resize);
+    resize();
+  }
+
+  function addItem(container, catEl, item = {}) {
     const row = document.createElement('div');
     row.className = 'ck-item';
     row.innerHTML = `
       <input class="item-code" placeholder="Código" value="${item.code || ''}" required>
-      <input class="item-req" placeholder="Requisito" value="${item.requisito || item.text || ''}" required>
-      <input class="item-txt" placeholder="Texto sugerido" value="${item.texto_sugerido || ''}">
+      <textarea class="item-req" placeholder="Requisito" rows="2" required></textarea>
+      <textarea class="item-txt" placeholder="Texto sugerido" rows="3"></textarea>
       <button type="button" class="del-item">×</button>
     `;
+    const req = row.querySelector('.item-req');
+    const txt = row.querySelector('.item-txt');
+    req.value = item.requisito || item.text || '';
+    txt.value = item.texto_sugerido || '';
     row.querySelector('.del-item').addEventListener('click', () => row.remove());
     catEl.querySelector('.ck-items').appendChild(row);
+    [req, txt].forEach(setupAutoResize);
   }
 
-  function addCategory(cat = {}) {
+  function addCategory(container, cat = {}) {
     const box = document.createElement('div');
     box.className = 'ck-category';
     box.innerHTML = `
@@ -26,21 +49,21 @@ window.Modules.checklists = (() => {
       <button type="button" class="add-item">Adicionar item</button>
       <button type="button" class="del-cat">Excluir categoria</button>
     `;
-    box.querySelector('.add-item').addEventListener('click', () => addItem(box));
+    box.querySelector('.add-item').addEventListener('click', () => addItem(container, box));
     box.querySelector('.del-cat').addEventListener('click', () => box.remove());
-    (cat.itens || []).forEach(it => addItem(box, it));
-    el('ckCats').appendChild(box);
+    (cat.itens || []).forEach(it => addItem(container, box, it));
+    container.appendChild(box);
   }
 
-  function renderCats(items = []) {
-    el('ckCats').innerHTML = '';
-    if (!items.length) addCategory();
-    else items.forEach(cat => addCategory(cat));
+  function renderCats(container, items = []) {
+    container.innerHTML = '';
+    if (!items.length) addCategory(container);
+    else items.forEach(cat => addCategory(container, cat));
   }
 
-  function collectItems() {
+  function collectItems(container) {
     const cats = [];
-    $$('#ckCats .ck-category').forEach(catEl => {
+    container.querySelectorAll('.ck-category').forEach(catEl => {
       const categoria = catEl.querySelector('.cat-name').value.trim();
       const itens = [];
       catEl.querySelectorAll('.ck-item').forEach(itEl => {
@@ -52,6 +75,50 @@ window.Modules.checklists = (() => {
       if (categoria && itens.length) cats.push({ categoria, itens });
     });
     return cats;
+  }
+
+  function highlightRow(tr) {
+    if (selectedRowEl && selectedRowEl.isConnected) {
+      selectedRowEl.classList.remove('ck-selected');
+    }
+    selectedRowEl = tr || null;
+    if (selectedRowEl) selectedRowEl.classList.add('ck-selected');
+  }
+
+  function updateActionButtons() {
+    const btnEdit = el('btnEditChecklist');
+    if (btnEdit) btnEdit.disabled = !selected;
+  }
+
+  function openChecklistDialog(row = selected) {
+    const dlg = getDialog();
+    const form = getForm();
+    const catsContainer = getCatsContainer();
+    Utils.setMsg('ckMsg', '');
+    form.reset();
+    if (row) {
+      selected = row;
+      form.querySelector('#ckId').value = row.id;
+      form.querySelector('#ckName').value = row.name;
+      form.querySelector('#ckCat').value = row.category;
+      renderCats(catsContainer, row.items || []);
+    } else {
+      selected = null;
+      renderCats(catsContainer);
+      highlightRow(null);
+    }
+    updateActionButtons();
+    dlg.showModal();
+    form.querySelector('#ckName').focus();
+  }
+
+  function closeChecklistDialog() {
+    const dlg = getDialog();
+    const form = getForm();
+    const catsContainer = getCatsContainer();
+    form.reset();
+    renderCats(catsContainer);
+    if (dlg.open) dlg.close();
   }
 
   function renderList() {
@@ -67,11 +134,16 @@ window.Modules.checklists = (() => {
       const tr = ev.target.closest('tr'); if (!tr) return;
       const row = JSON.parse(tr.dataset.row);
       selected = row;
-      el('ckId').value = row.id;
-      el('ckName').value = row.name;
-      el('ckCat').value = row.category;
-      renderCats(row.items);
-      Utils.setMsg('ckMsg', `Carregado: ${row.name} v${row.version}`);
+      highlightRow(tr);
+      updateActionButtons();
+    });
+    tbody?.addEventListener('dblclick', ev => {
+      const tr = ev.target.closest('tr'); if (!tr) return;
+      const row = JSON.parse(tr.dataset.row);
+      selected = row;
+      highlightRow(tr);
+      updateActionButtons();
+      openChecklistDialog(row);
     });
   }
 
@@ -81,17 +153,38 @@ window.Modules.checklists = (() => {
       .order('created_at', { ascending: false });
     if (error) { Utils.setMsg('ckMsg', error.message, true); return; }
     templates = (data || []);
+    selected = null;
+    highlightRow(null);
+    updateActionButtons();
     renderList();
   }
 
   function bindForm() {
-    el('btnAddCat').addEventListener('click', () => addCategory());
+    const dlg = getDialog();
+    const catsContainer = getCatsContainer();
+
+    el('btnAddCat').addEventListener('click', () => addCategory(catsContainer));
+    el('btnCloseChecklist').addEventListener('click', () => closeChecklistDialog());
+    el('btnNewChecklist').addEventListener('click', () => openChecklistDialog());
+    el('btnEditChecklist').addEventListener('click', () => {
+      if (!selected) return;
+      openChecklistDialog(selected);
+    });
+
+    dlg.addEventListener('cancel', ev => {
+      ev.preventDefault();
+      closeChecklistDialog();
+    });
+
+    renderCats(catsContainer);
+    updateActionButtons();
 
     el('adminBtnSalvarChecklist').addEventListener('click', async ev => {
       ev.preventDefault();
-      const name = el('ckName').value.trim();
-      const category = el('ckCat').value.trim();
-      const items = collectItems();
+      const form = getForm();
+      const items = collectItems(catsContainer);
+      const name = form.querySelector('#ckName').value.trim();
+      const category = form.querySelector('#ckCat').value.trim();
       if (!name || !category || !items.length) return Utils.setMsg('ckMsg', 'Preencha todos os campos.', true);
       const u = await getUser();
       if (!u) return Utils.setMsg('ckMsg', 'Sessão expirada.', true);
@@ -106,8 +199,9 @@ window.Modules.checklists = (() => {
       if (error) return Utils.setMsg('ckMsg', error.message, true);
       Utils.setMsg('ckMsg', 'Salvo.');
       selected = null;
-      el('formChecklist').reset();
-      renderCats();
+      highlightRow(null);
+      closeChecklistDialog();
+      updateActionButtons();
       await loadTemplates();
     });
 
@@ -117,8 +211,9 @@ window.Modules.checklists = (() => {
       if (error) return Utils.setMsg('ckMsg', error.message, true);
       Utils.setMsg('ckMsg', 'Excluído.');
       selected = null;
-      el('formChecklist').reset();
-      renderCats();
+      highlightRow(null);
+      closeChecklistDialog();
+      updateActionButtons();
       await loadTemplates();
     });
 
@@ -135,8 +230,8 @@ window.Modules.checklists = (() => {
     });
   }
 
-  function init() { bindForm(); renderCats(); }
+  function init() { bindForm(); }
   async function load() { await loadTemplates(); }
 
-  return { init, load };
+  return { init, load, openChecklistDialog, closeChecklistDialog };
 })();
