@@ -55,7 +55,13 @@ create extension if not exists pgcrypto with schema extensions;
 -- =========================
 create type user_role as enum ('Administrador','Analista OACO','Analista OAGA','CH OACO','CH OAGA','CH AGA','Visitante');
 
-create type process_type as enum ('PDIR','Inscrição','Alteração','Exploração','OPEA');
+create type process_type as enum (
+  'PDIR - Documental',
+  'Inscrição - Documental',
+  'Alteração - Documental',
+  'Exploração - Documental',
+  'OPEA - Documental'
+);
 
 create type process_status as enum (
   'CONFEC','REV-OACO','APROV','ICA-PUB','ICA-EXTR','EDICAO','AGD-LEIT',
@@ -486,7 +492,7 @@ with fav as (
   join processes p on p.id = n.process_id
   where n.type = 'FAV-AD_HEL'
     and n.status = 'LIDA'
-    and p.type = 'Inscrição'
+    and p.type = 'Inscrição - Documental'
   group by n.process_id
 )
 select p.id as process_id,
