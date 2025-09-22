@@ -58,6 +58,33 @@ window.Modules.processos = (() => {
 
   const el = (id) => document.getElementById(id);
 
+  // === Adições do patch: integração com utilitário de PDF/Checklist ===
+  const CHECKLIST_PDF = window.Modules?.checklistPDF || {};
+  const EXTRA_NC_CODE = CHECKLIST_PDF.EXTRA_NON_CONFORMITY_CODE || '__ck_extra_nc__';
+
+  const normalizeValue = (value) => (
+    typeof value === 'string'
+      ? value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+      : ''
+  );
+
+  function evaluateChecklistResult(source) {
+    if (typeof CHECKLIST_PDF.getChecklistResult === 'function') {
+      return CHECKLIST_PDF.getChecklistResult(source);
+    }
+    const answers = Array.isArray(source?.answers) ? source.answers : [];
+    const hasTemplateNonConformity = answers.some(ans => normalizeValue(ans?.value) === 'nao conforme');
+    const extraEntry = answers.find(ans => ans?.code === EXTRA_NC_CODE);
+    const hasExtraNonConformity = normalizeValue(extraEntry?.value) === 'sim';
+    const hasNonConformity = hasTemplateNonConformity || hasExtraNonConformity;
+    return {
+      hasNonConformity,
+      extraFlag: hasExtraNonConformity,
+      summary: hasNonConformity ? 'Processo não conforme' : 'Processo conforme'
+    };
+  }
+  // === Fim das adições do patch ===
+
   const SafeUtils = {
     setMsg(id, text, isError = false) {
       const box = el(id);
@@ -676,7 +703,7 @@ window.Modules.processos = (() => {
     }
   }
 
-  // === NOVO: lista de checklists preenchidas ===
+  // === NOVO: lista de checklists preenchidas (patch aplicado) ===
   async function loadChecklistList(procId, targetId = 'ckLista') {
     const box = el(targetId);
     if (!box) return;
@@ -684,25 +711,35 @@ window.Modules.processos = (() => {
     try {
       const { data, error } = await sb
         .from('checklist_responses')
-        .select('id,filled_at,checklist_templates(name)')
+        .select('id,filled_at,answers,checklist_templates(name,version)')
         .eq('process_id', procId)
-       .eq('status', 'final')
+        .eq('status', 'final')
         .order('filled_at', { ascending: false });
       if (error) throw error;
       const rows = Array.isArray(data)
-        ? data.map(r => ({
-            id: r.id,
-            checklist: r.checklist_templates?.name || '',
-            filled_at: r.filled_at
-          }))
+        ? data.map(r => {
+            const evaluation = evaluateChecklistResult(r);
+            const version = r.checklist_templates?.version;
+            const checklistName = r.checklist_templates?.name || '';
+            const checklistWithVersion = version != null
+              ? `${checklistName} (v${version})`
+              : checklistName;
+            return {
+              id: r.id,
+              checklist: checklistWithVersion,
+              filled_at: r.filled_at,
+              result: evaluation.summary || ''
+            };
+          })
         : [];
       if (!rows.length) {
         box.innerHTML = '<div class="msg">Nenhuma checklist preenchida.</div>';
         return;
       }
       Utils.renderTable(box, [
-         { key: 'checklist', label: 'Doc' },
+        { key: 'checklist', label: 'Doc' },
         { key: 'filled_at', label: 'Preenchida em', value: r => U.fmtDateTime(r.filled_at) },
+        { key: 'result', label: 'Resultado' },
         {
           label: 'PDF',
           align: 'center',
@@ -879,14 +916,14 @@ window.Modules.processos = (() => {
     }
   }
 
-  // === NOVO: abrir PDF de checklist ===
+  // === NOVO: abrir PDF de checklist (patch aplicado) ===
   async function abrirChecklistPDF(id) {
     const win = window.open('', '_blank');
     if (win) win.opener = null;
     try {
       const { data, error } = await sb
         .from('checklist_responses')
-        .select('answers,extra_obs,started_at,filled_at,filled_by,profiles:filled_by(name),processes(nup),checklist_templates(name,items)')
+        .select('answers,extra_obs,started_at,filled_at,filled_by,profiles:filled_by(name),processes(nup),checklist_templates(name,version,items)')
         .eq('id', id)
         .single();
       if (error) throw error;
