@@ -239,7 +239,7 @@ for each row execute function extensions.moddatetime(updated_at);
 create table checklist_templates (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  category text not null,
+  type process_type not null,
   version int not null default 1,
   -- Estrutura: [{categoria, itens:[{code,requisito,texto_sugerido}]}]
   items jsonb not null,
@@ -1111,7 +1111,7 @@ begin
           'numbers', old.numbers,
           'requested_at', old.requested_at,
           'expedit_at', old.expedit_at,
-          'received_at', old.recebido_at
+          'received_at', old.received_at
         ),
         auth.uid(),
         auth.jwt()->>'email',
@@ -1259,3 +1259,43 @@ alter table checklist_responses
   alter column started_at set not null;
 
 -- ============== Fim do arquivo 9: Painel_AGA-main/sql/07_add_started_at_to_checklist_responses.sql ==============
+
+
+-- ===============================================
+-- Início do arquivo 10: Painel_AGA-main/sql/08_rename_checklist_category_to_type.sql
+-- ===============================================
+
+-- sql/08_rename_checklist_category_to_type.sql
+-- Renomeia checklist_templates.category para type (process_type)
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'checklist_templates'
+      and column_name = 'category'
+  ) then
+    alter table checklist_templates
+      rename column category to type;
+  end if;
+end
+$$;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'checklist_templates'
+      and column_name = 'type'
+      and (data_type <> 'USER-DEFINED' or udt_name <> 'process_type')
+  ) then
+    alter table checklist_templates
+      alter column type type process_type using type::process_type;
+  end if;
+end
+$$;
+
+-- ============== Fim do arquivo 10: Painel_AGA-main/sql/08_rename_checklist_category_to_type.sql ==============
