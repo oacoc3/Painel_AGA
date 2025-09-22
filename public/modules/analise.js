@@ -589,6 +589,61 @@ window.Modules.analise = (() => {
     }
   }
 
+  async function loadApprovedChecklists() {
+    const box = el('adApprovedList');
+    if (!box) return;
+    box.innerHTML = '<div class="msg">Carregando…</div>';
+    try {
+      const { data, error } = await sb
+        .from('checklist_templates')
+        .select('id,name,category,version,approved_at,profiles:approved_by(name)')
+        .not('approved_by', 'is', null)
+        .order('approved_at', { ascending: false })
+        .order('name');
+      if (error) throw error;
+      const rows = Array.isArray(data)
+        ? data.map(row => ({
+          id: row.id,
+          name: row.name || '',
+          category: row.category || '',
+          version: row.version,
+          approved_at: row.approved_at,
+          approved_by_name: row.profiles?.name || ''
+        }))
+        : [];
+      if (!rows.length) {
+        box.innerHTML = '<div class="msg">Nenhuma checklist aprovada.</div>';
+        return;
+      }
+      Utils.renderTable(box, [
+        { key: 'name', label: 'Nome' },
+        { key: 'category', label: 'Categoria' },
+        { key: 'version', label: 'Versão', align: 'center' },
+        { key: 'approved_by_name', label: 'Aprovada por' },
+        {
+          key: 'approved_at',
+          label: 'Aprovada em',
+          value: r => (r.approved_at ? Utils.fmtDateTime(r.approved_at) : '')
+        },
+        {
+          label: 'PDF',
+          align: 'center',
+          render: r => createApprovedChecklistPdfButton(r.id)
+        }
+      ], rows);
+    } catch (err) {
+      box.innerHTML = `<div class="msg error">${err.message || String(err)}</div>`;
+    }
+  }
+
+  function createApprovedChecklistPdfButton(templateId) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'PDF';
+    btn.addEventListener('click', () => abrirChecklistTemplatePDF(templateId));
+    return btn;
+  }
+
   function createChecklistButton(processId) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -661,6 +716,47 @@ window.Modules.analise = (() => {
     dlg.querySelector('#ckClose')?.addEventListener('click', () => dlg.close());
     dlg.showModal();
     await loadChecklistHistory(procId, 'ckListaPop');
+  }
+
+  async function abrirChecklistTemplatePDF(templateId, existingWindow = null) {
+    if (!templateId) return;
+    const win = existingWindow || window.open('', '_blank');
+    if (win) win.opener = null;
+    try {
+      const { data, error } = await sb
+        .from('checklist_templates')
+        .select('id,name,category,version,items,approved_at,profiles:approved_by(name)')
+        .eq('id', templateId)
+        .single();
+      if (error) throw error;
+
+      const render = window.Modules?.checklistPDF?.renderChecklistPDF;
+      if (typeof render !== 'function') {
+        throw new Error('Utilitário de PDF indisponível.');
+      }
+
+      const metadata = [
+        { label: 'Categoria', value: data?.category || '—' },
+        { label: 'Versão', value: data?.version != null ? String(data.version) : '—' },
+        { label: 'Aprovada em', value: data?.approved_at ? Utils.fmtDateTime(data.approved_at) : '—' },
+        { label: 'Aprovada por', value: data?.profiles?.name || '—' }
+      ];
+
+      const payload = {
+        processes: { nup: '—' },
+        checklist_templates: {
+          name: data?.name || '',
+          items: Array.isArray(data?.items) ? data.items : []
+        },
+        answers: []
+      };
+
+      const url = render(payload, { metadata });
+      if (win) win.location.href = url;
+    } catch (err) {
+      if (win) win.close();
+      alert(err.message || String(err));
+    }
   }
 
   // ===== Patch aplicado: PDF com margens, quebra de página e word wrap =====
@@ -739,7 +835,13 @@ window.Modules.analise = (() => {
   }
 
   function init() { bind(); }
-  async function load() { clearChecklist(); await loadIndicador(); }
+  async function load() {
+    clearChecklist();
+    await Promise.all([
+      loadIndicador(),
+      loadApprovedChecklists()
+    ]);
+  }
 
   return { init, load };
 })();
