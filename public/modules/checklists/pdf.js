@@ -2,6 +2,7 @@
 // Utilitário compartilhado para renderização de PDFs de checklists.
 (() => {
   const EXTRA_NON_CONFORMITY_CODE = '__ck_extra_nc__';
+  const CHECKLIST_NOTICE = 'Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, houve o pertinente registro no campo "Outras observações do Analista".';
 
   const normalizeValue = (value) => (
     typeof value === 'string'
@@ -99,8 +100,17 @@
     const baseFontSize = options.fontSize || 12;
     doc.setFontSize(baseFontSize);
 
-    const resultInfo = getChecklistResult(response);
-    if (resultInfo.stamp) {
+    // Novo: modos de geração
+    const mode = options.mode === 'approved' ? 'approved' : 'final';
+    const isApproved = mode === 'approved';
+    const noticeText = options.notice ?? CHECKLIST_NOTICE;
+
+    const resultInfo = isApproved
+      ? { answers: getAnswersArray(response) }
+      : getChecklistResult(response);
+
+    // Selo (stamp) apenas no modo "final"
+    if (!isApproved && resultInfo.stamp) {
       const stampSize = options.stampFontSize || 16;
       const stampY = Math.max(10, marginTop - 6);
       doc.setFontSize(stampSize);
@@ -116,20 +126,34 @@
       doc.setFontSize(baseFontSize);
     }
 
+    const template = response?.checklist_templates || {};
     const metadataEntries = [
-      { label: 'Checklist', value: response?.checklist_templates?.name || '' },
+      { label: 'Tipo', value: template.type || template.name || options.type || '—' },
       {
-        label: 'Versão da checklist',
-        value: response?.checklist_templates?.version != null
-          ? String(response.checklist_templates.version)
-          : '—'
-      },
-      { label: 'NUP', value: response?.processes?.nup || '' },
-      ...(Array.isArray(options.metadata) ? options.metadata : [])
+        label: 'Versão',
+        value: template.version != null ? String(template.version) : '—'
+      }
     ];
 
-    if (resultInfo.summary) {
-      metadataEntries.push({ label: 'Resultado', value: resultInfo.summary });
+    if (isApproved) {
+      metadataEntries.push(
+        { label: 'Data de aprovação', value: options.approvedAt || '—' },
+        { label: 'Responsável pela aprovação', value: options.approvedBy || '—' }
+      );
+    } else {
+      metadataEntries.push(
+        { label: 'NUP', value: response?.processes?.nup || options.nup || '—' },
+        { label: 'Início', value: options.startedAt || '—' },
+        { label: 'Término', value: options.finishedAt || '—' },
+        { label: 'Responsável', value: options.responsible || '—' }
+      );
+      if (resultInfo.summary) {
+        metadataEntries.push({ label: 'Resultado', value: resultInfo.summary });
+      }
+    }
+
+    if (Array.isArray(options.metadata)) {
+      metadataEntries.push(...options.metadata.filter(Boolean));
     }
 
     metadataEntries.forEach(entry => {
@@ -141,6 +165,14 @@
     });
 
     if (metadataEntries.length) addVerticalSpace(headerSpacing);
+
+    // Aviso padrão (itálico)
+    if (noticeText) {
+      doc.setFont(undefined, 'italic');
+      addWrappedText(noticeText);
+      doc.setFont(undefined, 'normal');
+      addVerticalSpace(headerSpacing);
+    }
 
     const answers = resultInfo.answers;
     const categories = Array.isArray(response?.checklist_templates?.items)
@@ -154,15 +186,24 @@
       doc.setFont(undefined, 'normal');
       (category.itens || []).forEach(item => {
         if (!item) return;
-        const ans = answers.find(a => a && a.code === item.code) || {};
         addWrappedText(`${item.code || ''} - ${item.requisito || ''}`);
-        addWrappedText(`Resultado: ${ans.value || ''}`);
-        if (ans.obs) addWrappedText(`Obs: ${ans.obs}`);
+        if (isApproved) {
+          if (item.texto_sugerido) {
+            addWrappedText(`Texto sugerido: ${item.texto_sugerido}`);
+          }
+        } else {
+          const ans = answers.find(a => a && a.code === item.code) || {};
+          addWrappedText(`Resultado: ${ans.value || ''}`);
+          if (ans.obs) addWrappedText(`Obs: ${ans.obs}`);
+          if (item.texto_sugerido) {
+            addWrappedText(`Texto sugerido: ${item.texto_sugerido}`);
+          }
+        }
         addVerticalSpace(4);
       });
     });
 
-    if (response?.extra_obs) {
+    if (!isApproved && response?.extra_obs) {
       doc.setFont(undefined, 'bold');
       addWrappedText('Outras observações:');
       doc.setFont(undefined, 'normal');
