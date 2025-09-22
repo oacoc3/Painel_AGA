@@ -633,7 +633,8 @@ window.Modules.analise = (() => {
   async function clearForm() {
     await discardDraft();
     el('adNUP').value = '';
-    el('adTipo').value = 'PDIR';
+    // PATCH: valor padrão atualizado
+    el('adTipo').value = 'PDIR - Documental';
     Utils.setMsg('adMsg', '');
     currentProcessId = null;
     currentTemplate = null;
@@ -716,8 +717,8 @@ window.Modules.analise = (() => {
         box.innerHTML = '<div class="msg">Nenhuma checklist aprovada.</div>';
         return;
       }
+      // PATCH: coluna "Nome" removida conforme diff
       Utils.renderTable(box, [
-        { key: 'name', label: 'Nome' },
         { key: 'type', label: 'Tipo' },
         { key: 'version', label: 'Versão', align: 'center' },
         { key: 'approved_by_name', label: 'Aprovada por' },
@@ -846,23 +847,23 @@ window.Modules.analise = (() => {
         throw new Error('Utilitário de PDF indisponível.');
       }
 
-      const metadata = [
-        { label: 'Tipo', value: data?.type || '—' },
-        { label: 'Versão', value: data?.version != null ? String(data.version) : '—' },
-        { label: 'Aprovada em', value: data?.approved_at ? Utils.fmtDateTime(data.approved_at) : '—' },
-        { label: 'Aprovada por', value: data?.profiles?.name || '—' }
-      ];
-
       const payload = {
         processes: { nup: '—' },
         checklist_templates: {
           name: data?.name || '',
+          type: data?.type || '',
+          version: data?.version,
           items: Array.isArray(data?.items) ? data.items : []
         },
         answers: []
       };
 
-      const url = render(payload, { metadata });
+      // PATCH: novos parâmetros para o render do PDF aprovado
+      const url = render(payload, {
+        mode: 'approved',
+        approvedAt: data?.approved_at ? Utils.fmtDateTime(data.approved_at) : '—',
+        approvedBy: data?.profiles?.name || '—'
+      });
       if (win) win.location.href = url;
     } catch (err) {
       if (win) win.close();
@@ -878,7 +879,7 @@ window.Modules.analise = (() => {
     try {
       const { data, error } = await sb
         .from('checklist_responses')
-        .select('answers,extra_obs,started_at,filled_at,filled_by,profiles:filled_by(name),processes(nup),checklist_templates(name,version,items)')
+        .select('answers,extra_obs,started_at,filled_at,filled_by,profiles:filled_by(name),processes(nup),checklist_templates(name,type,version,items)')
         .eq('id', id)
         .single();
       if (error) throw error;
@@ -892,12 +893,12 @@ window.Modules.analise = (() => {
       const finishedAt = data.filled_at ? Utils.fmtDateTime(data.filled_at) : '—';
       const responsible = data.profiles?.name || data.filled_by || '—';
 
+      // PATCH: novos parâmetros para o render do PDF final
       const url = render(data, {
-        metadata: [
-          { label: 'Início', value: startedAt || '—' },
-          { label: 'Término', value: finishedAt || '—' },
-          { label: 'Responsável', value: responsible || '—' }
-        ]
+        mode: 'final',
+        startedAt: startedAt || '—',
+        finishedAt: finishedAt || '—',
+        responsible: responsible || '—'
       });
 
       if (win) win.location.href = url;
