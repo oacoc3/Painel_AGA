@@ -7,6 +7,45 @@ window.Modules.prazos = (() => {
   let monitor = [];
   let doaga = [];
   let adhel = [];
+
+  const PARECERES_COLUMNS = [
+    { key: 'nup', label: 'NUP' },
+    { key: 'type', label: 'Tipo' },
+    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
+    { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
+  ];
+
+  const REMOCAO_COLUMNS = [
+    { key: 'nup', label: 'NUP' },
+    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
+    { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
+  ];
+
+  const OBRAS_COLUMNS = [
+    { key: 'nup', label: 'NUP' },
+    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
+    { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) },
+    { key: 'em_atraso', label: 'Atraso', value: r => (r.em_atraso ? 'ATRASO' : '') }
+  ];
+
+  const MONITOR_COLUMNS = [
+    { key: 'nup', label: 'NUP' },
+    { key: 'type', label: 'Tipo' },
+    { key: 'number', label: 'Número', value: r => (r.number ? String(r.number).padStart(6, '0') : '') }
+  ];
+
+  const DOAGA_COLUMNS = [
+    { key: 'nup', label: 'NUP' },
+    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
+    { key: 'days_remaining', label: 'Dias rem.', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
+  ];
+
+  const ADHEL_COLUMNS = [
+    { key: 'nup', label: 'NUP' },
+    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : '') },
+    { key: 'days_remaining', label: 'Dias rem.', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
+  ];
+
   function bindRowLinks(tbody) {
     if (!tbody) return;
     tbody.querySelectorAll('tr').forEach(tr => {
@@ -22,16 +61,16 @@ window.Modules.prazos = (() => {
     });
   }
 
-  function renderPareceres() {
+  function getPareceresRows() {
     const tipo = el('psTipo')?.value;
     let rows = pareceres;
     if (tipo) rows = rows.filter(r => r.type === tipo);
-    const { tbody } = Utils.renderTable('prazoParec', [
-      { key: 'nup', label: 'NUP' },
-      { key: 'type', label: 'Tipo' },
-      { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-      { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
-    ], rows);
+    return rows;
+  }
+
+  function renderPareceres() {
+    const rows = getPareceresRows();
+    const { tbody } = Utils.renderTable('prazoParec', PARECERES_COLUMNS, rows);
     bindRowLinks(tbody);
   }
 
@@ -50,13 +89,13 @@ window.Modules.prazos = (() => {
     renderPareceres();
   }
 
+  function getRemocaoRows() {
+    return remocao;
+  }
+
   function renderRemocao() {
-    let rows = remocao;
-    const { tbody } = Utils.renderTable('prazoRemocao', [
-      { key: 'nup', label: 'NUP' },
-      { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-      { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
-    ], rows);
+    const rows = getRemocaoRows();
+    const { tbody } = Utils.renderTable('prazoRemocao', REMOCAO_COLUMNS, rows);
     bindRowLinks(tbody);
   }
 
@@ -67,14 +106,13 @@ window.Modules.prazos = (() => {
     renderRemocao();
   }
 
+  function getObraRows() {
+    return obras;
+  }
+
   function renderObra() {
-    let rows = obras;
-    const { tbody } = Utils.renderTable('prazoObra', [
-      { key: 'nup', label: 'NUP' },
-      { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-      { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) },
-      { key: 'em_atraso', label: 'Atraso', value: r => (r.em_atraso ? 'ATRASO' : '') }
-    ], rows);
+    const rows = getObraRows();
+    const { tbody } = Utils.renderTable('prazoObra', OBRAS_COLUMNS, rows);
     bindRowLinks(tbody);
   }
 
@@ -85,16 +123,16 @@ window.Modules.prazos = (() => {
     renderObra();
   }
 
-  function renderMonitor() {
+  function getMonitorRows() {
     const tipo = el('monTipo')?.value || '';
     let rows = monitor;
     if (tipo) rows = rows.filter(r => r.type === tipo);
+    return rows;
+  }
 
-    const { tbody } = Utils.renderTable('prazoMonit', [
-      { key: 'nup', label: 'NUP' },
-      { key: 'type', label: 'Tipo' },
-      { key: 'number', label: 'Número', value: r => r.number ? String(r.number).padStart(6, '0') : '' }
-    ], rows);
+  function renderMonitor() {
+    const rows = getMonitorRows();
+    const { tbody } = Utils.renderTable('prazoMonit', MONITOR_COLUMNS, rows);
     bindRowLinks(tbody);
   }
 
@@ -110,13 +148,13 @@ window.Modules.prazos = (() => {
     renderMonitor();
   }
 
+  function getDoagaRows() {
+    return doaga;
+  }
+
   function renderDOAGA() {
-    let rows = doaga;
-    const { tbody } = Utils.renderTable('prazoDOAGA', [
-      { key: 'nup', label: 'NUP' },
-      { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
-      { key: 'days_remaining', label: 'Dias rem.', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
-    ], rows);
+    const rows = getDoagaRows();
+    const { tbody } = Utils.renderTable('prazoDOAGA', DOAGA_COLUMNS, rows);
     bindRowLinks(tbody);
   }
 
@@ -127,14 +165,112 @@ window.Modules.prazos = (() => {
     renderDOAGA();
   }
 
+  function getAdhelRows() {
+    return adhel;
+  }
+
   function renderADHEL() {
-    const rows = adhel;
-    const { tbody } = Utils.renderTable('prazoADHEL', [
-      { key: 'nup', label: 'NUP' },
-      { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : '') },
-      { key: 'days_remaining', label: 'Dias rem.', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
-    ], rows);
+    const rows = getAdhelRows();
+    const { tbody } = Utils.renderTable('prazoADHEL', ADHEL_COLUMNS, rows);
     bindRowLinks(tbody);
+  }
+
+  const PDF_SECTIONS = {
+    pareceres: { title: 'Pareceres', columns: PARECERES_COLUMNS, getRows: getPareceresRows },
+    remocao: { title: 'Remoção/Rebaixamento', columns: REMOCAO_COLUMNS, getRows: getRemocaoRows },
+    obras: { title: 'Término de Obra', columns: OBRAS_COLUMNS, getRows: getObraRows },
+    monitor: { title: 'Monitorar Leitura/Expedição', columns: MONITOR_COLUMNS, getRows: getMonitorRows },
+    doaga: { title: 'Prazo DO-AGA', columns: DOAGA_COLUMNS, getRows: getDoagaRows },
+    adhel: { title: 'AD/HEL - Deliberação Favorável', columns: ADHEL_COLUMNS, getRows: getAdhelRows }
+  };
+
+  function exportPrazoPDF(section) {
+    const config = PDF_SECTIONS[section];
+    if (!config) return;
+    if (!window.jspdf?.jsPDF) {
+      alert('Biblioteca de PDF indisponível.');
+      return;
+    }
+
+    const data = typeof config.getRows === 'function' ? config.getRows() : [];
+    const rows = Array.isArray(data) ? data : [];
+    const doc = new window.jspdf.jsPDF();
+    const margin = 15;
+    const lineHeight = 6;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const contentWidth = pageWidth - margin * 2;
+    const maxY = pageHeight - margin;
+    let y = margin;
+
+    const ensureSpace = (extra = lineHeight) => {
+      if (y + extra > maxY) {
+        doc.addPage();
+        y = margin;
+      }
+    };
+
+    const addParagraph = (text, opts = {}) => {
+      if (text == null || text === '') return;
+      const parts = doc.splitTextToSize(String(text), contentWidth);
+      parts.forEach(line => {
+        ensureSpace();
+        doc.text(line, margin, y, opts);
+        y += lineHeight;
+      });
+    };
+
+    const addGap = (amount = lineHeight) => {
+      ensureSpace(amount);
+      y += amount;
+    };
+
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(14);
+    addParagraph(config.title, { align: 'left' });
+    addGap(lineHeight / 2);
+
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(10);
+    addParagraph(`Gerado em: ${Utils.fmtDateTime(new Date())}`);
+    addGap(lineHeight / 2);
+
+    if (!rows.length) {
+      addParagraph('Nenhum registro disponível.');
+    } else {
+      rows.forEach(row => {
+        const text = config.columns
+          .map(col => {
+            const label = col.label || '';
+            let value = '';
+            if (typeof col.pdfValue === 'function') value = col.pdfValue(row);
+            else if (typeof col.value === 'function') value = col.value(row);
+            else if (col.key) value = row[col.key];
+            if (value instanceof Date) value = Utils.fmtDateTime(value);
+            if (value == null) value = '';
+            value = String(value);
+            if (label) return `${label}: ${value}`;
+            return value;
+          })
+          .filter(Boolean)
+          .join('  |  ');
+        addParagraph(text);
+        addGap(lineHeight / 2);
+      });
+    }
+
+    const url = doc.output('bloburl');
+    const win = window.open(url, '_blank');
+    if (win) win.opener = null;
+  }
+
+  function bindPdfButtons() {
+    document.querySelectorAll('[data-pdf]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const section = btn.getAttribute('data-pdf');
+        exportPrazoPDF(section);
+      });
+    });
   }
 
   async function loadADHEL() {
@@ -147,6 +283,7 @@ window.Modules.prazos = (() => {
   function init() {
     el('psTipo')?.addEventListener('change', renderPareceres);
     el('monTipo')?.addEventListener('change', renderMonitor);
+    bindPdfButtons();
   }
 
   async function load() {
