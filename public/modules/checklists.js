@@ -111,7 +111,6 @@ window.Modules.checklists = (() => {
     if (row) {
       selected = row;
       form.querySelector('#ckId').value = row.id;
-      form.querySelector('#ckName').value = row.name;
       // category -> type
       form.querySelector('#ckCat').value = row.type || '';
       renderCats(catsContainer, row.items || []);
@@ -122,7 +121,7 @@ window.Modules.checklists = (() => {
     }
     updateActionButtons();
     dlg.showModal();
-    form.querySelector('#ckName').focus();
+    form.querySelector('#ckCat').focus();
   }
 
   function closeChecklistDialog() {
@@ -233,17 +232,17 @@ window.Modules.checklists = (() => {
       ev.preventDefault();
       const form = getForm();
       const items = collectItems(catsContainer);
-      const name = form.querySelector('#ckName').value.trim();
       // category -> type
       const type = form.querySelector('#ckCat').value.trim();
-      if (!name || !type || !items.length) return Utils.setMsg('ckMsg', 'Preencha todos os campos.', true);
+      if (!type || !items.length) return Utils.setMsg('ckMsg', 'Preencha todos os campos.', true);
       const u = await getUser();
       if (!u) return Utils.setMsg('ckMsg', 'Sessão expirada.', true);
+      const name = selected?.name?.trim() || type;
       let version = 1;
       if (selected) {
         version = (selected.version || 1) + 1;
       } else {
-        const max = Math.max(0, ...templates.filter(t => t.name === name).map(t => t.version || 0));
+        const max = Math.max(0, ...templates.filter(t => t.type === type).map(t => t.version || 0));
         version = max + 1;
       }
       // category -> type
