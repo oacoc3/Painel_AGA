@@ -75,13 +75,14 @@
             </div>
           </div>
 
-          <div class="admin-col admin-col-manage">
+          <div class="admin-col admin-col-checklists">
             <div class="card">
-              <h2>Gerenciar Checklists</h2>
+              <h2>Checklists</h2>
               <div class="row ck-manage-actions">
                 <button id="btnNewChecklist" type="button">Novo checklist</button>
                 <button id="btnEditChecklist" type="button" disabled>Editar selecionado</button>
               </div>
+              <div id="listaCk" class="table scrolly"></div>
               <dialog id="ckFormDialog">
                 <form id="formChecklist" data-ajax method="dialog">
                   <input type="hidden" id="ckId">
@@ -107,13 +108,6 @@
                   <div id="ckMsg" class="msg"></div>
                 </form>
               </dialog>
-            </div>
-          </div>
-
-          <div class="admin-col admin-col-checklists">
-            <div class="card">
-              <h2>Checklists</h2>
-              <div id="listaCk" class="table scrolly"></div>
             </div>
           </div>
         </div>
