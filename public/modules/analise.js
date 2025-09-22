@@ -479,6 +479,10 @@ window.Modules.analise = (() => {
       return;
     }
 
+    // Janela para o PDF aberta antecipadamente para evitar bloqueio de pop-up
+    const pdfWindow = window.open('', '_blank');
+    if (pdfWindow) pdfWindow.opener = null;
+
     const nowIso = new Date().toISOString();
     let saved;
     try {
@@ -499,6 +503,7 @@ window.Modules.analise = (() => {
       saved = data;
       currentDraftId = null;
     } catch (err) {
+      if (pdfWindow) pdfWindow.close();
       Utils.setMsg('adMsg', err.message || 'Falha ao finalizar checklist.', true);
       return;
     }
@@ -518,7 +523,16 @@ window.Modules.analise = (() => {
     Utils.setMsg('adMsg', 'Checklist finalizada.');
     await loadIndicador();
     if (window.Modules.processos?.reloadLists) {
-      await window.Modules.processos.reloadLists();
+      try {
+        await window.Modules.processos.reloadLists();
+      } catch (err) {
+        console.error('Falha ao recarregar listas de processos.', err);
+      }
+    }
+    if (saved?.id) {
+      await abrirChecklistPDF(saved.id, pdfWindow);
+    } else if (pdfWindow) {
+      pdfWindow.close();
     }
     clearChecklist();
   }
@@ -650,9 +664,9 @@ window.Modules.analise = (() => {
   }
 
   // ===== Patch aplicado: PDF com margens, quebra de página e word wrap =====
-  async function abrirChecklistPDF(id) {
-    // Abre imediatamente uma aba em branco para evitar bloqueio de pop-up
-    const win = window.open('', '_blank');
+  async function abrirChecklistPDF(id, existingWindow = null) {
+    // Reaproveita janela existente (quando fornecida) para evitar bloqueio de pop-up
+    const win = existingWindow || window.open('', '_blank');
     if (win) win.opener = null;
     try {
       const { data, error } = await sb
