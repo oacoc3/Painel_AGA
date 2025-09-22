@@ -909,7 +909,7 @@ window.Modules.processos = (() => {
             wrap.appendChild(del);
             return wrap;
           }
-        ]
+        }
       ], rows);
     } catch (e) {
       box.innerHTML = `<div class="msg error">${e.message || String(e)}</div>`;
