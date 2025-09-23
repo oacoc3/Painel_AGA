@@ -285,9 +285,10 @@
         const code = item.code || '';
         const requirement = item.requisito || '';
         if (code) {
-          const requirementText = requirement ? `- ${requirement}` : '';
-          const separator = requirement ? ' ' : '';
-          addLabelValue(code, requirementText, { separator });
+          addLabelValue(code, '', { separator: '' });
+          if (requirement) {
+            addWrappedText(requirement);
+          }
         } else {
           addWrappedText(requirement);
         }
@@ -299,8 +300,14 @@
         } else {
           const ans = answers.find(a => a && a.code === item.code) || {};
           // Patch: usar addLabelValue para "Resultado" e "Obs"
-          addLabelValue('Resultado', ans.value || '');
-          if (ans.obs) addLabelValue('Obs', ans.obs);
+          addLabelValue('Resultado', '', { separator: '' });
+          if (ans.value) {
+            addWrappedText(ans.value);
+          }
+          if (ans.obs) {
+            addLabelValue('Obs', '', { separator: '' });
+            addWrappedText(ans.obs);
+          }
           if (item.texto_sugerido) {
             addWrappedText(`Texto sugerido: ${item.texto_sugerido}`);
           }
