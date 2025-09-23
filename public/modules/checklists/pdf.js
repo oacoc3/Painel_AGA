@@ -279,16 +279,21 @@
       addVerticalSpace(categorySpacing);
       doc.setFont(undefined, 'normal');
 
-      (category.itens || []).forEach(item => {
+      (category.itens || []).forEach((item, index) => {
         if (!item) return;
 
         const itemSeparatorOffset = Math.max(1, Math.min(lineHeight / 4, 2));
         const itemContentSpacing = Math.max(2, Math.min(lineHeight / 2, 6));
+        const isFirstItem = index === 0;
 
         ensureSpace(itemSeparatorOffset + itemContentSpacing);
-        const topLineY = y + itemSeparatorOffset;
-        doc.line(marginLeft, topLineY, pageWidth - marginRight, topLineY);
-        y = topLineY;
+        if (isFirstItem) {
+          const topLineY = y + itemSeparatorOffset;
+          doc.line(marginLeft, topLineY, pageWidth - marginRight, topLineY);
+          y = topLineY;
+        } else {
+          y += itemSeparatorOffset;
+        }
         addVerticalSpace(itemContentSpacing);
 
         // Patch: destacar item em vermelho quando "não conforme"
