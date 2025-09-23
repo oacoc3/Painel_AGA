@@ -307,34 +307,30 @@
     return true;
   }
 
+  // ensureWrite com patch aplicado: sempre alerta o usuário
   function ensureWrite(moduleKey, options = {}) {
     if (canRoleWrite(moduleKey)) return true;
     if (options.silent) return false;
 
     const message = options.message || ACCESS_DENIED_MESSAGE;
-    let handled = false;
     const targetId = options.msgId || options.messageId;
     if (targetId) {
       const targetEl = document.getElementById(targetId);
       if (targetEl) {
         setMsg(targetId, message, true);
-        handled = true;
       }
     }
-    if (!handled && typeof options.onMessage === 'function') {
+    if (typeof options.onMessage === 'function') {
       try {
         options.onMessage(message);
-        handled = true;
       } catch (_) {
         // ignore handler errors
       }
     }
-    if (!handled) {
-      try {
-        window.alert(message);
-      } catch (_) {
-        // ignore alert failures
-      }
+    try {
+      window.alert(message);
+    } catch (_) {
+      // ignore alert failures
     }
     return false;
   }
