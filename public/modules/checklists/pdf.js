@@ -3,6 +3,7 @@
 (() => {
   const EXTRA_NON_CONFORMITY_CODE = '__ck_extra_nc__';
   const CHECKLIST_NOTICE = 'Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, haverá o pertinente registro no campo "Outras observações do(a) Analista".';
+
   const normalizeValue = (value) => (
     typeof value === 'string'
       ? value
@@ -281,7 +282,6 @@
       (category.itens || []).forEach(item => {
         if (!item) return;
 
-        
         const itemSeparatorOffset = Math.max(1, Math.min(lineHeight / 4, 2));
         const itemContentSpacing = Math.max(2, Math.min(lineHeight / 2, 6));
 
@@ -290,6 +290,16 @@
         doc.line(marginLeft, topLineY, pageWidth - marginRight, topLineY);
         y = topLineY;
         addVerticalSpace(itemContentSpacing);
+
+        // Patch: destacar item em vermelho quando "não conforme"
+        const ans = !isApproved
+          ? (answers.find(a => a && a.code === item.code) || {})
+          : {};
+        const isNonConform = !isApproved && normalizeValue(ans.value) === 'nao conforme';
+
+        if (isNonConform) {
+          doc.setTextColor(180, 0, 0);
+        }
 
         // Patch: exibir "código - requisito" com o código (label) em negrito
         const code = item.code || '';
@@ -308,7 +318,6 @@
             addWrappedText(`Texto sugerido: ${item.texto_sugerido}`);
           }
         } else {
-          const ans = answers.find(a => a && a.code === item.code) || {};
           // Patch: usar addLabelValue para "Resultado" e "Obs"
           addLabelValue('Resultado', '', { separator: '' });
           if (ans.value) {
@@ -318,9 +327,16 @@
             addLabelValue('Obs', '', { separator: '' });
             addWrappedText(ans.obs);
           }
+          if (isNonConform) {
+            doc.setTextColor(0, 0, 0);
+          }
           if (item.texto_sugerido) {
             addWrappedText(`Texto sugerido: ${item.texto_sugerido}`);
           }
+        }
+
+        if (isNonConform) {
+          doc.setTextColor(0, 0, 0);
         }
 
         ensureSpace(itemContentSpacing + itemSeparatorOffset);
