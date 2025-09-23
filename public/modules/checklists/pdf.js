@@ -48,6 +48,14 @@
     const defaultAlign = options.align ?? 'justify';
     const headerSpacing = options.headerSpacing ?? 4;
 
+    // Novo: controle de espaçamento após o título de categoria
+    const parsedCategorySpacing = Number(options.categorySpacing);
+    const hasCategorySpacing = Number.isFinite(parsedCategorySpacing);
+    const categorySpacing = Math.max(
+      hasCategorySpacing ? parsedCategorySpacing : lineHeight,
+      lineHeight
+    );
+
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const contentWidth = pageWidth - marginLeft - marginRight;
@@ -195,11 +203,13 @@
       doc.setFont(undefined, 'bold');
       addWrappedText(category.categoria || '');
       const separatorOffset = Math.max(1, Math.min(lineHeight / 4, 2));
-      ensureSpace(separatorOffset);
+      // Ajustado: garantir espaço para a linha + espaçamento configurável da categoria
+      ensureSpace(separatorOffset + categorySpacing);
       const lineY = y + separatorOffset;
       doc.line(marginLeft, lineY, pageWidth - marginRight, lineY);
       y = lineY;
-      addVerticalSpace(Math.max(lineHeight / 2, 1));
+      // Ajustado: usar o espaçamento de categoria (padrão = lineHeight)
+      addVerticalSpace(categorySpacing);
       doc.setFont(undefined, 'normal');
       (category.itens || []).forEach(item => {
         if (!item) return;
