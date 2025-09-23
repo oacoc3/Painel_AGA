@@ -281,6 +281,16 @@
       (category.itens || []).forEach(item => {
         if (!item) return;
 
+        
+        const itemSeparatorOffset = Math.max(1, Math.min(lineHeight / 4, 2));
+        const itemContentSpacing = Math.max(2, Math.min(lineHeight / 2, 6));
+
+        ensureSpace(itemSeparatorOffset + itemContentSpacing);
+        const topLineY = y + itemSeparatorOffset;
+        doc.line(marginLeft, topLineY, pageWidth - marginRight, topLineY);
+        y = topLineY;
+        addVerticalSpace(itemContentSpacing);
+
         // Patch: exibir "código - requisito" com o código (label) em negrito
         const code = item.code || '';
         const requirement = item.requisito || '';
@@ -312,7 +322,12 @@
             addWrappedText(`Texto sugerido: ${item.texto_sugerido}`);
           }
         }
-        addVerticalSpace(4);
+
+        ensureSpace(itemContentSpacing + itemSeparatorOffset);
+        addVerticalSpace(itemContentSpacing);
+        const bottomLineY = y + itemSeparatorOffset;
+        doc.line(marginLeft, bottomLineY, pageWidth - marginRight, bottomLineY);
+        y = bottomLineY;
       });
     });
 
