@@ -58,9 +58,7 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 100%; }
 .admin-grid {
-  grid-template-columns:
-    minmax(320px, 2fr)
-    minmax(0, 3fr);
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
 }
 .grid > * { min-height: 0; }
 #viewDashboard .grid {
@@ -590,11 +588,7 @@ footer { padding: 8px 12px; background: #faf9f7; }
 
 @media (max-width: 1200px) {
   .admin-grid {
-    grid-template-columns: minmax(280px, 2fr) minmax(280px, 3fr);
-  }
-
-  .admin-grid > .admin-col-checklists {
-    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
   }
 }
 
