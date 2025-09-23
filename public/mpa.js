@@ -72,8 +72,17 @@
     const btnLogout = document.getElementById('btnLogout');
     if (btnLogout) {
       btnLogout.addEventListener('click', async () => {
-        await sb.auth.signOut();
-        window.location.href = 'index.html';
+        try {
+          const client = window.sb;
+          if (client?.auth?.signOut) {
+            const { error } = await client.auth.signOut();
+            if (error) console.error('[mpa] Falha ao encerrar sessão:', error);
+          }
+        } catch (err) {
+          console.error('[mpa] Erro inesperado ao encerrar sessão:', err);
+        } finally {
+          window.location.href = 'index.html';
+        }
       });
     }
   }
