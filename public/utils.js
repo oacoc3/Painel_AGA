@@ -290,4 +290,59 @@
     renderProcessBars,
     dateOnly
   };
+
+  const ACCESS_DENIED_MESSAGE = 'Função não disponível para o seu perfil de acesso.';
+
+  function currentUserRole() {
+    return (window.APP_PROFILE && window.APP_PROFILE.role) || null;
+  }
+
+  function canRoleWrite(moduleKey) {
+    const role = currentUserRole();
+    if (!role) return false;
+    if (role === 'Visitante') return false;
+    if (role === 'Analista OACO') {
+      return moduleKey === 'documental';
+    }
+    return true;
+  }
+
+  function ensureWrite(moduleKey, options = {}) {
+    if (canRoleWrite(moduleKey)) return true;
+    if (options.silent) return false;
+
+    const message = options.message || ACCESS_DENIED_MESSAGE;
+    let handled = false;
+    const targetId = options.msgId || options.messageId;
+    if (targetId) {
+      const targetEl = document.getElementById(targetId);
+      if (targetEl) {
+        setMsg(targetId, message, true);
+        handled = true;
+      }
+    }
+    if (!handled && typeof options.onMessage === 'function') {
+      try {
+        options.onMessage(message);
+        handled = true;
+      } catch (_) {
+        // ignore handler errors
+      }
+    }
+    if (!handled) {
+      try {
+        window.alert(message);
+      } catch (_) {
+        // ignore alert failures
+      }
+    }
+    return false;
+  }
+
+  window.AccessGuards = {
+    message: ACCESS_DENIED_MESSAGE,
+    getRole: currentUserRole,
+    canWrite: canRoleWrite,
+    ensureWrite
+  };
 })();
