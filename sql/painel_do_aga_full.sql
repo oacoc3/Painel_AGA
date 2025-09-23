@@ -550,7 +550,7 @@ create policy "processes read all auth" on processes
 for select using (auth.role() = 'authenticated');
 
 create policy "processes write by role" on processes
-for insert with check ( has_write_role() );
+for insert with check ( can_fill_checklists() );
 
 create policy "processes update by role" on processes
 for update using ( has_write_role() );
