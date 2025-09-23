@@ -85,6 +85,20 @@ window.Modules.processos = (() => {
   }
   // === Fim das adições do patch ===
 
+  // === Patch: normalização de rótulos de Tipo de Processo ===
+  const PROCESS_TYPE_LABELS = ['PDIR', 'Inscrição', 'Alteração', 'Exploração', 'OPEA'];
+  const PROCESS_TYPE_MAP = PROCESS_TYPE_LABELS.reduce((map, label) => {
+    map[label] = label;
+    map[`${label} - Documental`] = label;
+    return map;
+  }, {});
+  const normalizeProcessTypeLabel = (value) => {
+    if (typeof value !== 'string') return '';
+    const key = value.trim();
+    return PROCESS_TYPE_MAP[key] || key;
+  };
+  // ================================================
+
   const SafeUtils = {
     setMsg(id, text, isError = false) {
       const box = el(id);
@@ -283,7 +297,7 @@ window.Modules.processos = (() => {
           <h3>Novo Processo ${nup}</h3>
           <label>Tipo
             <select id="npTipo">
-              <option>PDIR - Documental</option><option>Inscrição - Documental</option><option>Alteração - Documental</option><option>Exploração - Documental</option><option>OPEA - Documental</option>
+              <option>PDIR</option><option>Inscrição</option><option>Alteração</option><option>Exploração</option><option>OPEA</option>
             </select>
           </label>
           <label>Status
@@ -315,18 +329,19 @@ window.Modules.processos = (() => {
       dlg.querySelector('#npSalvar')?.addEventListener('click', async (ev) => {
         ev.preventDefault();
         const tipo = dlg.querySelector('#npTipo')?.value || '';
+        const processType = normalizeProcessTypeLabel(tipo);
         const status = dlg.querySelector('#npStatus')?.value || '';
         const statusDateVal = dlg.querySelector('#npStatusDate')?.value || '';
         const entrada = dlg.querySelector('#npEntrada')?.value || '';
         const obraTermVal = dlg.querySelector('#npObraTermino')?.value || '';
         const obraConcl = !!obraBtn?.classList.contains('active');
-        if (!tipo || !status || !statusDateVal || !entrada || (!obraConcl && !obraTermVal)) {
+        if (!processType || !status || !statusDateVal || !entrada || (!obraConcl && !obraTermVal)) {
           alert('Preencha todos os campos.');
           return;
         }
         const payload = {
           nup,
-          type: tipo,
+          type: processType,
           status,
           status_since: new Date(statusDateVal).toISOString(),
           first_entry_date: entrada,
@@ -643,10 +658,11 @@ window.Modules.processos = (() => {
         const ntBtn = `<button type="button" class="docIcon ntBtn ${hasNt ? 'on' : 'off'}">N</button>`;
         const sgBtn = `<button type="button" class="docIcon sgBtn ${hasSg ? 'on' : 'off'}">S</button>`;
         const obsBtn = `<button type="button" class="docIcon obsIcon obsBtn ${hasOb ? 'on' : 'off'}">OBS</button>`;
+        const displayType = normalizeProcessTypeLabel(r.type);
         tr.innerHTML = `
           <td class="align-center"><div class="historyWrap"><button type="button" class="historyBtn" aria-label="Histórico">👁️</button>${ckBtn}</div></td>
           <td>${r.nup || ''}</td>
-          <td>${r.type || ''}</td>
+          <td>${displayType || ''}</td>
           <td>${entradaCell}</td>
           <td>${stCell}</td>
           <td>${obCell}</td>
