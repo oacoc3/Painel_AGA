@@ -139,7 +139,12 @@ window.Modules.admin = (() => {
       { label: 'Usuário', render: renderAuditUserCell },
       { key: 'event_label', label: 'Evento' },
       { key: 'module_label', label: 'Módulo' },
-      { key: 'created_label', label: 'Horário' }
+      {
+        key: 'created_at',
+        label: 'Horário',
+        value: row => Utils.fmtDateTime(row.created_at),
+        align: 'right'
+      }
     ];
 
     Utils.setMsg(msgId, 'Carregando registros...');
@@ -154,8 +159,7 @@ window.Modules.admin = (() => {
       const rows = Array.isArray(data) ? data.map(row => ({
         ...row,
         event_label: getAuditEventLabel(row),
-        module_label: getAuditModuleLabel(row.event_module),
-        created_label: Utils.fmtDateTime(row.created_at)
+        module_label: getAuditModuleLabel(row.event_module)
       })) : [];
 
       if (!rows.length) {
