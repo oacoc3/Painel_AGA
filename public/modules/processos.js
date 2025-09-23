@@ -151,6 +151,19 @@ window.Modules.processos = (() => {
   };
   const U = (window.Utils && typeof window.Utils.setMsg === 'function') ? window.Utils : SafeUtils;
 
+  // === Guards de autorização para escrita (patch) ===
+  const Access = window.AccessGuards || null;
+  function guardProcessWrite(msgId, options = {}) {
+    if (!Access || typeof Access.ensureWrite !== 'function') return true;
+    const opts = { ...options };
+    if (msgId && !opts.msgId) opts.msgId = msgId;
+    return Access.ensureWrite('processos', opts);
+  }
+  function guardProcessWriteSilent(msgId) {
+    return guardProcessWrite(msgId, { silent: true });
+  }
+  // ================================================
+
   // === toggles ===
   function toggleProcFields(on) {
     const box = el('procCampos');
@@ -343,6 +356,7 @@ window.Modules.processos = (() => {
   }
 
   async function upsertProcess() {
+    if (!guardProcessWrite('procMsg')) return;
     const nup = (el('procNUP')?.value || '').trim();
     if (!nup) return U.setMsg('procMsg', 'Informe o NUP.', true);
 
@@ -376,6 +390,7 @@ window.Modules.processos = (() => {
   // Popup para editar status do processo
   function showStatusEditPopup(id, curStatus, curDate) {
     if (!id) return;
+    if (!guardProcessWrite('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
@@ -416,6 +431,7 @@ window.Modules.processos = (() => {
   // NOVO: Popup para editar 1ª entrada
   function showEntradaEditPopup(id, curDate) {
     if (!id) return;
+    if (!guardProcessWrite('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
@@ -452,6 +468,7 @@ window.Modules.processos = (() => {
   // Popup para editar término de obra
   function showObraEditPopup(id, curDate, concluida) {
     if (!id) return;
+    if (!guardProcessWrite('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
@@ -489,6 +506,7 @@ window.Modules.processos = (() => {
 
   async function deleteProcess(procId) {
     if (!procId) return;
+    if (!guardProcessWriteSilent('procMsg')) return;
     // remove dependências que referenciam o processo antes de apagar o registro principal
     const tables = ['internal_opinions', 'notifications', 'sigadaer',
       'process_observations', 'checklist_responses', 'history'];
@@ -580,7 +598,6 @@ window.Modules.processos = (() => {
         sb.from('sigadaer').select('process_id').in('process_id', ids),
         sb.from('process_observations').select('process_id').in('process_id', ids),
         sb.from('checklist_responses').select('process_id').in('process_id', ids)
-
       ]);
       const opSet = new Set((op.data || []).map(o => o.process_id));
       const ntSet = new Set((nt.data || []).map(o => o.process_id));
@@ -660,6 +677,7 @@ window.Modules.processos = (() => {
         const row = rows[idx];
         if (!row) return;
         if (ev.target.closest('.deleteBtn')) {
+          if (!guardProcessWrite('procMsg')) return;
           if (confirm('Excluir este processo?')) deleteProcess(row.id);
           return;
         }
@@ -669,10 +687,19 @@ window.Modules.processos = (() => {
         if (ev.target.closest('.ntBtn')) return showNotifPopup(row.id);
         if (ev.target.closest('.sgBtn')) return showSigPopup(row.id);
         if (ev.target.closest('.obsBtn')) return showObsPopup(row.id);
-        if (ev.target.closest('.editEntrada')) return showEntradaEditPopup(row.id, row.first_entry_date);
-        if (ev.target.closest('.editStatus')) return showStatusEditPopup(row.id, row.status, row.status_since);
-        if (ev.target.closest('.toggleObra')) return showObraEditPopup(row.id, row.obra_termino_date, row.obra_concluida);
-         selectProcess(row);
+        if (ev.target.closest('.editEntrada')) {
+          if (!guardProcessWrite('procMsg')) return;
+          return showEntradaEditPopup(row.id, row.first_entry_date);
+        }
+        if (ev.target.closest('.editStatus')) {
+          if (!guardProcessWrite('procMsg')) return;
+          return showStatusEditPopup(row.id, row.status, row.status_since);
+        }
+        if (ev.target.closest('.toggleObra')) {
+          if (!guardProcessWrite('procMsg')) return;
+          return showObraEditPopup(row.id, row.obra_termino_date, row.obra_concluida);
+        }
+        selectProcess(row);
       });
     } catch (err) {
       box.innerHTML = '<div class="msg error">Falha ao carregar a lista. <button type="button" id="procRetryBtn">Tentar novamente</button></div>';
@@ -783,13 +810,19 @@ window.Modules.processos = (() => {
               const b = document.createElement('button');
               b.type = 'button';
               b.textContent = 'Recebido';
-              b.addEventListener('click', () => showOpRecForm(r.id));
+              b.addEventListener('click', () => {
+                if (!guardProcessWrite('procMsg')) return;
+                showOpRecForm(r.id);
+              });
               wrap.appendChild(b);
             } else if (r.status === 'RECEBIDO') {
               const b = document.createElement('button');
               b.type = 'button';
               b.textContent = 'Finalizado';
-              b.addEventListener('click', () => showOpFinForm(r.id));
+              b.addEventListener('click', () => {
+                if (!guardProcessWrite('procMsg')) return;
+                showOpFinForm(r.id);
+              });
               wrap.appendChild(b);
             }
             const del = document.createElement('button');
@@ -798,6 +831,7 @@ window.Modules.processos = (() => {
             del.addEventListener('click', async (ev) => {
               ev.preventDefault();
               ev.stopPropagation();
+              if (!guardProcessWrite('procMsg')) return;
               await deleteOpinion(r.id);
             });
             wrap.appendChild(del);
@@ -836,7 +870,10 @@ window.Modules.processos = (() => {
               const b = document.createElement('button');
               b.type = 'button';
               b.textContent = 'Lida';
-              b.addEventListener('click', () => showNtLidaForm(r.id));
+              b.addEventListener('click', () => {
+                if (!guardProcessWrite('procMsg')) return;
+                showNtLidaForm(r.id);
+              });
               wrap.appendChild(b);
             }
             const del = document.createElement('button');
@@ -845,6 +882,7 @@ window.Modules.processos = (() => {
             del.addEventListener('click', async (ev) => {
               ev.preventDefault();
               ev.stopPropagation();
+              if (!guardProcessWrite('procMsg')) return;
               await deleteNotification(r.id);
             });
             wrap.appendChild(del);
@@ -889,13 +927,19 @@ window.Modules.processos = (() => {
               const b = document.createElement('button');
               b.type = 'button';
               b.textContent = 'Expedido';
-              b.addEventListener('click', () => showSgExpForm(r.id));
+              b.addEventListener('click', () => {
+                if (!guardProcessWrite('procMsg')) return;
+                showSgExpForm(r.id);
+              });
               wrap.appendChild(b);
             } else if (r.status === 'EXPEDIDO') {
               const b = document.createElement('button');
               b.type = 'button';
               b.textContent = 'Recebido';
-              b.addEventListener('click', () => showSgRecForm(r.id));
+              b.addEventListener('click', () => {
+                if (!guardProcessWrite('procMsg')) return;
+                showSgRecForm(r.id);
+              });
               wrap.appendChild(b);
             }
             const del = document.createElement('button');
@@ -904,6 +948,7 @@ window.Modules.processos = (() => {
             del.addEventListener('click', async (ev) => {
               ev.preventDefault();
               ev.stopPropagation();
+              if (!guardProcessWrite('procMsg')) return;
               await deleteSig(r.id);
             });
             wrap.appendChild(del);
@@ -973,7 +1018,10 @@ window.Modules.processos = (() => {
     document.body.appendChild(dlg);
     dlg.addEventListener('close', () => { dlg.remove(); popupProcId = null; });
     dlg.querySelector('#opClose').addEventListener('click', () => dlg.close());
-    dlg.querySelector('#opNew').addEventListener('click', () => showCadOpiniaoForm(procId));
+    dlg.querySelector('#opNew').addEventListener('click', () => {
+      if (!guardProcessWrite('procMsg')) return;
+      showCadOpiniaoForm(procId);
+    });
     dlg.showModal();
     await loadOpiniaoList(procId, 'opListaPop');
   }
@@ -987,7 +1035,10 @@ window.Modules.processos = (() => {
     document.body.appendChild(dlg);
     dlg.addEventListener('close', () => { dlg.remove(); popupProcId = null; });
     dlg.querySelector('#ntClose').addEventListener('click', () => dlg.close());
-    dlg.querySelector('#ntNew').addEventListener('click', () => showCadNotifForm(procId));
+    dlg.querySelector('#ntNew').addEventListener('click', () => {
+      if (!guardProcessWrite('procMsg')) return;
+      showCadNotifForm(procId);
+    });
     dlg.showModal();
     await loadNotifList(procId, 'ntListaPop');
   }
@@ -1001,7 +1052,10 @@ window.Modules.processos = (() => {
     document.body.appendChild(dlg);
     dlg.addEventListener('close', () => { dlg.remove(); popupProcId = null; });
     dlg.querySelector('#sgClose').addEventListener('click', () => dlg.close());
-    dlg.querySelector('#sgNew').addEventListener('click', () => showCadSigForm(procId));
+    dlg.querySelector('#sgNew').addEventListener('click', () => {
+      if (!guardProcessWrite('procMsg')) return;
+      showCadSigForm(procId);
+    });
     dlg.showModal();
     await loadSIGList(procId, 'sgListaPop');
   }
@@ -1016,6 +1070,7 @@ window.Modules.processos = (() => {
     dlg.addEventListener('close', () => { dlg.remove(); popupProcId = null; });
     dlg.querySelector('#obsFechar').addEventListener('click', () => dlg.close());
     dlg.querySelector('#obsNova').addEventListener('click', () => {
+      if (!guardProcessWrite('obsMsg')) return;
       const box = dlg.querySelector('#obsForm');
       box?.classList.remove('hidden');
       const txt = dlg.querySelector('#obsTexto');
@@ -1024,6 +1079,7 @@ window.Modules.processos = (() => {
     });
     dlg.querySelector('#obsSalvar').addEventListener('click', async ev => {
       ev.preventDefault();
+      if (!guardProcessWrite('obsMsg')) return;
       await salvarObs(procId, dlg);
     });
     dlg.showModal();
@@ -1033,6 +1089,7 @@ window.Modules.processos = (() => {
   async function salvarObs(procId, dlg) {
     const txt = dlg.querySelector('#obsTexto')?.value.trim();
     if (!txt) return;
+    if (!guardProcessWriteSilent('obsMsg')) return;
     try {
       const { error } = await sb
         .from('process_observations')
@@ -1139,6 +1196,7 @@ window.Modules.processos = (() => {
 
   function showCadOpiniaoForm(procId = currentProcId) {
     if (!procId) return;
+    if (!guardProcessWriteSilent('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
@@ -1161,6 +1219,7 @@ window.Modules.processos = (() => {
 
   async function cadOpiniao(dlg, procId = currentProcId) {
     if (!procId) return U.setMsg('opMsg', 'Selecione um processo.', true);
+    if (!guardProcessWriteSilent('opMsg')) return;
     const payload = {
       process_id: procId,
       type: dlg.querySelector('#opTipo')?.value || 'ATM',
@@ -1182,6 +1241,7 @@ window.Modules.processos = (() => {
 
   function showCadNotifForm(procId = currentProcId) {
     if (!procId) return;
+    if (!guardProcessWriteSilent('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
@@ -1207,6 +1267,7 @@ window.Modules.processos = (() => {
 
   async function cadNotif(dlg, procId = currentProcId) {
     if (!procId) return U.setMsg('ntCadMsg', 'Selecione um processo.', true);
+    if (!guardProcessWriteSilent('ntCadMsg')) return;
     const tipo = dlg.querySelector('#ntTipo')?.value || '';
     if (!tipo) return U.setMsg('ntCadMsg', 'Selecione o tipo de notificação.', true);
     const solicitadaEm = dlg.querySelector('#ntSolic')?.value || '';
@@ -1232,6 +1293,7 @@ window.Modules.processos = (() => {
 
   function showCadSigForm(procId = currentProcId) {
     if (!procId) return;
+    if (!guardProcessWriteSilent('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
@@ -1260,6 +1322,7 @@ window.Modules.processos = (() => {
 
   async function cadSig(dlg, procId = currentProcId) {
     if (!procId) return U.setMsg('sgCadMsg', 'Selecione um processo.', true);
+    if (!guardProcessWriteSilent('sgCadMsg')) return;
     const tipo = dlg.querySelector('#sgTipo')?.value || '';
     if (!tipo) return U.setMsg('sgCadMsg', 'Selecione o tipo de SIGADAER.', true);
     const numerosTexto = dlg.querySelector('#sgNumeros')?.value || '';
@@ -1289,6 +1352,7 @@ window.Modules.processos = (() => {
 
   function showOpRecForm(id) {
     editingOpId = id;
+    if (!guardProcessWriteSilent('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
@@ -1311,6 +1375,7 @@ window.Modules.processos = (() => {
 
   function showOpFinForm(id) {
     editingOpId = id;
+    if (!guardProcessWriteSilent('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
@@ -1333,6 +1398,7 @@ window.Modules.processos = (() => {
 
   async function salvarOpRec(dlg) {
     if (!editingOpId) return;
+    if (!guardProcessWriteSilent('opMsg')) return;
     const input = dlg.querySelector('#opRecInput');
     const dt = input && input.value ? new Date(input.value).toISOString() : new Date().toISOString();
     try {
@@ -1351,6 +1417,7 @@ window.Modules.processos = (() => {
 
   async function salvarOpFin(dlg) {
     if (!editingOpId) return;
+    if (!guardProcessWriteSilent('opMsg')) return;
     const input = dlg.querySelector('#opFinInput');
     const dt = input && input.value ? new Date(input.value).toISOString() : new Date().toISOString();
     try {
@@ -1369,6 +1436,7 @@ window.Modules.processos = (() => {
 
   async function deleteOpinion(id) {
     if (!id) return;
+    if (!guardProcessWriteSilent('procMsg')) return;
     if (!confirm('Excluir este parecer interno?')) return;
     const procId = popupProcId || currentProcId;
     try {
@@ -1388,6 +1456,7 @@ window.Modules.processos = (() => {
 
   function showNtLidaForm(id) {
     editingNtId = id;
+    if (!guardProcessWriteSilent('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
@@ -1407,6 +1476,7 @@ window.Modules.processos = (() => {
 
   async function salvarNtLida(dlg) {
     if (!editingNtId) return;
+    if (!guardProcessWriteSilent('ntMsg')) return;
     const input = dlg.querySelector('#ntLidaInput');
     const dt = input && input.value ? new Date(input.value).toISOString() : new Date().toISOString();
     try {
@@ -1425,6 +1495,7 @@ window.Modules.processos = (() => {
 
   async function deleteNotification(id) {
     if (!id) return;
+    if (!guardProcessWriteSilent('procMsg')) return;
     if (!confirm('Excluir esta notificação?')) return;
     const procId = popupProcId || currentProcId;
     try {
@@ -1444,6 +1515,7 @@ window.Modules.processos = (() => {
 
   function showSgExpForm(id) {
     editingSgId = id;
+    if (!guardProcessWriteSilent('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
@@ -1463,6 +1535,7 @@ window.Modules.processos = (() => {
 
   function showSgRecForm(id) {
     editingSgId = id;
+    if (!guardProcessWriteSilent('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
@@ -1482,6 +1555,7 @@ window.Modules.processos = (() => {
 
   async function salvarSgExp(dlg) {
     if (!editingSgId) return;
+    if (!guardProcessWriteSilent('sgMsg')) return;
     const input = dlg.querySelector('#sgExpInput');
     const dt = input && input.value ? new Date(input.value).toISOString() : new Date().toISOString();
     try {
@@ -1500,6 +1574,7 @@ window.Modules.processos = (() => {
 
   async function deleteSig(id) {
     if (!id) return;
+    if (!guardProcessWriteSilent('procMsg')) return;
     if (!confirm('Excluir este SIGADAER?')) return;
     const procId = popupProcId || currentProcId;
     try {
@@ -1519,6 +1594,7 @@ window.Modules.processos = (() => {
 
   async function salvarSgRec(dlg) {
     if (!editingSgId) return;
+    if (!guardProcessWriteSilent('sgMsg')) return;
     const input = dlg.querySelector('#sgRecInput');
     const dt = input && input.value ? new Date(input.value).toISOString() : new Date().toISOString();
     try {
