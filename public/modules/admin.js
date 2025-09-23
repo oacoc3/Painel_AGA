@@ -6,6 +6,23 @@ window.Modules.admin = (() => {
   const ADMIN_PAGE_SIZE = 50;
   let ADMIN_CACHE = [];
 
+  // --- (NOVO) Auditoria ---
+  const AUDIT_LOG_LIMIT = 200;
+  const AUDIT_EVENT_LABELS = {
+    login: 'Login',
+    logout: 'Logout',
+    module_access: 'Acesso ao módulo'
+  };
+  const AUDIT_MODULE_LABELS = {
+    dashboard: 'Início',
+    processos: 'Processos',
+    prazos: 'Prazos',
+    modelos: 'Modelos',
+    analise: 'Documental',
+    admin: 'Administração',
+    login: 'Login'
+  };
+
   const el = id => document.getElementById(id);
 
   function renderUsersPagination({ page, pagesTotal, count }) {
@@ -79,6 +96,82 @@ window.Modules.admin = (() => {
     renderUsersPagination({ page: p, pagesTotal, count: all.length });
   }
 
+  // --- (NOVO) Helpers de rótulos da auditoria ---
+  function getAuditModuleLabel(code) {
+    if (!code) return '—';
+    return AUDIT_MODULE_LABELS[code] || code;
+  }
+
+  function getAuditEventLabel(row) {
+    if (!row) return '—';
+    const base = AUDIT_EVENT_LABELS[row.event_type] || row.event_type || '—';
+    if (row.event_type === 'module_access') return base;
+    return base;
+  }
+
+  // --- (NOVO) Célula composta com dados do usuário na auditoria ---
+  function renderAuditUserCell(row) {
+    const wrap = document.createElement('div');
+    wrap.className = 'audit-user-cell';
+    const name = document.createElement('strong');
+    name.textContent = row.name || row.email || '—';
+    wrap.appendChild(name);
+    if (row.email) {
+      const email = document.createElement('div');
+      email.className = 'muted';
+      email.textContent = row.email;
+      wrap.appendChild(email);
+    }
+    if (row.role) {
+      const role = document.createElement('div');
+      role.className = 'muted';
+      role.textContent = row.role;
+      wrap.appendChild(role);
+    }
+    return wrap;
+  }
+
+  // --- (NOVO) Carregamento de logs de auditoria ---
+  async function loadAuditLogs({ limit = AUDIT_LOG_LIMIT } = {}) {
+    const tableId = 'auditLogTable';
+    const msgId = 'auditLogMsg';
+    const headers = [
+      { label: 'Usuário', render: renderAuditUserCell },
+      { key: 'event_label', label: 'Evento' },
+      { key: 'module_label', label: 'Módulo' },
+      { key: 'created_label', label: 'Horário' }
+    ];
+
+    Utils.setMsg(msgId, 'Carregando registros...');
+    try {
+      const { data, error } = await sb.rpc('admin_list_user_audit', { p_limit: limit });
+      if (error) {
+        Utils.setMsg(msgId, error.message || 'Falha ao carregar registros.', true);
+        Utils.renderTable(tableId, headers, []);
+        return;
+      }
+
+      const rows = Array.isArray(data) ? data.map(row => ({
+        ...row,
+        event_label: getAuditEventLabel(row),
+        module_label: getAuditModuleLabel(row.event_module),
+        created_label: Utils.fmtDateTime(row.created_at)
+      })) : [];
+
+      if (!rows.length) {
+        Utils.setMsg(msgId, 'Nenhum evento registrado.');
+      } else {
+        Utils.setMsg(msgId, '');
+      }
+
+      Utils.renderTable(tableId, headers, rows);
+    } catch (err) {
+      console.error('[admin] Falha ao carregar auditoria:', err);
+      Utils.setMsg(msgId, err?.message || 'Falha ao carregar registros.', true);
+      Utils.renderTable(tableId, headers, []);
+    }
+  }
+
   function resetForm() {
     const form = el('formUser');
     if (!form) return;
@@ -147,8 +240,23 @@ window.Modules.admin = (() => {
     });
   }
 
-  function init() { bindForm(); }
-  async function load() { await loadUsers(); }
+  // --- (NOVO) Bind de ações da auditoria ---
+  function bindAuditActions() {
+    el('btnAuditRefresh')?.addEventListener('click', ev => {
+      ev.preventDefault();
+      loadAuditLogs();
+    });
+  }
+
+  function init() {
+    bindForm();
+    bindAuditActions();
+  }
+
+  async function load() {
+    await loadUsers();
+    await loadAuditLogs({ limit: AUDIT_LOG_LIMIT });
+  }
 
   return { init, load };
 })();
