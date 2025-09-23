@@ -1305,3 +1305,117 @@ end
 $$;
 
 -- ============== Fim do arquivo 10: Painel_AGA-main/sql/08_rename_checklist_category_to_type.sql ==============
+
+-- sql/09_user_audit_events.sql
+-- Auditoria de sessões de usuário e acessos a módulos.
+-- Cria tabela dedicada a eventos de login/logout/acesso e expõe uma RPC para administradores.
+
+create table if not exists user_audit_events (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references profiles(id) on delete cascade,
+  event_type text not null check (event_type in ('login','logout','module_access')),
+  event_module text,
+  client_session_id uuid not null,
+  event_metadata jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_user_audit_events_profile_created_at
+  on user_audit_events (profile_id, created_at desc);
+
+create index if not exists idx_user_audit_events_created_at
+  on user_audit_events (created_at desc);
+
+alter table user_audit_events enable row level security;
+
+grant select, insert on user_audit_events to authenticated;
+
+-- Policies (idempotentes via DROP IF EXISTS; Postgres não aceita IF NOT EXISTS em CREATE POLICY)
+drop policy if exists user_audit_events_insert_own on user_audit_events;
+create policy user_audit_events_insert_own
+  on user_audit_events
+  for insert
+  with check (auth.uid() = profile_id);
+
+drop policy if exists user_audit_events_select_own on user_audit_events;
+create policy user_audit_events_select_own
+  on user_audit_events
+  for select
+  using (auth.uid() = profile_id);
+
+create or replace function admin_list_user_audit(p_limit integer default 200, p_profile uuid default null)
+returns table (
+  id uuid,
+  profile_id uuid,
+  email text,
+  name text,
+  role user_role,
+  event_type text,
+  event_module text,
+  client_session_id uuid,
+  event_metadata jsonb,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_is_admin boolean := false;
+  v_limit integer := least(1000, greatest(1, coalesce(p_limit, 200)));
+begin
+  -- Checa papel no JWT (user_metadata.role)
+  v_is_admin := coalesce(auth.jwt() -> 'user_metadata' ->> 'role','') = 'Administrador';
+
+  -- Fallback: confere na tabela profiles
+  if not v_is_admin then
+    select exists(
+      select 1
+      from profiles p
+      where p.id = auth.uid()
+        and p.role = 'Administrador'
+    )
+    into v_is_admin;
+  end if;
+
+  -- Não admin: vê apenas os próprios eventos
+  if not v_is_admin then
+    return query
+      select e.id,
+             e.profile_id,
+             p.email,
+             p.name,
+             p.role,
+             e.event_type,
+             e.event_module,
+             e.client_session_id,
+             e.event_metadata,
+             e.created_at
+      from user_audit_events e
+      join profiles p on p.id = e.profile_id
+      where e.profile_id = auth.uid()
+      order by e.created_at desc
+      limit v_limit;
+  end if;
+
+  -- Admin: pode ver todos (ou filtrar por p_profile)
+  return query
+    select e.id,
+           e.profile_id,
+           p.email,
+           p.name,
+           p.role,
+           e.event_type,
+           e.event_module,
+           e.client_session_id,
+           e.event_metadata,
+           e.created_at
+  from user_audit_events e
+  join profiles p on p.id = e.profile_id
+  where p_profile is null or e.profile_id = p_profile
+  order by e.created_at desc
+  limit v_limit;
+end;
+$$;
+
+grant execute on function admin_list_user_audit(integer, uuid) to authenticated;
