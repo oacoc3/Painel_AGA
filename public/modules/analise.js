@@ -78,15 +78,17 @@ window.Modules.analise = (() => {
 
   async function loadTemplatesFor(processType) {
     const normalized = normalizeProcessType(processType);
+    const documentalTypes = new Set(Object.values(CHECKLIST_TYPES).map(type => type.trim()));
+    const seeds = [processType, normalized, CHECKLIST_TYPES[normalized]];
     const candidates = [];
-    const docType = CHECKLIST_TYPES[normalized];
-    if (typeof docType === 'string' && docType.trim()) {
-      candidates.push(docType.trim());
-    }
-    if (typeof normalized === 'string' && normalized.trim()) {
-      const trimmed = normalized.trim();
+    seeds.forEach((seed) => {
+      if (typeof seed !== 'string') return;
+      const mapped = toChecklistType(seed);
+      if (typeof mapped !== 'string') return;
+      const trimmed = mapped.trim();
+      if (!trimmed || !documentalTypes.has(trimmed)) return;
       if (!candidates.includes(trimmed)) candidates.push(trimmed);
-    }
+    });
     if (!candidates.length) return [];
 
     let query = sb
