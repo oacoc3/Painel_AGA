@@ -204,17 +204,40 @@
       return height;
     };
 
+    // === Patch aplicado aqui: ajuste de baseline e largura efetiva ===
     const drawBlockWithBackground = (drawContent, opts = {}) => {
       const blockX = opts.blockX ?? marginLeft;
       const blockWidth = opts.blockWidth ?? contentWidth;
       const paddingX = opts.paddingX ?? 2;
       const paddingY = opts.paddingY ?? Math.max(2, Math.min(lineHeight / 2, 4));
       const fillColor = opts.fillColor ?? [230, 230, 230];
+
+      const baselineOffset = (() => {
+        if (typeof doc.getTextDimensions !== 'function') return 0;
+        try {
+          const metrics = doc.getTextDimensions('Ig');
+          if (!metrics) return 0;
+          const { h, baseline } = metrics;
+          if (Number.isFinite(h) && Number.isFinite(baseline)) {
+            const offset = h - baseline;
+            if (Number.isFinite(offset) && offset > 0) {
+              return offset;
+            }
+          }
+        } catch (error) {
+          // Falha na obtenção das métricas; ignora o ajuste.
+        }
+        return 0;
+      })();
+
+      const effectiveTopPadding = paddingY + baselineOffset;
+      const maxWidth = opts.maxWidth ?? (blockWidth - paddingX * 2);
+
       const content = () => {
-        y += paddingY;
+        y += effectiveTopPadding;
         drawContent({
           x: blockX + paddingX,
-          maxWidth: opts.maxWidth ?? (blockWidth - paddingX * 2),
+          maxWidth,
           blockX,
           blockWidth
         });
@@ -232,6 +255,7 @@
       content();
       doc.setFillColor(255, 255, 255);
     };
+    // === Fim do patch ===
 
     const baseFontSize = options.fontSize || 12;
     doc.setFontSize(baseFontSize);
