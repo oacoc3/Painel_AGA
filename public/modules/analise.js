@@ -8,9 +8,30 @@ window.Modules.analise = (() => {
   const CLIPBOARD_ICON = window.Modules?.processos?.CLIPBOARD_ICON
     || '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a 2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="m10 16 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
-  // ==== Novos utilitários do patch (resultado da checklist e flag extra) ====
+  // ==== Utilitários do patch (resultado da checklist e flag extra) ====
   const CHECKLIST_PDF = window.Modules?.checklistPDF || {};
   const EXTRA_NC_CODE = CHECKLIST_PDF.EXTRA_NON_CONFORMITY_CODE || '__ck_extra_nc__';
+
+  // ==== Normalização de tipos de processo x tipos de checklist (patch) ====
+  const PROCESS_TYPES = ['PDIR', 'Inscrição', 'Alteração', 'Exploração', 'OPEA'];
+  const CHECKLIST_TYPES = PROCESS_TYPES.reduce((map, type) => {
+    map[type] = `${type} - Documental`;
+    return map;
+  }, {});
+  const PROCESS_TYPE_LOOKUP = Object.entries(CHECKLIST_TYPES).reduce((map, [procType, checklistType]) => {
+    map[procType] = procType;
+    map[checklistType] = procType;
+    return map;
+  }, {});
+  const normalizeProcessType = (value) => {
+    if (typeof value !== 'string') return '';
+    const key = value.trim();
+    return PROCESS_TYPE_LOOKUP[key] || key;
+  };
+  const toChecklistType = (value) => {
+    const normalized = normalizeProcessType(value);
+    return CHECKLIST_TYPES[normalized] || value;
+  };
 
   const normalizeValue = (value) => (
     typeof value === 'string'
@@ -46,7 +67,7 @@ window.Modules.analise = (() => {
 
   const scheduleDraftSave = debounce(() => { saveChecklistDraft(); }, 600);
 
-  // ===== Patch: guardas de escrita documental =====
+  // ===== Guardas de escrita documental =====
   const Access = window.AccessGuards || null;
   function guardDocumentalWrite(options = {}) {
     if (!Access || typeof Access.ensureWrite !== 'function') return true;
@@ -55,14 +76,31 @@ window.Modules.analise = (() => {
   }
   // ================================================
 
-  async function loadTemplatesFor(tipo) {
-    const { data, error } = await sb
+  async function loadTemplatesFor(processType) {
+    const normalized = normalizeProcessType(processType);
+    const candidates = [];
+    const docType = CHECKLIST_TYPES[normalized];
+    if (typeof docType === 'string' && docType.trim()) {
+      candidates.push(docType.trim());
+    }
+    if (typeof normalized === 'string' && normalized.trim()) {
+      const trimmed = normalized.trim();
+      if (!candidates.includes(trimmed)) candidates.push(trimmed);
+    }
+    if (!candidates.length) return [];
+
+    let query = sb
       .from('checklist_templates')
       .select('id,name,type,version,items')
-      .eq('type', tipo)
       .not('approved_by', 'is', null)
       .order('name')
       .order('version', { ascending: false });
+
+    query = candidates.length === 1
+      ? query.eq('type', candidates[0])
+      : query.in('type', candidates);
+
+    const { data, error } = await query;
     if (error) return [];
     const uniq = [];
     const seen = new Set();
@@ -189,7 +227,7 @@ window.Modules.analise = (() => {
     title.textContent = template.name || 'Checklist';
     frag.appendChild(title);
 
-    // Aviso do patch (texto institucional, não altera estilo além da classe)
+    // Aviso do patch (texto institucional)
     const warning = document.createElement('div');
     warning.className = 'ck-warning';
     warning.innerHTML = '<strong>Atenção!</strong> Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, marque a opção "Identificada não conformidade não abarcada pelos itens anteriores" e realize o registro pertinente no campo “Outras observações do(a) Analista”.';
@@ -201,7 +239,7 @@ window.Modules.analise = (() => {
 
       if (cat.categoria) {
         const h = document.createElement('h4');
-        h.className = 'ck-category-title'; // Patch: adiciona classe (sem alterar visual)
+        h.className = 'ck-category-title'; // Patch: adiciona classe
         h.textContent = cat.categoria || '';
         catSection.appendChild(h);
       }
@@ -514,12 +552,14 @@ window.Modules.analise = (() => {
   async function iniciarChecklist() {
     if (!guardDocumentalWrite()) return;
     const nup = el('adNUP').value.trim();
-    const tipo = el('adTipo').value;
+    const rawType = el('adTipo')?.value || '';
+    const processType = normalizeProcessType(rawType);
     if (!nup) return Utils.setMsg('adMsg', 'Informe um NUP.', true);
+    if (!processType) return Utils.setMsg('adMsg', 'Selecione o tipo do processo.', true);
 
     const { data: proc } = await sb.from('processes').select('id,type').eq('nup', nup).maybeSingle();
     if (proc) {
-      if (proc.type !== tipo) {
+      if (normalizeProcessType(proc.type) !== processType) {
         alert('Já existe processo com este NUP e tipo diferente. Verifique as informações.');
         return;
       }
@@ -528,7 +568,7 @@ window.Modules.analise = (() => {
       const u = await getUser();
       if (!u) return Utils.setMsg('adMsg', 'Sessão expirada.', true);
       const { data, error } = await sb.from('processes')
-        .insert({ nup, type: tipo, created_by: u.id })
+        .insert({ nup, type: processType, created_by: u.id })
         .select('id')
         .single();
       if (error) return Utils.setMsg('adMsg', error.message, true);
@@ -538,7 +578,7 @@ window.Modules.analise = (() => {
       }
     }
 
-    const list = await loadTemplatesFor(tipo);
+    const list = await loadTemplatesFor(processType);
     const template = list[0] || null;
     renderChecklist(template);
     if (template && currentProcessId) {
@@ -644,8 +684,13 @@ window.Modules.analise = (() => {
   async function clearForm() {
     await discardDraft();
     el('adNUP').value = '';
-    // PATCH: valor padrão atualizado
-    el('adTipo').value = 'PDIR - Documental';
+    const tipoField = el('adTipo');
+    if (tipoField) {
+      tipoField.value = 'PDIR';
+      if (tipoField.value !== 'PDIR' && CHECKLIST_TYPES.PDIR) {
+        tipoField.value = CHECKLIST_TYPES.PDIR;
+      }
+    }
     Utils.setMsg('adMsg', '');
     currentProcessId = null;
     currentTemplate = null;
@@ -728,7 +773,7 @@ window.Modules.analise = (() => {
         box.innerHTML = '<div class="msg">Nenhuma checklist aprovada.</div>';
         return;
       }
-      // PATCH: coluna "Nome" removida conforme diff
+      // Coluna "Nome" removida conforme patch
       Utils.renderTable(box, [
         { key: 'type', label: 'Tipo' },
         { key: 'version', label: 'Versão', align: 'center' },
@@ -869,7 +914,7 @@ window.Modules.analise = (() => {
         answers: []
       };
 
-      // PATCH: novos parâmetros para o render do PDF aprovado
+      // Parâmetros para o PDF aprovado
       const url = render(payload, {
         mode: 'approved',
         approvedAt: data?.approved_at ? Utils.fmtDateTime(data.approved_at) : '—',
@@ -882,7 +927,7 @@ window.Modules.analise = (() => {
     }
   }
 
-  // ===== Patch aplicado: PDF com margens, quebra de página e word wrap =====
+  // ===== PDF com margens, quebra de página e word wrap =====
   async function abrirChecklistPDF(id, existingWindow = null) {
     // Reaproveita janela existente (quando fornecida) para evitar bloqueio de pop-up
     const win = existingWindow || window.open('', '_blank');
@@ -904,7 +949,7 @@ window.Modules.analise = (() => {
       const finishedAt = data.filled_at ? Utils.fmtDateTime(data.filled_at) : '—';
       const responsible = data.profiles?.name || data.filled_by || '—';
 
-      // PATCH: novos parâmetros para o render do PDF final
+      // Parâmetros para o PDF final
       const url = render(data, {
         mode: 'final',
         startedAt: startedAt || '—',
