@@ -73,6 +73,15 @@
               <h2>Usuários</h2>
               <div id="listaUsers" class="table scrolly"></div>
             </div>
+              <div class="card">
+              <h2>Auditoria de sessões</h2>
+              <p class="muted">Registros recentes de login, logout e acesso aos módulos.</p>
+              <div class="row" style="display:flex;gap:.5rem;justify-content:flex-end;margin-bottom:.5rem;">
+                <button id="btnAuditRefresh" type="button">Atualizar</button>
+              </div>
+              <div id="auditLogMsg" class="msg"></div>
+              <div id="auditLogTable" class="table scrolly"></div>
+            </div>
           </div>
 
           <div class="admin-col admin-col-checklists">
