@@ -53,7 +53,7 @@
               <h2>Criar usuários</h2>
               <form id="formUser" data-ajax>
                 <label>E-mail <input id="adEmail" type="email" required></label>
-                 <label>Posto/Gad + Nome <input id="adName" required></label>
+                <label>Posto/Gad + Nome <input id="adName" required></label>
                 <label>Perfil
                   <select id="adRole">
                     <option>Administrador</option>
@@ -69,11 +69,15 @@
                 <div id="adminMsg" class="msg"></div>
               </form>
             </div>
+
             <div class="card">
               <h2>Usuários</h2>
               <div id="listaUsers" class="table scrolly"></div>
             </div>
-              <div class="card">
+          </div>
+
+          <div class="admin-col admin-col-audit">
+            <div class="card">
               <h2>Auditoria de sessões</h2>
               <p class="muted">Registros recentes de login, logout e acesso aos módulos.</p>
               <div class="row" style="display:flex;gap:.5rem;justify-content:flex-end;margin-bottom:.5rem;">
@@ -90,9 +94,9 @@
               <div class="row ck-manage-actions">
                 <button id="btnNewChecklist" type="button">Novo checklist</button>
                 <button id="btnEditChecklist" type="button" disabled>Editar selecionado</button>
-                 <button id="btnDeleteChecklist" class="danger" type="button" disabled>Excluir selecionado</button>
+                <button id="btnDeleteChecklist" class="danger" type="button" disabled>Excluir selecionado</button>
               </div>
-               <div id="ckManageMsg" class="msg"></div>
+              <div id="ckManageMsg" class="msg"></div>
 
               <div id="listaCk" class="table scrolly"></div>
               <dialog id="ckFormDialog">
@@ -108,7 +112,7 @@
                     </select>
                   </label>
                   <label>Itens</label>
-                    <div id="ckCats" class="scrolly"></div>
+                  <div id="ckCats" class="scrolly"></div>
                   <button id="btnAddCat" type="button">Adicionar categoria</button>
                   <menu>
                     <button id="adminBtnSalvarChecklist" type="button">Salvar</button>
