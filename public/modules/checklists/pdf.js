@@ -63,7 +63,10 @@
     const maxY = pageHeight - marginBottom;
     let y = marginTop;
 
+    let isSimulating = false;
+
     const ensureSpace = (height = lineHeight) => {
+      if (isSimulating) return;
       if (y + height > maxY) {
         doc.addPage();
         y = marginTop;
@@ -71,6 +74,10 @@
     };
 
     const addVerticalSpace = (amount = lineHeight) => {
+      if (isSimulating) {
+        y += amount;
+        return;
+      }
       if (y + amount > maxY) {
         doc.addPage();
         y = marginTop;
@@ -82,10 +89,13 @@
     const addWrappedText = (text, opts = {}) => {
       if (text == null || text === '') return;
       const paragraphs = String(text).split(/\n+/);
-      const maxWidth = opts.maxWidth ?? contentWidth;
+      const x = opts.x ?? marginLeft;
+      const availableWidth = contentWidth - (x - marginLeft);
+      const maxWidth = opts.maxWidth ?? availableWidth;
       const align = opts.align ?? defaultAlign;
+      const { x: _ignoredX, ...restOpts } = opts;
       const baseOptions = {
-        ...opts,
+        ...restOpts,
         maxWidth,
         align
       };
@@ -101,7 +111,9 @@
         const requiredHeight = lineHeight * lineCount;
 
         ensureSpace(requiredHeight);
-        doc.text(paragraph, marginLeft, y, baseOptions);
+        if (!isSimulating) {
+          doc.text(paragraph, x, y, baseOptions);
+        }
         y += requiredHeight;
 
         if (index < paragraphs.length - 1) {
@@ -121,8 +133,11 @@
       }
 
       const separator = opts.separator ?? ': ';
-      const maxWidth = opts.maxWidth ?? contentWidth;
-      const baseOptions = { ...opts, align: 'left' };
+      const x = opts.x ?? marginLeft;
+      const availableWidth = contentWidth - (x - marginLeft);
+      const maxWidth = opts.maxWidth ?? availableWidth;
+      const { x: _ignoredX, ...restOpts } = opts;
+      const baseOptions = { ...restOpts, align: 'left', maxWidth };
       const labelText = `${label}${separator}`;
 
       const prevStyle = typeof doc.getFont === 'function'
@@ -136,9 +151,9 @@
       // Se o rótulo não couber na largura máxima, quebra o rótulo e o valor em linhas separadas
       if (!(labelWidth < maxWidth)) {
         doc.setFont(undefined, 'bold');
-        addWrappedText(labelText, baseOptions);
+        addWrappedText(labelText, { ...baseOptions, x });
         doc.setFont(undefined, 'normal');
-        if (strValue) addWrappedText(strValue, baseOptions);
+        if (strValue) addWrappedText(strValue, { ...baseOptions, x });
         doc.setFont(undefined, prevStyle);
         return;
       }
@@ -153,22 +168,69 @@
         lines.forEach(line => {
           ensureSpace(lineHeight);
           if (isFirstLine) {
-            doc.setFont(undefined, 'bold');
-            doc.text(labelText, marginLeft, y, baseOptions);
+            if (!isSimulating) {
+              doc.setFont(undefined, 'bold');
+              doc.text(labelText, x, y, baseOptions);
+            }
             isFirstLine = false;
           }
-          doc.setFont(undefined, 'normal');
-          if (line) {
-            doc.text(line, marginLeft + labelWidth, y, {
-              ...baseOptions,
-              maxWidth: valueMaxWidth
-            });
+          if (!isSimulating) {
+            doc.setFont(undefined, 'normal');
+            if (line) {
+              doc.text(line, x + labelWidth, y, {
+                ...baseOptions,
+                maxWidth: valueMaxWidth
+              });
+            }
           }
           y += lineHeight;
         });
       });
 
       doc.setFont(undefined, prevStyle);
+    };
+
+    const measureContent = (fn) => {
+      const savedY = y;
+      const wasSimulating = isSimulating;
+      isSimulating = true;
+      fn();
+      const height = y - savedY;
+      y = savedY;
+      isSimulating = wasSimulating;
+      if (doc.setFont) doc.setFont(undefined, 'normal');
+      if (doc.setFontSize) doc.setFontSize(baseFontSize);
+      if (doc.setTextColor) doc.setTextColor(0, 0, 0);
+      return height;
+    };
+
+    const drawBlockWithBackground = (drawContent, opts = {}) => {
+      const blockX = opts.blockX ?? marginLeft;
+      const blockWidth = opts.blockWidth ?? contentWidth;
+      const paddingX = opts.paddingX ?? 2;
+      const paddingY = opts.paddingY ?? Math.max(2, Math.min(lineHeight / 2, 4));
+      const fillColor = opts.fillColor ?? [230, 230, 230];
+      const content = () => {
+        y += paddingY;
+        drawContent({
+          x: blockX + paddingX,
+          maxWidth: opts.maxWidth ?? (blockWidth - paddingX * 2),
+          blockX,
+          blockWidth
+        });
+        y += paddingY;
+      };
+
+      const blockHeight = measureContent(content);
+      ensureSpace(blockHeight);
+      if (!Array.isArray(fillColor)) {
+        doc.setFillColor(fillColor);
+      } else if (fillColor.length === 3) {
+        doc.setFillColor(fillColor[0], fillColor[1], fillColor[2]);
+      }
+      doc.rect(blockX, y, blockWidth, blockHeight, 'F');
+      content();
+      doc.setFillColor(255, 255, 255);
     };
 
     const baseFontSize = options.fontSize || 12;
@@ -267,34 +329,25 @@
 
     categories.forEach(category => {
       if (!category) return;
-      doc.setFont(undefined, 'bold');
-      addWrappedText(category.categoria || '');
-      const separatorOffset = Math.max(1, Math.min(lineHeight / 4, 2));
-      // Ajustado: garantir espaço para a linha + espaçamento configurável da categoria
-      ensureSpace(separatorOffset + categorySpacing);
-      const lineY = y + separatorOffset;
-      doc.line(marginLeft, lineY, pageWidth - marginRight, lineY);
-      y = lineY;
-      // Ajustado: usar o espaçamento de categoria (padrão = lineHeight)
+
+      const categoryTitle = category.categoria || '';
+      if (categoryTitle) {
+        drawBlockWithBackground(({ x, maxWidth }) => {
+          doc.setFont(undefined, 'bold');
+          addWrappedText(categoryTitle, { x, maxWidth, align: 'left' });
+          doc.setFont(undefined, 'normal');
+        }, {
+          paddingX: 4,
+          paddingY: Math.max(3, Math.min(lineHeight / 2, 6)),
+          fillColor: [210, 210, 210]
+        });
+      }
+
       addVerticalSpace(categorySpacing);
       doc.setFont(undefined, 'normal');
 
       (category.itens || []).forEach((item, index) => {
         if (!item) return;
-
-        const itemSeparatorOffset = Math.max(1, Math.min(lineHeight / 4, 2));
-        const itemContentSpacing = Math.max(2, Math.min(lineHeight / 2, 6));
-        const isFirstItem = index === 0;
-
-        ensureSpace(itemSeparatorOffset + itemContentSpacing);
-        if (isFirstItem) {
-          const topLineY = y + itemSeparatorOffset;
-          doc.line(marginLeft, topLineY, pageWidth - marginRight, topLineY);
-          y = topLineY;
-        } else {
-          y += itemSeparatorOffset;
-        }
-        addVerticalSpace(itemContentSpacing);
 
         // Patch: destacar item em vermelho quando "não conforme"
         const ans = !isApproved
@@ -302,53 +355,56 @@
           : {};
         const isNonConform = !isApproved && normalizeValue(ans.value) === 'nao conforme';
 
-        if (isNonConform) {
-          doc.setTextColor(180, 0, 0);
-        }
+        const itemPaddingY = Math.max(3, Math.min(lineHeight / 2, 6));
+        const itemSpacing = Math.max(3, Math.min(lineHeight / 2, 6));
+        const fillColor = index % 2 === 0 ? [240, 240, 240] : [230, 230, 230];
 
-        // Patch: exibir "código - requisito" com o código (label) em negrito
-        const code = item.code || '';
-        const requirement = item.requisito || '';
-        if (code) {
-          addLabelValue(code, '', { separator: '' });
-          if (requirement) {
-            addWrappedText(requirement);
+        drawBlockWithBackground(({ x, maxWidth }) => {
+          if (isNonConform) {
+            doc.setTextColor(180, 0, 0);
           }
-        } else {
-          addWrappedText(requirement);
-        }
 
-        if (isApproved) {
-          if (item.texto_sugerido) {
-            addWrappedText(`Texto sugerido: ${item.texto_sugerido}`);
+          const code = item.code || '';
+          const requirement = item.requisito || '';
+          if (code) {
+            addLabelValue(code, '', { separator: '', x, maxWidth });
+            if (requirement) {
+              addWrappedText(requirement, { x, maxWidth });
+            }
+          } else if (requirement) {
+            addWrappedText(requirement, { x, maxWidth });
           }
-        } else {
-          // Patch: usar addLabelValue para "Resultado" e "Obs"
-          addLabelValue('Resultado', '', { separator: '' });
-          if (ans.value) {
-            addWrappedText(ans.value);
+
+          if (isApproved) {
+            if (item.texto_sugerido) {
+              addWrappedText(`Texto sugerido: ${item.texto_sugerido}`, { x, maxWidth });
+            }
+          } else {
+            addLabelValue('Resultado', '', { separator: '', x, maxWidth });
+            if (ans.value) {
+              addWrappedText(ans.value, { x, maxWidth });
+            }
+            if (ans.obs) {
+              addLabelValue('Obs', '', { separator: '', x, maxWidth });
+              addWrappedText(ans.obs, { x, maxWidth });
+            }
+            if (item.texto_sugerido) {
+              addWrappedText(`Texto sugerido: ${item.texto_sugerido}`, { x, maxWidth });
+            }
           }
-          if (ans.obs) {
-            addLabelValue('Obs', '', { separator: '' });
-            addWrappedText(ans.obs);
-          }
+
           if (isNonConform) {
             doc.setTextColor(0, 0, 0);
           }
-          if (item.texto_sugerido) {
-            addWrappedText(`Texto sugerido: ${item.texto_sugerido}`);
-          }
-        }
+        }, {
+          paddingX: 4,
+          paddingY: itemPaddingY,
+          fillColor
+        });
 
-        if (isNonConform) {
-          doc.setTextColor(0, 0, 0);
+        if (index < (category.itens || []).length - 1) {
+          addVerticalSpace(itemSpacing);
         }
-
-        ensureSpace(itemContentSpacing + itemSeparatorOffset);
-        addVerticalSpace(itemContentSpacing);
-        const bottomLineY = y + itemSeparatorOffset;
-        doc.line(marginLeft, bottomLineY, pageWidth - marginRight, bottomLineY);
-        y = bottomLineY;
       });
     });
 
