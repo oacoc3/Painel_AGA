@@ -46,6 +46,15 @@ window.Modules.analise = (() => {
 
   const scheduleDraftSave = debounce(() => { saveChecklistDraft(); }, 600);
 
+  // ===== Patch: guardas de escrita documental =====
+  const Access = window.AccessGuards || null;
+  function guardDocumentalWrite(options = {}) {
+    if (!Access || typeof Access.ensureWrite !== 'function') return true;
+    const opts = { msgId: 'adMsg', ...options };
+    return Access.ensureWrite('documental', opts);
+  }
+  // ================================================
+
   async function loadTemplatesFor(tipo) {
     const { data, error } = await sb
       .from('checklist_templates')
@@ -503,6 +512,7 @@ window.Modules.analise = (() => {
   }
 
   async function iniciarChecklist() {
+    if (!guardDocumentalWrite()) return;
     const nup = el('adNUP').value.trim();
     const tipo = el('adTipo').value;
     if (!nup) return Utils.setMsg('adMsg', 'Informe um NUP.', true);
@@ -539,6 +549,7 @@ window.Modules.analise = (() => {
   }
 
   async function finalizarChecklist() {
+    if (!guardDocumentalWrite()) return;
     if (!currentProcessId || !currentTemplate) return;
 
     const state = getChecklistValidationState();
@@ -915,15 +926,21 @@ window.Modules.analise = (() => {
     const btnLimparChecklist = el('btnLimparChecklist');
     const btnFinalizarChecklist = el('adBtnFinalizarChecklist');
 
-    if (btnIniciar) btnIniciar.addEventListener('click', ev => { ev.preventDefault(); iniciarChecklist(); });
+    if (btnIniciar) btnIniciar.addEventListener('click', ev => {
+      ev.preventDefault();
+      if (!guardDocumentalWrite()) return;
+      iniciarChecklist();
+    });
     if (btnLimparAD) btnLimparAD.addEventListener('click', async ev => {
       ev.preventDefault();
+      if (!guardDocumentalWrite()) return;
       await clearForm();
     });
     if (btnLimparChecklist) {
       btnLimparChecklist.addEventListener('click', async ev => {
         ev.preventDefault();
         if (!currentTemplate) return;
+        if (!guardDocumentalWrite()) return;
         if (window.confirm('Deseja limpar a checklist atual?')) {
           await discardDraft();
           clearChecklist();
@@ -934,6 +951,7 @@ window.Modules.analise = (() => {
       btnFinalizarChecklist.addEventListener('click', ev => {
         ev.preventDefault();
         if (!currentTemplate) return;
+        if (!guardDocumentalWrite()) return;
         const state = getChecklistValidationState();
         if (!state.ready) {
           const msg = state.reason || 'Checklist incompleta. Finalize apenas após preencher todos os itens obrigatórios.';
