@@ -4,6 +4,17 @@ window.Modules.modelos = (() => {
   let selectedId = null;
   let modelos = [];
 
+  const Access = window.AccessGuards || null;
+  function guardModelosWrite(options = {}) {
+    if (!Access || typeof Access.ensureWrite !== 'function') return true;
+    const opts = { msgId: 'mdlMsg', ...options };
+    return Access.ensureWrite('modelos', opts);
+  }
+
+  function guardModelosWriteSilent() {
+    return guardModelosWrite({ silent: true });
+  }
+
   function checkModeloFields() {
     const cat = el('mdlCat').value.trim();
     const tit = el('mdlTit').value.trim();
@@ -49,6 +60,7 @@ window.Modules.modelos = (() => {
           bEd.textContent = 'Editar';
           bEd.addEventListener('click', ev => {
             ev.stopPropagation();
+            if (!guardModelosWrite()) return;
             selectedId = r.id;
             el('mdlId').value = r.id;
             el('mdlCat').value = r.category;
@@ -64,6 +76,7 @@ window.Modules.modelos = (() => {
           bDel.textContent = 'Excluir';
           bDel.addEventListener('click', async ev => {
             ev.stopPropagation();
+            if (!guardModelosWrite()) return;
             const { error } = await sb.from('models').delete().eq('id', r.id);
             if (error) return Utils.setMsg('mdlMsg', error.message, true);
             Utils.setMsg('mdlMsg', 'Excluído.');
@@ -119,6 +132,7 @@ window.Modules.modelos = (() => {
 
     el('btnSalvarModelo').addEventListener('click', async (ev) => {
       ev.preventDefault();
+      if (!guardModelosWrite()) return;
       const category = el('mdlCat').value.trim();
       const title = el('mdlTit').value.trim();
       const content = el('mdlTxt').value;
@@ -129,6 +143,7 @@ window.Modules.modelos = (() => {
         const { error } = await sb.from('models').insert({ category, title, content, created_by: u.id });
         if (error) return Utils.setMsg('mdlMsg', error.message, true);
       } else {
+        if (!guardModelosWriteSilent()) return;
         const { error } = await sb.from('models').update({ category, title, content }).eq('id', selectedId);
         if (error) return Utils.setMsg('mdlMsg', error.message, true);
       }
