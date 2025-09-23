@@ -1,9 +1,9 @@
 /* ====== Ajustes específicos do módulo Modelos ====== */
 
-/* Formulário ocupando 65% da largura da tela */
+/* Cards lado a lado dividindo igualmente o espaço disponível */
 .split.modelos {
   display: grid;
-  grid-template-columns: 13fr 7fr; /* 65% para o formulário, 35% para a lista */
+  grid-template-columns: repeat(2, minmax(320px, 1fr)); /* 50% para cada card */
   gap: 12px;
   height: 100%;
 }
@@ -19,3 +19,9 @@
   grid-template-columns: 1fr 1fr auto auto auto;
 }
 #formModelo .mdl-top-row label { min-width: 0; }
+
+@media (max-width: 760px) {
+  .split.modelos {
+    grid-template-columns: 1fr;
+  }
+}
