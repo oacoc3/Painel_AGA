@@ -102,6 +102,22 @@ window.Modules.checklists = (() => {
     if (btnApprove) btnApprove.disabled = !hasSelection;
   }
 
+  // Verifica/renova a sessão antes de operações (evita falhas por sessão expirada).
+  async function ensureSessionActive(targetMsg) {
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) return true;
+      const { data: refreshed, error } = await sb.auth.refreshSession();
+      if (error || !refreshed.session) throw error || new Error('no-session');
+      return true;
+    } catch (err) {
+      const message = 'Sessão expirada. Recarregue a página ou faça login novamente.';
+      if (targetMsg) Utils.setMsg(targetMsg, message, true);
+      console.warn('[checklists] sessão expirada', err);
+      return false;
+    }
+  }
+
   function openChecklistDialog(row = selected) {
     const dlg = getDialog();
     const form = getForm();
@@ -234,19 +250,25 @@ window.Modules.checklists = (() => {
       // category -> type
       const type = form.querySelector('#ckCat').value.trim();
       if (!type || !items.length) return Utils.setMsg('ckMsg', 'Preencha todos os campos.', true);
+      const sessionOk = await ensureSessionActive('ckMsg');
+      if (!sessionOk) return;
       const u = await getUser();
       if (!u) return Utils.setMsg('ckMsg', 'Sessão expirada.', true);
       const name = selected?.name?.trim() || type;
-      let version = 1;
+
       if (selected) {
-        version = (selected.version || 1) + 1;
+        const { error } = await sb.from('checklist_templates')
+          .update({ name, type, items })
+          .eq('id', selected.id);
+        if (error) return Utils.setMsg('ckMsg', error.message, true);
       } else {
         const max = Math.max(0, ...templates.filter(t => t.type === type).map(t => t.version || 0));
-        version = max + 1;
+        const version = max + 1;
+        const { error } = await sb.from('checklist_templates')
+          .insert({ name, type, items, version, created_by: u.id });
+        if (error) return Utils.setMsg('ckMsg', error.message, true);
       }
-      // category -> type
-      const { error } = await sb.from('checklist_templates').insert({ name, type, items, version, created_by: u.id });
-      if (error) return Utils.setMsg('ckMsg', error.message, true);
+
       Utils.setMsg('ckMsg', 'Salvo.');
       selected = null;
       highlightRow(null);
@@ -259,6 +281,8 @@ window.Modules.checklists = (() => {
 
     el('btnAprovarChecklist').addEventListener('click', async () => {
       if (!selected) return Utils.setMsg('ckMsg', 'Selecione um checklist antes de aprovar.', true);
+      const sessionOk = await ensureSessionActive('ckMsg');
+      if (!sessionOk) return;
       const u = await getUser();
       if (!u) return Utils.setMsg('ckMsg', 'Sessão expirada.', true);
       const { error } = await sb.from('checklist_templates')
