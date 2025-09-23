@@ -194,6 +194,12 @@
       if (!category) return;
       doc.setFont(undefined, 'bold');
       addWrappedText(category.categoria || '');
+      const separatorOffset = Math.max(1, Math.min(lineHeight / 4, 2));
+      ensureSpace(separatorOffset);
+      const lineY = y + separatorOffset;
+      doc.line(marginLeft, lineY, pageWidth - marginRight, lineY);
+      y = lineY;
+      addVerticalSpace(Math.max(lineHeight / 2, 1));
       doc.setFont(undefined, 'normal');
       (category.itens || []).forEach(item => {
         if (!item) return;
