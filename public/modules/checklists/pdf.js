@@ -221,6 +221,13 @@
       addWrappedText(String(response.extra_obs));
     }
 
+    if (!isApproved) {
+      addVerticalSpace(headerSpacing);
+      doc.setFont(undefined, 'bold');
+      addWrappedText('Fim da checklist.', { align: 'left' });
+      doc.setFont(undefined, 'normal');
+    }
+
     return doc.output('bloburl');
   }
 
