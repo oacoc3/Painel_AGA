@@ -255,17 +255,29 @@ window.Modules.checklists = (() => {
       const u = await getUser();
       if (!u) return Utils.setMsg('ckMsg', 'Sessão expirada.', true);
       const name = selected?.name?.trim() || type;
+      const isEditingApproved = !!selected?.approved_at;
 
-      if (selected) {
+      if (selected && !isEditingApproved) {
         const { error } = await sb.from('checklist_templates')
           .update({ name, type, items })
           .eq('id', selected.id);
         if (error) return Utils.setMsg('ckMsg', error.message, true);
       } else {
-        const max = Math.max(0, ...templates.filter(t => t.type === type).map(t => t.version || 0));
+        const max = Math.max(0, ...templates
+          .filter(t => t.type === type)
+          .map(t => t.version || 0));
         const version = max + 1;
+        const payload = {
+          name,
+          type,
+          items,
+          version,
+          created_by: u.id,
+          approved_by: null,
+          approved_at: null
+        };
         const { error } = await sb.from('checklist_templates')
-          .insert({ name, type, items, version, created_by: u.id });
+          .insert(payload);
         if (error) return Utils.setMsg('ckMsg', error.message, true);
       }
 
