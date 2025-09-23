@@ -348,29 +348,40 @@ window.Modules.dashboard = (() => {
       .select('type, status, expedit_at');
     cachedSigadaer = sigadaer || [];
 
-    // Velocidade média — montar histórico de status por processo
+    // Velocidade média — montar histórico de status por processo (usando 'history')
     const ids = (procs || []).map(p => p.id);
-    let logs = [];
-    if (ids.length) {
-      const { data: logData } = await sb.from('audit_log')
-        .select('entity_id,occurred_at,details')
-        .eq('entity_type', 'processes')
-        .in('entity_id', ids)
-        .order('occurred_at');
-      logs = logData || [];
-    }
     const byProc = {};
-    logs.forEach(l => {
-      const det = l.details || {};
-      if (!det.status || !det.status_since) return;
-      const pid = l.entity_id;
-      byProc[pid] = byProc[pid] || [];
-      byProc[pid].push({ status: det.status, start: det.status_since });
-    });
+    if (ids.length) {
+      const { data: historyData } = await sb
+        .from('history')
+        .select('process_id,details,created_at')
+        .eq('action', 'Status atualizado')
+        .in('process_id', ids)
+        .order('created_at');
+      (historyData || []).forEach(item => {
+        if (!item || !item.process_id) return;
+        let det = item.details || {};
+        if (typeof det === 'string') {
+          try { det = JSON.parse(det); } catch (_) { det = {}; }
+        }
+        const status = det?.status;
+        let start = det?.status_since || det?.start || item.created_at;
+        if (!status || !start) return;
+        const list = byProc[item.process_id] || (byProc[item.process_id] = []);
+        list.push({ status, start });
+      });
+    }
 
-    Object.values(byProc).forEach(list => {
+    (procs || []).forEach(proc => {
+      if (!proc || !proc.id) return;
+      const list = byProc[proc.id] || (byProc[proc.id] = []);
+      if (proc.status && proc.status_since) {
+        const already = list.some(entry => entry.status === proc.status && entry.start === proc.status_since);
+        if (!already) list.push({ status: proc.status, start: proc.status_since });
+      }
       list.sort((a, b) => new Date(a.start) - new Date(b.start));
     });
+
     cachedStatusHistory = byProc;
 
     renderOverview();
