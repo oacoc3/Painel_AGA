@@ -197,10 +197,57 @@
     });
   }
 
+  // ---- Novo: limpeza local de sessão Supabase (fallback de segurança) ----
+  function clearSupabaseStoredSession(client) {
+    let cleared = false;
+    try {
+      const auth = client?.auth;
+      if (!auth) return false;
+      const storage = auth.storage || window.localStorage;
+      if (!storage || typeof storage.removeItem !== 'function') return false;
+      const knownKeys = [
+        auth.storageKey,
+        auth.persistSessionKey,
+        auth.recoverSessionKey,
+        auth.multiTabKey,
+      ].filter((key) => typeof key === 'string' && key.length);
+      knownKeys.forEach((key) => {
+        try {
+          storage.removeItem(key);
+          cleared = true;
+        } catch (err) {
+          console.warn(`[mpa] Falha ao remover chave de sessão Supabase ${key}:`, err);
+        }
+      });
+      if (!cleared && typeof storage.length === 'number' && typeof storage.key === 'function') {
+        const candidateKeys = [];
+        for (let i = 0; i < storage.length; i += 1) {
+          const key = storage.key(i);
+          if (key && key.startsWith('sb-')) {
+            candidateKeys.push(key);
+          }
+        }
+        candidateKeys.forEach((key) => {
+          try {
+            storage.removeItem(key);
+            cleared = true;
+          } catch (err) {
+            console.warn(`[mpa] Falha ao remover chave Supabase derivada ${key}:`, err);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[mpa] Falha ao limpar sessão local do Supabase:', err);
+    }
+    return cleared;
+  }
+
   // Trata o logout e atualiza a UI antes de redirecionar
   async function handleLogout() {
     let stayOnLogin = false;
-    let didSignOut = false;
+    let shouldReload = true;
+    let sessionCleared = false;
+    let primarySignOutError = null;
 
     try {
       await recordLogoutEvent();
@@ -208,19 +255,77 @@
       console.warn('[mpa] Falha ao registrar logout:', err);
     }
 
-    try {
-      const client = window.sb;
-      if (client?.auth?.signOut) {
+    const client = window.sb;
+    if (client?.auth?.signOut) {
+      try {
         const { error } = await client.auth.signOut();
         if (error) {
-          console.error('[mpa] Falha ao encerrar sessão:', error);
-        } else {
-          didSignOut = true;
+          primarySignOutError = error;
+        }
+      } catch (err) {
+        primarySignOutError = err;
+        console.error('[mpa] Erro inesperado ao encerrar sessão:', err);
+      }
+    } else {
+      primarySignOutError = new Error('Supabase auth.signOut indisponível');
+    }
+
+    if (primarySignOutError) {
+      console.warn('[mpa] Falha no signOut padrão, tentando fallback local:', primarySignOutError);
+      let fallbackSucceeded = false;
+      if (client?.auth?.signOut) {
+        try {
+          const { error: localError } = await client.auth.signOut({ scope: 'local' });
+          if (localError) {
+            console.warn('[mpa] SignOut local também falhou:', localError);
+          } else {
+            fallbackSucceeded = true;
+          }
+        } catch (err) {
+          console.warn('[mpa] Erro ao tentar signOut local:', err);
         }
       }
-    } catch (err) {
-      console.error('[mpa] Erro inesperado ao encerrar sessão:', err);
+      if (!fallbackSucceeded) {
+        fallbackSucceeded = clearSupabaseStoredSession(client);
+      }
+      if (!fallbackSucceeded) {
+        console.warn('[mpa] Não foi possível limpar sessão local do Supabase.');
+      }
     }
+
+    let finalSession = null;
+    let sessionCheckFailed = false;
+    try {
+      finalSession = await getSession();
+      if (finalSession?.user) {
+        sessionCleared = false;
+      } else {
+        sessionCleared = true;
+      }
+    } catch (err) {
+      sessionCheckFailed = true;
+      sessionCleared = false;
+      console.error('[mpa] Falha ao verificar sessão após logout:', err);
+    }
+
+    if (!sessionCheckFailed) {
+      state.session = finalSession;
+    }
+
+    if (!sessionCleared) {
+      shouldReload = false;
+      if (!sessionCheckFailed && finalSession?.user) {
+        console.error('[mpa] Sessão Supabase permanece ativa após tentativa de logout.');
+      }
+      try {
+        window.alert('Não foi possível encerrar a sessão. A página não será recarregada.');
+      } catch (err) {
+        console.warn('[mpa] Falha ao exibir alerta de erro de logout:', err);
+      }
+      return { stayOnLogin: false, shouldReload, sessionCleared };
+    }
+
+    clearAuditState();
 
     try {
       stayOnLogin = await ensureAuthAndUI();
@@ -228,13 +333,11 @@
       console.error('[mpa] Erro ao atualizar interface após logout:', err);
     }
 
-    if (didSignOut) {
-      clearAuditState();
-    }
-
     if (!stayOnLogin) {
       window.location.replace('index.html');
     }
+
+    return { stayOnLogin, shouldReload, sessionCleared };
   }
 
   function bindNav() {
@@ -252,9 +355,15 @@
     if (btnLogout) {
       btnLogout.addEventListener('click', async (ev) => {
         ev.preventDefault();
+        let shouldReload = false;
         try {
-          await handleLogout();
-        } finally {
+          const result = await handleLogout();
+          shouldReload = result?.shouldReload === true;
+        } catch (err) {
+          console.error('[mpa] Falha inesperada ao processar logout:', err);
+          shouldReload = false;
+        }
+        if (shouldReload) {
           try {
             window.location.reload();
           } catch (err) {
