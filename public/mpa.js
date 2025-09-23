@@ -58,6 +58,30 @@
     });
   }
 
+  // Novo: trata o logout e atualiza a UI antes de redirecionar
+  async function handleLogout() {
+    let stayOnLogin = false;
+    try {
+      const client = window.sb;
+      if (client?.auth?.signOut) {
+        const { error } = await client.auth.signOut();
+        if (error) console.error('[mpa] Falha ao encerrar sessão:', error);
+      }
+    } catch (err) {
+      console.error('[mpa] Erro inesperado ao encerrar sessão:', err);
+    }
+
+    try {
+      stayOnLogin = await ensureAuthAndUI();
+    } catch (err) {
+      console.error('[mpa] Erro ao atualizar interface após logout:', err);
+    }
+
+    if (!stayOnLogin) {
+      window.location.replace('index.html');
+    }
+  }
+
   function bindNav() {
     const nav = document.getElementById('topNav');
     if (!nav) return;
@@ -71,19 +95,7 @@
 
     const btnLogout = document.getElementById('btnLogout');
     if (btnLogout) {
-      btnLogout.addEventListener('click', async () => {
-        try {
-          const client = window.sb;
-          if (client?.auth?.signOut) {
-            const { error } = await client.auth.signOut();
-            if (error) console.error('[mpa] Falha ao encerrar sessão:', error);
-          }
-        } catch (err) {
-          console.error('[mpa] Erro inesperado ao encerrar sessão:', err);
-        } finally {
-          window.location.href = 'index.html';
-        }
-      });
+      btnLogout.addEventListener('click', handleLogout);
     }
   }
 
