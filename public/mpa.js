@@ -250,7 +250,19 @@
 
     const btnLogout = document.getElementById('btnLogout');
     if (btnLogout) {
-      btnLogout.addEventListener('click', handleLogout);
+      btnLogout.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        try {
+          await handleLogout();
+        } finally {
+          try {
+            window.location.reload();
+          } catch (err) {
+            console.warn('[mpa] Falha ao recarregar após logout:', err);
+            window.location.replace('index.html');
+          }
+        }
+      });
     }
   }
 
