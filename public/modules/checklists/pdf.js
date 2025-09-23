@@ -106,7 +106,8 @@
     if (typeof doc.getFontSize === 'function' && typeof doc.setLineHeightFactor === 'function') {
       const currentFontSize = doc.getFontSize();
       if (currentFontSize) {
-        doc.setLineHeightFactor(lineHeight / currentFontSize);
+        const scaleFactor = doc.internal?.scaleFactor ?? (72 / 25.4);
+        doc.setLineHeightFactor((lineHeight * scaleFactor) / currentFontSize);
       }
     }
 
