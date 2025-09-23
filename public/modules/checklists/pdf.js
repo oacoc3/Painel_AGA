@@ -109,6 +109,67 @@
       });
     };
 
+    // Novo no patch: impressão "Label: Valor" com label em negrito e quebra inteligente
+    const addLabelValue = (label, value, opts = {}) => {
+      const hasLabel = label != null && label !== '';
+      const strValue = value == null ? '' : String(value);
+
+      if (!hasLabel) {
+        addWrappedText(strValue, opts);
+        return;
+      }
+
+      const separator = opts.separator ?? ': ';
+      const maxWidth = opts.maxWidth ?? contentWidth;
+      const baseOptions = { ...opts, align: 'left' };
+      const labelText = `${label}${separator}`;
+
+      const prevStyle = typeof doc.getFont === 'function'
+        ? doc.getFont()?.fontStyle || 'normal'
+        : 'normal';
+
+      doc.setFont(undefined, 'bold');
+      const labelWidth = doc.getTextWidth(labelText);
+      doc.setFont(undefined, 'normal');
+
+      // Se o rótulo não couber na largura máxima, quebra o rótulo e o valor em linhas separadas
+      if (!(labelWidth < maxWidth)) {
+        doc.setFont(undefined, 'bold');
+        addWrappedText(labelText, baseOptions);
+        doc.setFont(undefined, 'normal');
+        if (strValue) addWrappedText(strValue, baseOptions);
+        doc.setFont(undefined, prevStyle);
+        return;
+      }
+
+      const valueMaxWidth = maxWidth - labelWidth;
+      let isFirstLine = true;
+      const paragraphs = strValue.split(/\n/);
+
+      paragraphs.forEach(paragraph => {
+        const lines = doc.splitTextToSize(paragraph, valueMaxWidth);
+        if (!lines.length) lines.push('');
+        lines.forEach(line => {
+          ensureSpace(lineHeight);
+          if (isFirstLine) {
+            doc.setFont(undefined, 'bold');
+            doc.text(labelText, marginLeft, y, baseOptions);
+            isFirstLine = false;
+          }
+          doc.setFont(undefined, 'normal');
+          if (line) {
+            doc.text(line, marginLeft + labelWidth, y, {
+              ...baseOptions,
+              maxWidth: valueMaxWidth
+            });
+          }
+          y += lineHeight;
+        });
+      });
+
+      doc.setFont(undefined, prevStyle);
+    };
+
     const baseFontSize = options.fontSize || 12;
     doc.setFontSize(baseFontSize);
     if (typeof doc.getFontSize === 'function' && typeof doc.setLineHeightFactor === 'function') {
@@ -175,12 +236,17 @@
       metadataEntries.push(...options.metadata.filter(Boolean));
     }
 
+    // Cabeçalho (metadados)
     metadataEntries.forEach(entry => {
       if (!entry) return;
       const label = entry.label ?? '';
       const value = entry.value ?? '';
-      const text = label ? `${label}: ${value}` : String(value);
-      addWrappedText(text, entry.textOptions || {});
+      if (label) {
+        addLabelValue(label, value, entry.textOptions || {});
+      } else {
+        const text = String(value);
+        addWrappedText(text, entry.textOptions || {});
+      }
     });
 
     if (metadataEntries.length) addVerticalSpace(headerSpacing);
@@ -211,17 +277,30 @@
       // Ajustado: usar o espaçamento de categoria (padrão = lineHeight)
       addVerticalSpace(categorySpacing);
       doc.setFont(undefined, 'normal');
+
       (category.itens || []).forEach(item => {
         if (!item) return;
-        addWrappedText(`${item.code || ''} - ${item.requisito || ''}`);
+
+        // Patch: exibir "código - requisito" com o código (label) em negrito
+        const code = item.code || '';
+        const requirement = item.requisito || '';
+        if (code) {
+          const requirementText = requirement ? `- ${requirement}` : '';
+          const separator = requirement ? ' ' : '';
+          addLabelValue(code, requirementText, { separator });
+        } else {
+          addWrappedText(requirement);
+        }
+
         if (isApproved) {
           if (item.texto_sugerido) {
             addWrappedText(`Texto sugerido: ${item.texto_sugerido}`);
           }
         } else {
           const ans = answers.find(a => a && a.code === item.code) || {};
-          addWrappedText(`Resultado: ${ans.value || ''}`);
-          if (ans.obs) addWrappedText(`Obs: ${ans.obs}`);
+          // Patch: usar addLabelValue para "Resultado" e "Obs"
+          addLabelValue('Resultado', ans.value || '');
+          if (ans.obs) addLabelValue('Obs', ans.obs);
           if (item.texto_sugerido) {
             addWrappedText(`Texto sugerido: ${item.texto_sugerido}`);
           }
