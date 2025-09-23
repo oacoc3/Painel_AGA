@@ -73,10 +73,12 @@
     const addWrappedText = (text, opts = {}) => {
       if (text == null || text === '') return;
       const paragraphs = String(text).split(/\n+/);
+      const maxWidth = opts.maxWidth ?? contentWidth;
+      const align = opts.align ?? defaultAlign;
       const baseOptions = {
-        maxWidth: contentWidth,
-        align: opts.align || defaultAlign,
-        ...opts
+        ...opts,
+        maxWidth,
+        align
       };
 
       paragraphs.forEach((paragraph, index) => {
@@ -84,12 +86,15 @@
           addVerticalSpace(lineHeight);
           return;
         }
-        const lines = doc.splitTextToSize(paragraph, contentWidth);
-        lines.forEach(line => {
-          ensureSpace(lineHeight);
-          doc.text(line, marginLeft, y, baseOptions);
-          y += lineHeight;
-        });
+
+        const lines = doc.splitTextToSize(paragraph, maxWidth);
+        const lineCount = Array.isArray(lines) && lines.length > 0 ? lines.length : 1;
+        const requiredHeight = lineHeight * lineCount;
+
+        ensureSpace(requiredHeight);
+        doc.text(paragraph, marginLeft, y, baseOptions);
+        y += requiredHeight;
+
         if (index < paragraphs.length - 1) {
           addVerticalSpace(lineHeight);
         }
@@ -98,6 +103,12 @@
 
     const baseFontSize = options.fontSize || 12;
     doc.setFontSize(baseFontSize);
+    if (typeof doc.getFontSize === 'function' && typeof doc.setLineHeightFactor === 'function') {
+      const currentFontSize = doc.getFontSize();
+      if (currentFontSize) {
+        doc.setLineHeightFactor(lineHeight / currentFontSize);
+      }
+    }
 
     // Novo: modos de geração
     const mode = options.mode === 'approved' ? 'approved' : 'final';
