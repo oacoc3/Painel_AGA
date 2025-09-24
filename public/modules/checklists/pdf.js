@@ -365,6 +365,8 @@
       ? response.checklist_templates.items
       : [];
 
+    const itemSpacing = Math.max(3, Math.min(lineHeight / 2, 6));
+
     categories.forEach((category, catIndex) => {
       if (!category) return;
 
@@ -459,7 +461,6 @@
         const isNonConform = !isApproved && normalizeValue(ans.value) === 'nao conforme';
 
         const itemPaddingY = Math.max(3, Math.min(lineHeight / 2, 6));
-        const itemSpacing = Math.max(3, Math.min(lineHeight / 2, 6));
         const fillColor = index % 2 === 0 ? [240, 240, 240] : [230, 230, 230];
 
         // Mede o bloco do item; quebra antes se necessário
@@ -510,7 +511,7 @@
       });
 
       // Pequeno espaço após a categoria (evita “grudar” com a próxima)
-      if (catIndex < categories.length - 1) addVerticalSpace(Math.max(2, itemSpacing ?? 4));
+      if (catIndex < categories.length - 1) addVerticalSpace(Math.max(2, itemSpacing));
     });
 
     if (!isApproved && response?.extra_obs) {
