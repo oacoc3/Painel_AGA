@@ -210,6 +210,46 @@
       doc.setFont(undefined, prevStyle);
     };
 
+    // NOVO: texto sublinhado (usado nos títulos de categoria)
+    const addUnderlinedText = (text, opts = {}) => {
+      if (text == null || text === '') return;
+      const paragraphs = String(text).split(/\n+/);
+      const x = opts.x ?? marginLeft;
+      const availableWidth = contentWidth - (x - marginLeft);
+      const maxWidth = opts.maxWidth ?? availableWidth;
+      const underlineOffset = Number.isFinite(opts.underlineOffset)
+        ? opts.underlineOffset
+        : 0.75;
+      const baseOptions = { ...opts, align: 'left', maxWidth };
+
+      paragraphs.forEach((paragraph, index) => {
+        if (!paragraph.trim()) {
+          addVerticalSpace(lineHeight);
+          return;
+        }
+
+        const lines = doc.splitTextToSize(paragraph, maxWidth);
+        if (!lines.length) lines.push('');
+        const requiredHeight = lineHeight * lines.length;
+
+        ensureSpace(requiredHeight);
+        if (!isSimulating) {
+          lines.forEach((line, lineIndex) => {
+            const lineY = y + lineHeight * lineIndex;
+            doc.text(line, x, lineY, baseOptions);
+            const textWidth = Math.min(maxWidth, doc.getTextWidth(line));
+            const underlineY = lineY + underlineOffset;
+            doc.line(x, underlineY, x + textWidth, underlineY);
+          });
+        }
+        y += requiredHeight;
+
+        if (index < paragraphs.length - 1) {
+          addVerticalSpace(lineHeight);
+        }
+      });
+    };
+
     const measureContent = (fn) => {
       const savedY = y;
       const wasSimulating = isSimulating;
@@ -224,13 +264,14 @@
       return height;
     };
 
-    // Bloco com fundo cinza (mesmo visual), com medições consistentes
-    const drawBlockWithBackground = (drawContent, opts = {}) => {
+    // ALTERADO: bloco com espaçamento interno (sem preenchimento de fundo)
+    const drawBlock = (drawContent, opts = {}) => {
       const blockX = opts.blockX ?? marginLeft;
       const blockWidth = opts.blockWidth ?? contentWidth;
       const paddingX = opts.paddingX ?? 2;
       const paddingY = opts.paddingY ?? Math.max(2, Math.min(lineHeight / 2, 4));
-      const fillColor = opts.fillColor ?? [230, 230, 230];
+      const drawBorder = opts.drawBorder === true;
+      const borderColor = opts.borderColor;
 
       const baselineOffset = (() => {
         if (typeof doc.getTextDimensions !== 'function') return 0;
@@ -266,14 +307,17 @@
         forcePageBreak();
       }
 
-      if (!Array.isArray(fillColor)) {
-        doc.setFillColor(fillColor);
-      } else if (fillColor.length === 3) {
-        doc.setFillColor(fillColor[0], fillColor[1], fillColor[2]);
+      if (!isSimulating && drawBorder) {
+        if (Array.isArray(borderColor) && borderColor.length === 3) {
+          doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
+        } else if (Number.isFinite(borderColor)) {
+          doc.setDrawColor(borderColor);
+        }
+        doc.rect(blockX, y, blockWidth, blockHeight);
+        doc.setDrawColor(0);
       }
-      doc.rect(blockX, y, blockWidth, blockHeight, 'F');
+
       content();
-      doc.setFillColor(255, 255, 255);
     };
 
     const baseFontSize = options.fontSize || 12;
@@ -373,14 +417,13 @@
       const categoryTitle = category.categoria || '';
       const categoryBlockHeight = categoryTitle
         ? measureContent(() => {
-            drawBlockWithBackground(({ x, maxWidth }) => {
+            drawBlock(({ x, maxWidth }) => {
               doc.setFont(undefined, 'bold');
-              addWrappedText(categoryTitle, { x, maxWidth, align: 'left' });
+              addUnderlinedText(categoryTitle, { x, maxWidth });
               doc.setFont(undefined, 'normal');
             }, {
               paddingX: 4,
-              paddingY: Math.max(3, Math.min(lineHeight / 2, 6)),
-              fillColor: [210, 210, 210]
+              paddingY: Math.max(3, Math.min(lineHeight / 2, 6))
             });
           })
         : 0;
@@ -394,7 +437,7 @@
               : {};
             const isNonConform = !isApproved && normalizeValue(ans.value) === 'nao conforme';
 
-            drawBlockWithBackground(({ x, maxWidth }) => {
+            drawBlock(({ x, maxWidth }) => {
               if (isNonConform) doc.setTextColor(180, 0, 0);
 
               const code = firstItem.code || '';
@@ -425,8 +468,7 @@
               if (isNonConform) doc.setTextColor(0, 0, 0);
             }, {
               paddingX: 4,
-              paddingY: Math.max(3, Math.min(lineHeight / 2, 6)),
-              fillColor: [240, 240, 240]
+              paddingY: Math.max(3, Math.min(lineHeight / 2, 6))
             });
           })
         : 0;
@@ -438,14 +480,13 @@
 
       // Desenha o título de categoria
       if (categoryTitle) {
-        drawBlockWithBackground(({ x, maxWidth }) => {
+        drawBlock(({ x, maxWidth }) => {
           doc.setFont(undefined, 'bold');
-          addWrappedText(categoryTitle, { x, maxWidth, align: 'left' });
+          addUnderlinedText(categoryTitle, { x, maxWidth });
           doc.setFont(undefined, 'normal');
         }, {
           paddingX: 4,
-          paddingY: Math.max(3, Math.min(lineHeight / 2, 6)),
-          fillColor: [210, 210, 210]
+          paddingY: Math.max(3, Math.min(lineHeight / 2, 6))
         });
       }
 
@@ -461,16 +502,15 @@
         const isNonConform = !isApproved && normalizeValue(ans.value) === 'nao conforme';
 
         const itemPaddingY = Math.max(3, Math.min(lineHeight / 2, 6));
-        const fillColor = index % 2 === 0 ? [240, 240, 240] : [230, 230, 230];
 
         // Mede o bloco do item; quebra antes se necessário
         const thisItemHeight = measureContent(() => {
-          drawBlockWithBackground(() => {}, { paddingX: 4, paddingY: itemPaddingY, fillColor });
+          drawBlock(() => {}, { paddingX: 4, paddingY: itemPaddingY });
         });
 
         if (y + thisItemHeight > maxY) forcePageBreak();
 
-        drawBlockWithBackground(({ x, maxWidth }) => {
+        drawBlock(({ x, maxWidth }) => {
           if (isNonConform) doc.setTextColor(180, 0, 0);
 
           const code = item.code || '';
@@ -501,8 +541,7 @@
           if (isNonConform) doc.setTextColor(0, 0, 0);
         }, {
           paddingX: 4,
-          paddingY: itemPaddingY,
-          fillColor
+          paddingY: itemPaddingY
         });
 
         if (index < (category.itens || []).length - 1) {
@@ -528,7 +567,7 @@
       doc.setFont(undefined, 'normal');
     }
 
-    // Numeração de páginas (rodapé), mantendo o visual
+    // Numeração de páginas (rodapé)
     if (options.pageNumbers !== false) {
       const pageCount = doc.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
