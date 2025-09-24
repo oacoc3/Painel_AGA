@@ -9,21 +9,37 @@ window.Modules.prazos = (() => {
   let doaga = [];
   let adhel = [];
 
+  // Formata NUP (Número Único de Protocolo) no padrão XXXXX/XXXX-XX,
+  // desconsiderando os 5 dígitos iniciais (prefixo) caso existam.
+  function formatNup(nup) {
+    if (!nup) return '';
+    const digits = String(nup).replace(/\D/g, '');
+    if (digits.length <= 5) return '';
+    const rest = digits.slice(5);
+    const part1 = rest.slice(0, 6);
+    const part2 = rest.slice(6, 10);
+    const part3 = rest.slice(10, 12);
+    let formatted = part1;
+    if (part2) formatted += `/${part2}`;
+    if (part3) formatted += `-${part3}`;
+    return formatted;
+  }
+
   const PARECERES_COLUMNS = [
-    { key: 'nup', label: 'NUP' },
+    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
     { key: 'type', label: 'Tipo' },
     { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
     { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
   ];
 
   const REMOCAO_COLUMNS = [
-    { key: 'nup', label: 'NUP' },
+    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
     { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
     { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
   ];
 
   const OBRAS_COLUMNS = [
-    { key: 'nup', label: 'NUP' },
+    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
     {
       key: 'due_date',
       label: 'Prazo',
@@ -38,25 +54,25 @@ window.Modules.prazos = (() => {
   ];
 
   const SOBRESTAMENTO_COLUMNS = [
-    { key: 'nup', label: 'NUP' },
+    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
     { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
     { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
 
   const MONITOR_COLUMNS = [
-    { key: 'nup', label: 'NUP' },
+    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
     { key: 'type', label: 'Tipo' },
     { key: 'number', label: 'Número', value: r => (r.number ? String(r.number).padStart(6, '0') : '') }
   ];
 
   const DOAGA_COLUMNS = [
-    { key: 'nup', label: 'NUP' },
+    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
     { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
     { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
 
   const ADHEL_COLUMNS = [
-    { key: 'nup', label: 'NUP' },
+    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
     { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : '') },
     { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
