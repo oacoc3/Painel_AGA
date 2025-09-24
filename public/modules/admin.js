@@ -8,6 +8,7 @@ window.Modules.admin = (() => {
 
   // --- (NOVO) Auditoria ---
   const AUDIT_LOG_LIMIT = 200;
+  let AUDIT_LOG_CACHE = [];
   const AUDIT_EVENT_LABELS = {
     login: 'Login',
     logout: 'Logout',
@@ -131,28 +132,65 @@ window.Modules.admin = (() => {
     return wrap;
   }
 
-  // --- (NOVO) Carregamento de logs de auditoria ---
-  async function loadAuditLogs({ limit = AUDIT_LOG_LIMIT } = {}) {
+  // --- (NOVO) Cabeçalhos e render da tabela de auditoria ---
+  const AUDIT_TABLE_HEADERS = [
+    { label: 'Usuário', render: renderAuditUserCell },
+    { key: 'event_label', label: 'Evento' },
+    { key: 'module_label', label: 'Módulo' },
+    {
+      key: 'created_at',
+      label: 'Horário',
+      value: row => Utils.fmtDateTime(row.created_at),
+      align: 'right'
+    }
+  ];
+
+  function getAuditFilterQuery() {
+    return (el('auditFilterName')?.value || '').trim().toLowerCase();
+  }
+
+  function renderAuditTable({ preserveMessage } = {}) {
     const tableId = 'auditLogTable';
     const msgId = 'auditLogMsg';
-    const headers = [
-      { label: 'Usuário', render: renderAuditUserCell },
-      { key: 'event_label', label: 'Evento' },
-      { key: 'module_label', label: 'Módulo' },
-      {
-        key: 'created_at',
-        label: 'Horário',
-        value: row => Utils.fmtDateTime(row.created_at),
-        align: 'right'
+    const query = getAuditFilterQuery();
+
+    if (!AUDIT_LOG_CACHE.length) {
+      Utils.renderTable(tableId, AUDIT_TABLE_HEADERS, []);
+      if (!preserveMessage && query) {
+        Utils.setMsg(msgId, 'Nenhum evento encontrado para o filtro.');
       }
-    ];
+      return;
+    }
+
+    const filtered = query
+      ? AUDIT_LOG_CACHE.filter(row => {
+          const haystack = `${row.name || ''} ${row.email || ''}`.toLowerCase();
+          return haystack.includes(query);
+        })
+      : AUDIT_LOG_CACHE;
+
+    Utils.renderTable(tableId, AUDIT_TABLE_HEADERS, filtered);
+
+    if (preserveMessage) return;
+
+    if (query && !filtered.length) {
+      Utils.setMsg(msgId, 'Nenhum evento encontrado para o filtro.');
+    } else {
+      Utils.setMsg(msgId, '');
+    }
+  }
+
+  // --- (NOVO) Carregamento de logs de auditoria ---
+  async function loadAuditLogs({ limit = AUDIT_LOG_LIMIT } = {}) {
+    const msgId = 'auditLogMsg';
 
     Utils.setMsg(msgId, 'Carregando registros...');
     try {
       const { data, error } = await sb.rpc('admin_list_user_audit', { p_limit: limit });
       if (error) {
         Utils.setMsg(msgId, error.message || 'Falha ao carregar registros.', true);
-        Utils.renderTable(tableId, headers, []);
+        AUDIT_LOG_CACHE = [];
+        renderAuditTable({ preserveMessage: true });
         return;
       }
 
@@ -162,17 +200,21 @@ window.Modules.admin = (() => {
         module_label: getAuditModuleLabel(row.event_module)
       })) : [];
 
+      AUDIT_LOG_CACHE = rows;
+
       if (!rows.length) {
         Utils.setMsg(msgId, 'Nenhum evento registrado.');
-      } else {
-        Utils.setMsg(msgId, '');
+        renderAuditTable({ preserveMessage: true });
+        return;
       }
 
-      Utils.renderTable(tableId, headers, rows);
+      Utils.setMsg(msgId, '');
+      renderAuditTable();
     } catch (err) {
       console.error('[admin] Falha ao carregar auditoria:', err);
       Utils.setMsg(msgId, err?.message || 'Falha ao carregar registros.', true);
-      Utils.renderTable(tableId, headers, []);
+      AUDIT_LOG_CACHE = [];
+      renderAuditTable({ preserveMessage: true });
     }
   }
 
@@ -246,6 +288,9 @@ window.Modules.admin = (() => {
 
   // --- (NOVO) Bind de ações da auditoria ---
   function bindAuditActions() {
+    el('auditFilterName')?.addEventListener('input', () => {
+      renderAuditTable({ preserveMessage: !AUDIT_LOG_CACHE.length });
+    });
     el('btnAuditRefresh')?.addEventListener('click', ev => {
       ev.preventDefault();
       loadAuditLogs();
