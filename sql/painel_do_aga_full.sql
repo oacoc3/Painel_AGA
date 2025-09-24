@@ -197,6 +197,7 @@ create table notifications (
   requested_at timestamptz not null,
   status notification_status not null default 'SOLICITADA',
   read_at timestamptz,
+  responded_at timestamptz,
   created_by uuid not null references profiles(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
