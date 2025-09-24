@@ -52,6 +52,8 @@ window.Modules.processos = (() => {
   const STATUS_OPTIONS = PROCESS_STATUSES.map(s => `<option>${s}</option>`).join('');
   const NOTIFICATION_TYPES = ['FAV', 'FAV-TERM', 'FAV-AD_HEL', 'TERM-ATRA', 'DESF-INI', 'DESF-NAO_INI', 'DESF_JJAER', 'DESF-REM_REB', 'NCD', 'NCT', 'REVOG', 'ARQ-EXTR', 'ARQ-PRAZ'];
   const NOTIFICATION_OPTIONS = NOTIFICATION_TYPES.map(t => `<option>${t}</option>`).join('');
+  // NOVO (patch): tipos de notificação que permitem marcação "Resolvida"
+  const NOTIFICATION_RESOLUTION_TYPES = new Set(['FAV-AD_HEL', 'TERM-ATR', 'TERM-ATRA', 'DESF-REM_REB']);
   const SIGADAER_TYPES = ['COMAE', 'COMPREP', 'COMGAP', 'GABAER', 'SAC', 'ANAC', 'OPR_AD', 'PREF', 'GOV', 'JJAER', 'AGU', 'OUTRO'];
   const SIGADAER_OPTIONS = SIGADAER_TYPES.map(t => `<option>${t}</option>`).join('');
   const CLIPBOARD_ICON = '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="m10 16 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
@@ -867,7 +869,7 @@ window.Modules.processos = (() => {
     try {
       const { data, error } = await sb
         .from('notifications')
-        .select('id,type,requested_at,status,read_at')
+        .select('id,type,requested_at,status,read_at,responded_at')
         .eq('process_id', procId)
         .order('requested_at', { ascending: false });
       if (error) throw error;
@@ -877,6 +879,7 @@ window.Modules.processos = (() => {
         { key: 'requested_at', label: 'Solicitada em', value: r => U.fmtDateTime(r.requested_at) },
         { key: 'status', label: 'Status' },
         { key: 'read_at', label: 'Lida em', value: r => U.fmtDateTime(r.read_at) },
+        { key: 'responded_at', label: 'Resolvida em', value: r => U.fmtDateTime(r.responded_at) },
         {
           label: 'Ações',
           render: (r) => {
@@ -891,6 +894,18 @@ window.Modules.processos = (() => {
                 showNtLidaForm(r.id);
               });
               wrap.appendChild(b);
+            }
+            if (r.status !== 'RESPONDIDA' && NOTIFICATION_RESOLUTION_TYPES.has(r.type)) {
+              const resp = document.createElement('button');
+              resp.type = 'button';
+              resp.textContent = 'Resolvida';
+              resp.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (!guardProcessWrite('procMsg')) return;
+                showNtResolvidaForm(r.id, r.responded_at);
+              });
+              wrap.appendChild(resp);
             }
             const del = document.createElement('button');
             del.type = 'button';
@@ -1490,6 +1505,29 @@ window.Modules.processos = (() => {
     dlg.showModal();
   }
 
+  // NOVO (patch): marcar notificação como RESPONDIDA/Resolvida
+  function showNtResolvidaForm(id, respondedAt) {
+    editingNtId = id;
+    if (!guardProcessWriteSilent('procMsg')) return;
+    const dlg = document.createElement('dialog');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <label>Resolvida em <input type="datetime-local" id="ntResolvidaInput"></label>
+        <menu>
+          <button id="btnSalvarNtResolvida" type="button">Salvar</button>
+          <button type="button" id="btnCancelarNtResolvida">Cancelar</button>
+        </menu>
+        <div id="ntResolvidaMsg" class="msg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    const input = dlg.querySelector('#ntResolvidaInput');
+    if (input) input.value = U.toDateTimeLocalValue(respondedAt) || '';
+    dlg.addEventListener('close', () => { dlg.remove(); editingNtId = null; });
+    dlg.querySelector('#btnSalvarNtResolvida').addEventListener('click', async ev => { ev.preventDefault(); await salvarNtResolvida(dlg); });
+    dlg.querySelector('#btnCancelarNtResolvida').addEventListener('click', () => dlg.close());
+    dlg.showModal();
+  }
+
   async function salvarNtLida(dlg) {
     if (!editingNtId) return;
     if (!guardProcessWriteSilent('ntMsg')) return;
@@ -1506,6 +1544,28 @@ window.Modules.processos = (() => {
       if (el('ntListaPop')) await loadNotifList(popupProcId || currentProcId, 'ntListaPop');
     } catch (e) {
       U.setMsg('ntMsg', e.message || String(e), true);
+    }
+  }
+
+  // NOVO (patch): persistir RESPONDIDA/Resolvida
+  async function salvarNtResolvida(dlg) {
+    if (!editingNtId) return;
+    if (!guardProcessWriteSilent('ntResolvidaMsg')) return;
+    const input = dlg.querySelector('#ntResolvidaInput');
+    const dt = input && input.value ? new Date(input.value).toISOString() : new Date().toISOString();
+    const procId = popupProcId || currentProcId;
+    try {
+      const { error } = await sb
+        .from('notifications')
+        .update({ status: 'RESPONDIDA', responded_at: dt })
+        .eq('id', editingNtId);
+      if (error) throw error;
+      dlg.close();
+      await loadProcessList();
+      if (procId && el('ntListaPop')) await loadNotifList(procId, 'ntListaPop');
+      if (procId && el('ntLista')) await loadNotifList(procId, 'ntLista');
+    } catch (e) {
+      U.setMsg('ntResolvidaMsg', e.message || String(e), true);
     }
   }
 
