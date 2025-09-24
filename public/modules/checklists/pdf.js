@@ -1,5 +1,7 @@
 // public/modules/checklists/pdf.js
 // Utilitário compartilhado para renderização de PDFs de checklists.
+// Mantém o visual atual; melhora paginação, medições e numeração de páginas.
+
 (() => {
   const EXTRA_NON_CONFORMITY_CODE = '__ck_extra_nc__';
   const CHECKLIST_NOTICE = 'Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, haverá o pertinente registro no campo "Outras observações do(a) Analista".';
@@ -49,7 +51,7 @@
     const defaultAlign = options.align ?? 'justify';
     const headerSpacing = options.headerSpacing ?? 4;
 
-    // Novo: controle de espaçamento após o título de categoria
+    // Controle de espaçamento após o título de categoria
     const parsedCategorySpacing = Number(options.categorySpacing);
     const hasCategorySpacing = Number.isFinite(parsedCategorySpacing);
     const categorySpacing = Math.max(
@@ -73,6 +75,12 @@
       }
     };
 
+    const forcePageBreak = () => {
+      if (isSimulating) return;
+      doc.addPage();
+      y = marginTop;
+    };
+
     const addVerticalSpace = (amount = lineHeight) => {
       if (isSimulating) {
         y += amount;
@@ -86,6 +94,26 @@
       }
     };
 
+    // Mede a altura de um parágrafo (ou múltiplos, separados por \n)
+    const measureTextHeight = (text, opts = {}) => {
+      const x = opts.x ?? marginLeft;
+      const availableWidth = contentWidth - (x - marginLeft);
+      const maxWidth = opts.maxWidth ?? availableWidth;
+      const paragraphs = String(text ?? '').split(/\n+/);
+      let total = 0;
+      paragraphs.forEach((p, i) => {
+        if (!p.trim()) {
+          total += lineHeight; // linha vazia
+        } else {
+          const lines = doc.splitTextToSize(p, maxWidth);
+          const count = Math.max(1, lines.length);
+          total += count * lineHeight;
+        }
+        if (i < paragraphs.length - 1) total += lineHeight; // espaço entre parágrafos
+      });
+      return total;
+    };
+
     const addWrappedText = (text, opts = {}) => {
       if (text == null || text === '') return;
       const paragraphs = String(text).split(/\n+/);
@@ -94,20 +122,15 @@
       const maxWidth = opts.maxWidth ?? availableWidth;
       const align = opts.align ?? defaultAlign;
       const { x: _ignoredX, ...restOpts } = opts;
-      const baseOptions = {
-        ...restOpts,
-        maxWidth,
-        align
-      };
+      const baseOptions = { ...restOpts, maxWidth, align };
 
       paragraphs.forEach((paragraph, index) => {
         if (!paragraph.trim()) {
           addVerticalSpace(lineHeight);
           return;
         }
-
         const lines = doc.splitTextToSize(paragraph, maxWidth);
-        const lineCount = Array.isArray(lines) && lines.length > 0 ? lines.length : 1;
+        const lineCount = Math.max(1, lines.length);
         const requiredHeight = lineHeight * lineCount;
 
         ensureSpace(requiredHeight);
@@ -116,17 +139,14 @@
         }
         y += requiredHeight;
 
-        if (index < paragraphs.length - 1) {
-          addVerticalSpace(lineHeight);
-        }
+        if (index < paragraphs.length - 1) addVerticalSpace(lineHeight);
       });
     };
 
-    // Novo no patch: impressão "Label: Valor" com label em negrito e quebra inteligente
+    // Impressão "Label: Valor" com label em negrito e quebra inteligente
     const addLabelValue = (label, value, opts = {}) => {
       const hasLabel = label != null && label !== '';
       const strValue = value == null ? '' : String(value);
-
       if (!hasLabel) {
         addWrappedText(strValue, opts);
         return;
@@ -141,14 +161,14 @@
       const labelText = `${label}${separator}`;
 
       const prevStyle = typeof doc.getFont === 'function'
-        ? doc.getFont()?.fontStyle || 'normal'
+        ? (doc.getFont()?.fontStyle || 'normal')
         : 'normal';
 
       doc.setFont(undefined, 'bold');
       const labelWidth = doc.getTextWidth(labelText);
       doc.setFont(undefined, 'normal');
 
-      // Se o rótulo não couber na largura máxima, quebra o rótulo e o valor em linhas separadas
+      // Label não cabe -> quebra label e valor em linhas separadas
       if (!(labelWidth < maxWidth)) {
         doc.setFont(undefined, 'bold');
         addWrappedText(labelText, { ...baseOptions, x });
@@ -204,7 +224,7 @@
       return height;
     };
 
-    // === Patch aplicado aqui: ajuste de baseline e largura efetiva ===
+    // Bloco com fundo cinza (mesmo visual), com medições consistentes
     const drawBlockWithBackground = (drawContent, opts = {}) => {
       const blockX = opts.blockX ?? marginLeft;
       const blockWidth = opts.blockWidth ?? contentWidth;
@@ -220,13 +240,9 @@
           const { h, baseline } = metrics;
           if (Number.isFinite(h) && Number.isFinite(baseline)) {
             const offset = h - baseline;
-            if (Number.isFinite(offset) && offset > 0) {
-              return offset;
-            }
+            if (Number.isFinite(offset) && offset > 0) return offset;
           }
-        } catch (error) {
-          // Falha na obtenção das métricas; ignora o ajuste.
-        }
+        } catch (_err) {}
         return 0;
       })();
 
@@ -245,7 +261,11 @@
       };
 
       const blockHeight = measureContent(content);
-      ensureSpace(blockHeight);
+      // Se não couber inteiro, quebra antes do bloco
+      if (!isSimulating && (y + blockHeight > maxY)) {
+        forcePageBreak();
+      }
+
       if (!Array.isArray(fillColor)) {
         doc.setFillColor(fillColor);
       } else if (fillColor.length === 3) {
@@ -255,7 +275,6 @@
       content();
       doc.setFillColor(255, 255, 255);
     };
-    // === Fim do patch ===
 
     const baseFontSize = options.fontSize || 12;
     doc.setFontSize(baseFontSize);
@@ -267,7 +286,7 @@
       }
     }
 
-    // Novo: modos de geração
+    // Modos de geração
     const mode = options.mode === 'approved' ? 'approved' : 'final';
     const isApproved = mode === 'approved';
     const noticeText = options.notice ?? CHECKLIST_NOTICE;
@@ -276,30 +295,25 @@
       ? { answers: getAnswersArray(response) }
       : getChecklistResult(response);
 
-    // Selo (stamp) apenas no modo "final"
+    // Selo (stamp) apenas no modo "final" e só na 1ª página
     if (!isApproved && resultInfo.stamp) {
       const stampSize = options.stampFontSize || 16;
       const stampY = Math.max(10, marginTop - 6);
       doc.setFontSize(stampSize);
       doc.setFont(undefined, 'bold');
-      if (resultInfo.hasNonConformity) {
-        doc.setTextColor(180, 0, 0);
-      } else {
-        doc.setTextColor(34, 139, 34);
-      }
+      if (resultInfo.hasNonConformity) doc.setTextColor(180, 0, 0);
+      else doc.setTextColor(34, 139, 34);
       doc.text(resultInfo.stamp, pageWidth - marginRight, stampY, { align: 'right' });
       doc.setTextColor(0, 0, 0);
       doc.setFont(undefined, 'normal');
       doc.setFontSize(baseFontSize);
     }
 
+    // Metadados (mantém uma coluna; sem mudanças visuais fortes)
     const template = response?.checklist_templates || {};
     const metadataEntries = [
       { label: 'Tipo', value: template.type || template.name || options.type || '—' },
-      {
-        label: 'Versão',
-        value: template.version != null ? String(template.version) : '—'
-      }
+      { label: 'Versão', value: template.version != null ? String(template.version) : '—' }
     ];
 
     if (isApproved) {
@@ -351,10 +365,76 @@
       ? response.checklist_templates.items
       : [];
 
-    categories.forEach(category => {
+    categories.forEach((category, catIndex) => {
       if (!category) return;
 
       const categoryTitle = category.categoria || '';
+      const categoryBlockHeight = categoryTitle
+        ? measureContent(() => {
+            drawBlockWithBackground(({ x, maxWidth }) => {
+              doc.setFont(undefined, 'bold');
+              addWrappedText(categoryTitle, { x, maxWidth, align: 'left' });
+              doc.setFont(undefined, 'normal');
+            }, {
+              paddingX: 4,
+              paddingY: Math.max(3, Math.min(lineHeight / 2, 6)),
+              fillColor: [210, 210, 210]
+            });
+          })
+        : 0;
+
+      // Se possível, mantenha título + 1º item na mesma página
+      const firstItem = (category.itens || [])[0];
+      const firstItemHeight = firstItem
+        ? measureContent(() => {
+            const ans = !isApproved
+              ? (answers.find(a => a && a.code === firstItem.code) || {})
+              : {};
+            const isNonConform = !isApproved && normalizeValue(ans.value) === 'nao conforme';
+
+            drawBlockWithBackground(({ x, maxWidth }) => {
+              if (isNonConform) doc.setTextColor(180, 0, 0);
+
+              const code = firstItem.code || '';
+              const requirement = firstItem.requisito || '';
+              if (code) {
+                addLabelValue(code, '', { separator: '', x, maxWidth });
+                if (requirement) addWrappedText(requirement, { x, maxWidth });
+              } else if (requirement) {
+                addWrappedText(requirement, { x, maxWidth });
+              }
+
+              if (isApproved) {
+                if (firstItem.texto_sugerido) {
+                  addWrappedText(`Texto sugerido: ${firstItem.texto_sugerido}`, { x, maxWidth });
+                }
+              } else {
+                addLabelValue('Resultado', '', { separator: '', x, maxWidth });
+                if (ans.value) addWrappedText(ans.value, { x, maxWidth });
+                if (ans.obs) {
+                  addLabelValue('Obs', '', { separator: '', x, maxWidth });
+                  addWrappedText(ans.obs, { x, maxWidth });
+                }
+                if (firstItem.texto_sugerido) {
+                  addWrappedText(`Texto sugerido: ${firstItem.texto_sugerido}`, { x, maxWidth });
+                }
+              }
+
+              if (isNonConform) doc.setTextColor(0, 0, 0);
+            }, {
+              paddingX: 4,
+              paddingY: Math.max(3, Math.min(lineHeight / 2, 6)),
+              fillColor: [240, 240, 240]
+            });
+          })
+        : 0;
+
+      // Keep-with-first: quebra antes se faltar espaço para título+primeiro item
+      if (categoryTitle && firstItem && (y + categoryBlockHeight + categorySpacing + firstItemHeight > maxY)) {
+        forcePageBreak();
+      }
+
+      // Desenha o título de categoria
       if (categoryTitle) {
         drawBlockWithBackground(({ x, maxWidth }) => {
           doc.setFont(undefined, 'bold');
@@ -373,7 +453,6 @@
       (category.itens || []).forEach((item, index) => {
         if (!item) return;
 
-        // Patch: destacar item em vermelho quando "não conforme"
         const ans = !isApproved
           ? (answers.find(a => a && a.code === item.code) || {})
           : {};
@@ -383,18 +462,21 @@
         const itemSpacing = Math.max(3, Math.min(lineHeight / 2, 6));
         const fillColor = index % 2 === 0 ? [240, 240, 240] : [230, 230, 230];
 
+        // Mede o bloco do item; quebra antes se necessário
+        const thisItemHeight = measureContent(() => {
+          drawBlockWithBackground(() => {}, { paddingX: 4, paddingY: itemPaddingY, fillColor });
+        });
+
+        if (y + thisItemHeight > maxY) forcePageBreak();
+
         drawBlockWithBackground(({ x, maxWidth }) => {
-          if (isNonConform) {
-            doc.setTextColor(180, 0, 0);
-          }
+          if (isNonConform) doc.setTextColor(180, 0, 0);
 
           const code = item.code || '';
           const requirement = item.requisito || '';
           if (code) {
             addLabelValue(code, '', { separator: '', x, maxWidth });
-            if (requirement) {
-              addWrappedText(requirement, { x, maxWidth });
-            }
+            if (requirement) addWrappedText(requirement, { x, maxWidth });
           } else if (requirement) {
             addWrappedText(requirement, { x, maxWidth });
           }
@@ -405,9 +487,7 @@
             }
           } else {
             addLabelValue('Resultado', '', { separator: '', x, maxWidth });
-            if (ans.value) {
-              addWrappedText(ans.value, { x, maxWidth });
-            }
+            if (ans.value) addWrappedText(ans.value, { x, maxWidth });
             if (ans.obs) {
               addLabelValue('Obs', '', { separator: '', x, maxWidth });
               addWrappedText(ans.obs, { x, maxWidth });
@@ -417,9 +497,7 @@
             }
           }
 
-          if (isNonConform) {
-            doc.setTextColor(0, 0, 0);
-          }
+          if (isNonConform) doc.setTextColor(0, 0, 0);
         }, {
           paddingX: 4,
           paddingY: itemPaddingY,
@@ -430,6 +508,9 @@
           addVerticalSpace(itemSpacing);
         }
       });
+
+      // Pequeno espaço após a categoria (evita “grudar” com a próxima)
+      if (catIndex < categories.length - 1) addVerticalSpace(Math.max(2, itemSpacing ?? 4));
     });
 
     if (!isApproved && response?.extra_obs) {
@@ -444,6 +525,19 @@
       doc.setFont(undefined, 'bold');
       addWrappedText('Fim da checklist.', { align: 'left' });
       doc.setFont(undefined, 'normal');
+    }
+
+    // Numeração de páginas (rodapé), mantendo o visual
+    if (options.pageNumbers !== false) {
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(baseFontSize - 2);
+        doc.setFont(undefined, 'normal');
+        const text = `${i}/${pageCount}`;
+        doc.text(text, pageWidth - marginRight, pageHeight - 4, { align: 'right' });
+      }
+      doc.setFontSize(baseFontSize);
     }
 
     return doc.output('bloburl');
