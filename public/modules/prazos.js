@@ -12,19 +12,28 @@ window.Modules.prazos = (() => {
     { key: 'nup', label: 'NUP' },
     { key: 'type', label: 'Tipo' },
     { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-    { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
+    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
   ];
 
   const REMOCAO_COLUMNS = [
     { key: 'nup', label: 'NUP' },
     { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-    { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) }
+    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
   ];
 
   const OBRAS_COLUMNS = [
     { key: 'nup', label: 'NUP' },
-    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-    { key: 'days_remaining', label: 'Dias rem.', value: r => Utils.daysBetween(new Date(), r.due_date) },
+    {
+      key: 'due_date',
+      label: 'Prazo',
+      value: r => Utils.fmtDate(r.due_date),
+      render: r => {
+        const prazo = Utils.fmtDate(r.due_date);
+        if (!r.em_atraso) return `<div>${prazo}</div>`;
+        return `<div>${prazo}</div><div class="text-danger">ADICIONAL</div>`;
+      }
+    },
+    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) },
     { key: 'em_atraso', label: 'Atraso', value: r => (r.em_atraso ? 'ATRASO' : '') }
   ];
 
@@ -37,13 +46,13 @@ window.Modules.prazos = (() => {
   const DOAGA_COLUMNS = [
     { key: 'nup', label: 'NUP' },
     { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
-    { key: 'days_remaining', label: 'Dias rem.', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
+    { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
 
   const ADHEL_COLUMNS = [
     { key: 'nup', label: 'NUP' },
     { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : '') },
-    { key: 'days_remaining', label: 'Dias rem.', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
+    { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
 
   function bindRowLinks(tbody) {
