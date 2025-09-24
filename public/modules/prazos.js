@@ -4,6 +4,7 @@ window.Modules.prazos = (() => {
   let pareceres = [];
   let remocao = [];
   let obras = [];
+  let sobrestamento = [];
   let monitor = [];
   let doaga = [];
   let adhel = [];
@@ -33,8 +34,13 @@ window.Modules.prazos = (() => {
         return `<div>${prazo}</div><div class="text-danger">ADICIONAL</div>`;
       }
     },
-    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) },
-    { key: 'em_atraso', label: 'Atraso', value: r => (r.em_atraso ? 'ATRASO' : '') }
+    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
+  ];
+
+  const SOBRESTAMENTO_COLUMNS = [
+    { key: 'nup', label: 'NUP' },
+    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
+    { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
 
   const MONITOR_COLUMNS = [
@@ -132,6 +138,26 @@ window.Modules.prazos = (() => {
     renderObra();
   }
 
+  function getSobrestamentoRows() {
+    return sobrestamento;
+  }
+
+  function renderSobrestamento() {
+    const rows = getSobrestamentoRows();
+    const { tbody } = Utils.renderTable('prazoSobrestamento', SOBRESTAMENTO_COLUMNS, rows);
+    bindRowLinks(tbody);
+  }
+
+  async function loadSobrestamento() {
+    const { data } = await sb.from('v_prazo_sobrestamento')
+      .select('nup,due_date,days_remaining');
+    sobrestamento = (data || []).sort(
+      (a, b) =>
+        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
+    );
+    renderSobrestamento();
+  }
+
   function getMonitorRows() {
     const tipo = el('monTipo')?.value || '';
     let rows = monitor;
@@ -170,7 +196,10 @@ window.Modules.prazos = (() => {
   async function loadDOAGA() {
     const { data } = await sb.from('v_prazo_do_aga')
       .select('nup,due_date,days_remaining');
-    doaga = (data || []).sort((a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31'));
+    doaga = (data || []).sort(
+      (a, b) =>
+        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
+    );
     renderDOAGA();
   }
 
@@ -188,6 +217,7 @@ window.Modules.prazos = (() => {
     pareceres: { title: 'Pareceres', columns: PARECERES_COLUMNS, getRows: getPareceresRows },
     remocao: { title: 'Remoção/Rebaixamento', columns: REMOCAO_COLUMNS, getRows: getRemocaoRows },
     obras: { title: 'Término de Obra', columns: OBRAS_COLUMNS, getRows: getObraRows },
+    sobrestamento: { title: 'Sobrestamento', columns: SOBRESTAMENTO_COLUMNS, getRows: getSobrestamentoRows },
     monitor: { title: 'Monitorar Leitura/Expedição', columns: MONITOR_COLUMNS, getRows: getMonitorRows },
     doaga: { title: 'Prazo DO-AGA', columns: DOAGA_COLUMNS, getRows: getDoagaRows },
     adhel: { title: 'AD/HEL - Deliberação Favorável', columns: ADHEL_COLUMNS, getRows: getAdhelRows }
@@ -285,7 +315,10 @@ window.Modules.prazos = (() => {
   async function loadADHEL() {
     const { data } = await sb.from('v_prazo_ad_hel')
       .select('nup,due_date,days_remaining');
-    adhel = (data || []).sort((a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31'));
+    adhel = (data || []).sort(
+      (a, b) =>
+        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
+    );
     renderADHEL();
   }
 
@@ -296,7 +329,15 @@ window.Modules.prazos = (() => {
   }
 
   async function load() {
-    await Promise.all([loadPareceres(), loadRemocao(), loadObra(), loadMonitor(), loadDOAGA(), loadADHEL()]);
+    await Promise.all([
+      loadPareceres(),
+      loadRemocao(),
+      loadObra(),
+      loadSobrestamento(),
+      loadMonitor(),
+      loadDOAGA(),
+      loadADHEL()
+    ]);
   }
 
   return { init, load };
