@@ -80,7 +80,8 @@
             <div class="card">
               <h2>Auditoria de sessões</h2>
               <p class="muted">Registros recentes de login, logout e acesso aos módulos.</p>
-              <div class="row" style="display:flex;gap:.5rem;justify-content:flex-end;margin-bottom:.5rem;">
+                <div class="row" style="display:flex;gap:.5rem;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+                <input id="auditFilterName" type="search" placeholder="Filtrar por usuário" style="flex:1;" />
                 <button id="btnAuditRefresh" type="button">Atualizar</button>
               </div>
               <div id="auditLogMsg" class="msg"></div>
