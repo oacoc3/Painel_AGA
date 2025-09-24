@@ -55,7 +55,7 @@ textarea { min-height: 80px; resize: vertical; }
 button { padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: #fff; cursor: pointer; }
 button:hover { filter: brightness(0.98); }
 button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
-
+.text-danger { color: #900; font-weight: 600; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 100%; }
 .admin-grid {
   grid-template-columns:
