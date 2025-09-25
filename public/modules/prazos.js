@@ -93,10 +93,7 @@ window.Modules.prazos = (() => {
   }
 
   function getPareceresRows() {
-    const tipo = el('psTipo')?.value;
-    let rows = pareceres;
-    if (tipo) rows = rows.filter(r => r.type === tipo);
-    return rows;
+    return pareceres;
   }
 
   function renderPareceres() {
@@ -112,11 +109,6 @@ window.Modules.prazos = (() => {
     ]);
     pareceres = [...(intRes.data || []), ...(extRes.data || [])]
       .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-    const sel = el('psTipo');
-    if (sel) {
-      const tipos = Array.from(new Set(pareceres.map(p => p.type).filter(Boolean))).sort();
-      sel.innerHTML = '<option value="">Todos</option>' + tipos.map(t => `<option>${t}</option>`).join('');
-    }
     renderPareceres();
   }
 
@@ -175,10 +167,7 @@ window.Modules.prazos = (() => {
   }
 
   function getMonitorRows() {
-    const tipo = el('monTipo')?.value || '';
-    let rows = monitor;
-    if (tipo) rows = rows.filter(r => r.type === tipo);
-    return rows;
+    return monitor;
   }
 
   function renderMonitor() {
@@ -191,11 +180,6 @@ window.Modules.prazos = (() => {
     const { data } = await sb.from('v_monitorar_tramitacao')
       .select('nup,type,number');
     monitor = data || [];
-    const sel = el('monTipo');
-    if (sel) {
-      const tipos = Array.from(new Set(monitor.map(m => m.type).filter(Boolean))).sort();
-      sel.innerHTML = '<option value="">Todos</option>' + tipos.map(t => `<option>${t}</option>`).join('');
-    }
     renderMonitor();
   }
 
@@ -339,8 +323,6 @@ window.Modules.prazos = (() => {
   }
 
   function init() {
-    el('psTipo')?.addEventListener('change', renderPareceres);
-    el('monTipo')?.addEventListener('change', renderMonitor);
     bindPdfButtons();
   }
 
