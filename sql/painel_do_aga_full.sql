@@ -560,7 +560,7 @@ with fav as (
   join processes p on p.id = n.process_id
   where n.type = 'FAV-AD_HEL'
     and n.status = 'LIDA'
-    and p.type = 'Inscrição - Documental'
+    and p.type = 'Inscrição'
   group by n.process_id
 )
 select p.id as process_id,
