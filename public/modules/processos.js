@@ -264,7 +264,7 @@ window.Modules.processos = (() => {
     try {
       const { data, error } = await sb
         .from('processes')
-        .select('id,nup,type,status,status_since,first_entry_date,obra_termino_date,obra_concluida')
+        .select('id,nup,type,status,status_since,first_entry_date,obra_termino_date,obra_concluida,created_at')
         .eq('nup', nup)
         .maybeSingle();
 
@@ -283,7 +283,39 @@ window.Modules.processos = (() => {
         if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
         U.setMsg('procMsg', 'Processo encontrado.');
-        await loadProcessList();
+        // NOVO (patch): calcular a página onde o processo aparece e abrir a lista já posicionada
+        let targetPage = null;
+        if (data.created_at) {
+          try {
+            let offset = 0;
+            const { count: newerCount, error: newerErr } = await sb
+              .from('processes')
+              .select('id', { count: 'exact', head: true })
+              .gt('created_at', data.created_at);
+            if (newerErr) throw newerErr;
+            if (typeof newerCount === 'number') offset += newerCount;
+
+            if (data.id) {
+              const { count: tieCount, error: tieErr } = await sb
+                .from('processes')
+                .select('id', { count: 'exact', head: true })
+                .eq('created_at', data.created_at)
+                .gt('id', data.id);
+              if (tieErr) throw tieErr;
+              if (typeof tieCount === 'number') offset += tieCount;
+            }
+
+            targetPage = Math.max(1, Math.floor(offset / PROC_PAGE_SIZE) + 1);
+          } catch (pageErr) {
+            console.warn('Falha ao calcular página do processo', pageErr);
+          }
+        }
+
+        if (targetPage && Number.isFinite(targetPage)) {
+          await loadProcessList({ page: targetPage });
+        } else {
+          await loadProcessList();
+        }
       } else {
         const ok = window.confirm('Processo não encontrado. Criar novo?');
         if (ok) {
@@ -602,6 +634,7 @@ window.Modules.processos = (() => {
         .from('processes')
         .select('id,nup,type,status,status_since,first_entry_date,obra_termino_date,obra_concluida,created_at', { count: 'exact' })
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .range(from, to);
 
       let toRef;
