@@ -1362,7 +1362,7 @@ window.Modules.processos = (() => {
       const defaultPrazo = SIGADAER_DEFAULT_DEADLINES.get(tipoSelect.value);
       if (defaultPrazo !== undefined) {
         prazoInput.value = String(defaultPrazo);
-      } else if (!prazoInput.value) {
+      } else {
         prazoInput.value = '';
       }
     };
