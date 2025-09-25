@@ -394,58 +394,90 @@ create trigger audit_checklists    after insert or update on checklist_responses
 -- Views (Prazos)
 -- =========================
 
--- Pareceres internos (ATM/DT 10d; CGNA 30d) a partir do dia seguinte
+-- Pareceres internos (ATM/DT 10d; CGNA 30d) a partir do dia seguinte)
 create or replace view v_prazo_pareceres as
-select io.process_id, p.nup, io.type,
-       date(timezone('America/Sao_Paulo', io.requested_at)) as requested_at,
-  date(timezone('America/Sao_Paulo', io.requested_at))
-         + case when io.type in ('ATM','DT') then 10 else 30 end as due_date,
-       date(timezone('America/Sao_Paulo', io.requested_at)) + 1 as start_count,
-       date(timezone('America/Sao_Paulo', io.requested_at))
-         + case when io.type in ('ATM','DT') then 10 else 30 end - current_date as days_remaining
-from internal_opinions io
-join processes p on p.id = io.process_id
-where io.status = 'SOLICITADO';
+with base as (
+  select io.process_id,
+         p.nup,
+         io.type,
+         date(timezone('America/Sao_Paulo', io.requested_at)) as requested_at,
+         date(timezone('America/Sao_Paulo', io.requested_at)) + 1 as start_count,
+         case when io.type in ('ATM','DT') then 10 else 30 end as deadline_days
+  from internal_opinions io
+  join processes p on p.id = io.process_id
+  where io.status = 'SOLICITADO'
+    and io.type in ('ATM','DT','CGNA')
+)
+select process_id,
+       nup,
+       type,
+       requested_at,
+       deadline_days,
+       start_count + (deadline_days - 1) as due_date,
+       start_count,
+       start_count + (deadline_days - 1) - current_date as days_remaining
+from base;
 
 -- Pareceres externos (SIGADAER)
 create or replace view v_prazo_pareceres_externos as
-select s.process_id, p.nup, s.type,
-       date(timezone('America/Sao_Paulo', s.expedit_at)) as requested_at,
-  date(timezone('America/Sao_Paulo', s.expedit_at))
-         + coalesce(s.deadline_days, case when s.type='COMGAP' then 90 else 30 end) as due_date,
-       date(timezone('America/Sao_Paulo', s.expedit_at)) + 1 as start_count,
-       date(timezone('America/Sao_Paulo', s.expedit_at))
-         + coalesce(s.deadline_days, case when s.type='COMGAP' then 90 else 30 end) - current_date as days_remaining
-from sigadaer s
-join processes p on p.id = s.process_id
-where s.status = 'EXPEDIDO' and s.type in ('COMAE','COMPREP','COMGAP','GABAER');
+with base as (
+  select s.process_id,
+         p.nup,
+         s.type,
+         date(timezone('America/Sao_Paulo', s.expedit_at)) as requested_at,
+         date(timezone('America/Sao_Paulo', s.expedit_at)) + 1 as start_count,
+         s.deadline_days
+  from sigadaer s
+  join processes p on p.id = s.process_id
+  where s.status = 'EXPEDIDO'
+    and s.received_at is null
+    and s.deadline_days is not null
+    and s.type in ('COMAE','COMPREP','COMGAP','GABAER')
+)
+select process_id,
+       nup,
+       type,
+       requested_at,
+       deadline_days,
+       start_count + (deadline_days - 1) as due_date,
+       start_count,
+       start_count + (deadline_days - 1) - current_date as days_remaining
+from base;
 
 -- Término de obra (FAV-TERM / TERM-ATRA LIDA)
 create or replace view v_prazo_termino_obra as
-with term_atra as (
-  select n.process_id, min(n.read_at) as read_at
-  from notifications n
-  where n.type = 'TERM-ATRA' and n.status='LIDA'
-  group by n.process_id
-),
-fav_term as (
-  select distinct n.process_id
-  from notifications n
-  where n.type='FAV-TERM' and n.status='LIDA'
-)
-select p.id as process_id, p.nup,
-       case when ta.read_at is not null then date(timezone('America/Sao_Paulo', ta.read_at))
-            else p.obra_termino_date end as requested_at,
-  case when ta.read_at is not null then (date(timezone('America/Sao_Paulo', ta.read_at)) + 30)
-            else p.obra_termino_date end as due_date,
-       case when ta.read_at is not null then (date(timezone('America/Sao_Paulo', ta.read_at)) + 1) end as start_count,
-       case when ta.read_at is not null then (date(timezone('America/Sao_Paulo', ta.read_at)) + 30) - current_date
-            else (p.obra_termino_date - current_date) end as days_remaining,
-       (ta.read_at is not null) as em_atraso
-from processes p
-join fav_term f on f.process_id = p.id
-left join term_atra ta on ta.process_id = p.id
-where p.obra_concluida = false;
+select base.process_id,
+       base.nup,
+       base.requested_at,
+       case when base.em_atraso then base.start_count + 29
+            else base.requested_at end as due_date,
+       base.start_count,
+       case when base.em_atraso then base.start_count + 29 - current_date
+            else base.requested_at - current_date end as days_remaining,
+       base.em_atraso
+from (
+  with term_atra as (
+    select n.process_id, min(n.read_at) as read_at
+    from notifications n
+    where n.type = 'TERM-ATRA' and n.status='LIDA'
+    group by n.process_id
+  ),
+  fav_term as (
+    select distinct n.process_id
+    from notifications n
+    where n.type='FAV-TERM' and n.status='LIDA'
+  )
+  select p.id as process_id,
+         p.nup,
+         case when ta.read_at is not null then date(timezone('America/Sao_Paulo', ta.read_at))
+              else p.obra_termino_date end as requested_at,
+         case when ta.read_at is not null then date(timezone('America/Sao_Paulo', ta.read_at)) + 1 end as start_count,
+         (ta.read_at is not null) as em_atraso
+  from processes p
+  join fav_term f on f.process_id = p.id
+  left join term_atra ta on ta.process_id = p.id
+  where p.obra_concluida = false
+) base;
 
 -- Monitorar Leitura/Expedição: notificações não lidas e SIGADAER não expedidos
 create or replace view v_monitorar_tramitacao as
@@ -461,14 +493,21 @@ where s.status = 'SOLICITADO';
 
 -- Remoção / Rebaixamento (DESF-REM_REB lida)
 create or replace view v_prazo_remocao_rebaixamento as
-select n.process_id, p.nup,
-       date(timezone('America/Sao_Paulo', n.read_at)) as read_at,
-       date(timezone('America/Sao_Paulo', n.read_at)) + 120 as due_date,
-       date(timezone('America/Sao_Paulo', n.read_at)) + 1 as start_count,
-       date(timezone('America/Sao_Paulo', n.read_at)) + 120 - current_date as days_remaining
-from notifications n
-join processes p on p.id = n.process_id
-where n.type = 'DESF-REM_REB' and n.status = 'LIDA';
+with base as (
+  select n.process_id,
+         p.nup,
+         date(timezone('America/Sao_Paulo', n.read_at)) as read_date
+  from notifications n
+  join processes p on p.id = n.process_id
+  where n.type = 'DESF-REM_REB' and n.status = 'LIDA'
+)
+select process_id,
+       nup,
+       read_date as read_at,
+       (read_date + 1) + (120 - 1) as due_date,
+       read_date + 1 as start_count,
+       ((read_date + 1) + (120 - 1)) - current_date as days_remaining
+from base;
 
 -- Sobrestamento (SOB-TEC: 120 dias / SOB-DOC: 60 dias a partir do dia seguinte)
 create or replace view v_prazo_sobrestamento as
@@ -476,21 +515,22 @@ with base as (
   select p.id as process_id,
          p.nup,
          p.status,
-         date(timezone('America/Sao_Paulo', p.status_since)) as status_start_date
+         date(timezone('America/Sao_Paulo', p.status_since)) as status_start_date,
+         case p.status when 'SOB-TEC' then 120 when 'SOB-DOC' then 60 end as deadline_days
   from processes p
   where p.status in ('SOB-TEC','SOB-DOC')
 )
 select process_id,
        nup,
-       case status
-         when 'SOB-TEC' then status_start_date + 120
-         when 'SOB-DOC' then status_start_date + 60
-       end as due_date,
-       case when status_start_date is not null then status_start_date + 1 end as start_count,
-       case status
-         when 'SOB-TEC' then status_start_date + 120 - current_date
-         when 'SOB-DOC' then status_start_date + 60 - current_date
-       end as days_remaining
+       case when status_start_date is not null
+             then (status_start_date + 1) + (deadline_days - 1)
+        end as due_date,
+       case when status_start_date is not null
+             then status_start_date + 1
+        end as start_count,
+       case when status_start_date is not null
+             then ((status_start_date + 1) + (deadline_days - 1)) - current_date
+        end as days_remaining
 from base
 where status_start_date is not null;
 
@@ -1228,11 +1268,6 @@ create trigger history_sigadaer_del
   after delete on sigadaer
   for each row execute function add_history_event();
 
-drop trigger if exists history_checklists on checklist_responses;
-create trigger history_checklists
-  after insert or update on checklist_responses
-  for each row execute function add_history_event();
-
 -- =========================================================
 -- (D) Backfill do histórico a partir do audit_log
 --     ✅ Com guarda para não violar FK (só insere se o processo existir)
@@ -1454,4 +1489,3 @@ $$;
 grant execute on function admin_list_user_audit(integer, uuid) to authenticated;
 
 -- ============== Fim do arquivo 11: sql/09_user_audit_events.sql ==============
-
