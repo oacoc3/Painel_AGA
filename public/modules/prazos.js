@@ -27,7 +27,11 @@ window.Modules.prazos = (() => {
 
   const PARECERES_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
-    { key: 'type', label: 'Tipo' },
+    {
+      key: 'type_label',
+      label: 'Tipo',
+      value: r => r.type_label || r.type || ''
+    },
     { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
     { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
   ];
@@ -104,10 +108,34 @@ window.Modules.prazos = (() => {
 
   async function loadPareceres() {
     const [intRes, extRes] = await Promise.all([
-      sb.from('v_prazo_pareceres').select('nup,type,due_date,days_remaining'),
-      sb.from('v_prazo_pareceres_externos').select('nup,type,due_date,days_remaining')
+      sb
+        .from('v_prazo_pareceres')
+        .select('nup,type,due_date,days_remaining,deadline_days'),
+      sb
+        .from('v_prazo_pareceres_externos')
+        .select('nup,type,due_date,days_remaining,deadline_days')
     ]);
-    pareceres = [...(intRes.data || []), ...(extRes.data || [])]
+
+    const normalize = rows => (Array.isArray(rows) ? rows : []);
+
+    const parecerRows = normalize(intRes.data)
+      .filter(row => ['ATM', 'DT', 'CGNA'].includes(row.type))
+      .map(row => ({
+        ...row,
+        origin: 'parecer',
+        type_label: `Parecer ${row.type}`
+      }));
+
+    const sigadaerRows = normalize(extRes.data)
+      .filter(row => typeof row.deadline_days === 'number')
+      .map(row => ({
+        ...row,
+        origin: 'sigadaer',
+        type_label: `SIGADAER ${row.type}`
+      }));
+
+    pareceres = [...parecerRows, ...sigadaerRows]
+      .filter(row => row.due_date)
       .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
     renderPareceres();
   }
