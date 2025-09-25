@@ -56,6 +56,14 @@ window.Modules.processos = (() => {
   const NOTIFICATION_RESOLUTION_TYPES = new Set(['FAV-AD_HEL', 'TERM-ATR', 'TERM-ATRA', 'DESF-REM_REB']);
   const SIGADAER_TYPES = ['COMAE', 'COMPREP', 'COMGAP', 'GABAER', 'SAC', 'ANAC', 'OPR_AD', 'PREF', 'GOV', 'JJAER', 'AGU', 'OUTRO'];
   const SIGADAER_OPTIONS = SIGADAER_TYPES.map(t => `<option>${t}</option>`).join('');
+  // NOVO (patch): prazos padrão por tipo de SIGADAER
+  const SIGADAER_DEFAULT_DEADLINES = new Map([
+    ['COMAE', 30],
+    ['COMPREP', 30],
+    ['GABAER', 30],
+    ['COMGAP', 90]
+  ]);
+
   const CLIPBOARD_ICON = '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="m10 16 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
   const el = (id) => document.getElementById(id);
@@ -933,7 +941,7 @@ window.Modules.processos = (() => {
     try {
       const { data, error } = await sb
         .from('sigadaer')
-        .select('id,numbers,type,requested_at,status,expedit_at,received_at')
+        .select('id,numbers,type,requested_at,status,expedit_at,received_at,deadline_days')
         .eq('process_id', procId)
         .order('requested_at', { ascending: false });
       if (error) throw error;
@@ -945,6 +953,7 @@ window.Modules.processos = (() => {
           value: r => Array.isArray(r.numbers) ? r.numbers.map(n => String(n).padStart(6, '0')).join('; ') : ''
         },
         { key: 'type', label: 'Tipo' },
+        { key: 'deadline_days', label: 'Prazo (dias)' },
         { key: 'requested_at', label: 'Solicitada em', value: r => U.fmtDateTime(r.requested_at) },
         { key: 'status', label: 'Status' },
         { key: 'expedit_at', label: 'Expedida em', value: r => U.fmtDateTime(r.expedit_at) },
@@ -1334,6 +1343,9 @@ window.Modules.processos = (() => {
         <label>Números (separe com espaços, vírgulas ou ponto e vírgula)
           <input type="text" id="sgNumeros" placeholder="123456; 654321">
         </label>
+        <label>Prazo (dias)
+          <input type="number" id="sgPrazo" min="0" step="1" placeholder="30">
+        </label>
         <label>Solicitada em <input type="datetime-local" id="sgSolic"></label>
         <menu>
           <button id="btnSalvarSg" type="button">Salvar</button>
@@ -1343,6 +1355,21 @@ window.Modules.processos = (() => {
       </form>`;
     document.body.appendChild(dlg);
     dlg.addEventListener('close', () => dlg.remove());
+    const tipoSelect = dlg.querySelector('#sgTipo');
+    const prazoInput = dlg.querySelector('#sgPrazo');
+    const applyDefaultPrazo = () => {
+      if (!tipoSelect || !prazoInput) return;
+      const defaultPrazo = SIGADAER_DEFAULT_DEADLINES.get(tipoSelect.value);
+      if (defaultPrazo !== undefined) {
+        prazoInput.value = String(defaultPrazo);
+      } else if (!prazoInput.value) {
+        prazoInput.value = '';
+      }
+    };
+    applyDefaultPrazo();
+    tipoSelect?.addEventListener('change', () => {
+      applyDefaultPrazo();
+    });
     dlg.querySelector('#btnSalvarSg')?.addEventListener('click', async ev => {
       ev.preventDefault();
       await cadSig(dlg, procId);
@@ -1360,6 +1387,9 @@ window.Modules.processos = (() => {
     const numeros = Array.from(new Set(parseSigNumbers(numerosTexto)));
     if (!numeros.length) return U.setMsg('sgCadMsg', 'Informe ao menos um número SIGADAER válido.', true);
     const solicitadaEm = dlg.querySelector('#sgSolic')?.value || '';
+    const prazoTexto = dlg.querySelector('#sgPrazo')?.value || '';
+    const prazoDiasValor = prazoTexto ? parseInt(prazoTexto, 10) : NaN;
+    const prazoDias = Number.isNaN(prazoDiasValor) || prazoDiasValor <= 0 ? null : prazoDiasValor;
     const payload = {
       process_id: procId,
       type: tipo,
@@ -1367,6 +1397,7 @@ window.Modules.processos = (() => {
       status: 'SOLICITADO',
       numbers: numeros
     };
+    if (prazoDias !== null) payload.deadline_days = prazoDias;
     try {
       const u = await getUser();
       if (!u) return U.setMsg('sgCadMsg', 'Sessão expirada.', true);
@@ -1604,7 +1635,10 @@ window.Modules.processos = (() => {
       </form>`;
     document.body.appendChild(dlg);
     dlg.addEventListener('close', () => { dlg.remove(); editingSgId = null; });
-    dlg.querySelector('#btnSalvarSgExp').addEventListener('click', async ev => { ev.preventDefault(); await salvarSgExp(dlg); });
+    dlg.querySelector('#btnSalvarSgExp').addEventListener('click', async ev => {
+      ev.preventDefault();
+      await salvarSgExp(dlg);
+    });
     dlg.querySelector('#btnCancelarSgExp').addEventListener('click', () => dlg.close());
     dlg.showModal();
   }
@@ -1624,7 +1658,10 @@ window.Modules.processos = (() => {
       </form>`;
     document.body.appendChild(dlg);
     dlg.addEventListener('close', () => { dlg.remove(); editingSgId = null; });
-    dlg.querySelector('#btnSalvarSgRec').addEventListener('click', async ev => { ev.preventDefault(); await salvarSgRec(dlg); });
+    dlg.querySelector('#btnSalvarSgRec').addEventListener('click', async ev => {
+      ev.preventDefault();
+      await salvarSgRec(dlg);
+    });
     dlg.querySelector('#btnCancelarSgRec').addEventListener('click', () => dlg.close());
     dlg.showModal();
   }
