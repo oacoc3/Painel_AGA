@@ -466,6 +466,30 @@ from notifications n
 join processes p on p.id = n.process_id
 where n.type = 'DESF-REM_REB' and n.status = 'LIDA';
 
+-- Sobrestamento (SOB-TEC: 120 dias / SOB-DOC: 60 dias a partir do dia seguinte)
+create or replace view v_prazo_sobrestamento as
+with base as (
+  select p.id as process_id,
+         p.nup,
+         p.status,
+         date(timezone('America/Sao_Paulo', p.status_since)) as status_start_date
+  from processes p
+  where p.status in ('SOB-TEC','SOB-DOC')
+)
+select process_id,
+       nup,
+       case status
+         when 'SOB-TEC' then status_start_date + 120
+         when 'SOB-DOC' then status_start_date + 60
+       end as due_date,
+       case when status_start_date is not null then status_start_date + 1 end as start_count,
+       case status
+         when 'SOB-TEC' then status_start_date + 120 - current_date
+         when 'SOB-DOC' then status_start_date + 60 - current_date
+       end as days_remaining
+from base
+where status_start_date is not null;
+
 -- Prazo DO-AGA (60 dias; pausa em SOB-*)
 create or replace view v_prazo_do_aga as
 select p.id as process_id, p.nup,
