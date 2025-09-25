@@ -252,7 +252,7 @@ window.Modules.prazos = (() => {
     sobrestamento: { title: 'Sobrestamento', columns: SOBRESTAMENTO_COLUMNS, getRows: getSobrestamentoRows },
     monitor: { title: 'Leitura/Expedição', columns: MONITOR_COLUMNS, getRows: getMonitorRows },
     doaga: { title: 'Prazo DO-AGA', columns: DOAGA_COLUMNS, getRows: getDoagaRows },
-    adhel: { title: 'Realizar inscrição', columns: ADHEL_COLUMNS, getRows: getAdhelRows }
+    adhel: { title: 'Revogar plano', columns: ADHEL_COLUMNS, getRows: getAdhelRows }
   };
 
   function exportPrazoPDF(section) {
