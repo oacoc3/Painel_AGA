@@ -432,7 +432,6 @@ with base as (
   where s.status = 'EXPEDIDO'
     and s.received_at is null
     and s.deadline_days is not null
-    and s.type in ('COMAE','COMPREP','COMGAP','GABAER')
 )
 select process_id,
        nup,
