@@ -219,6 +219,7 @@ create table sigadaer (
   expedit_at timestamptz,
   received_at timestamptz,
   numbers integer[], -- números de 6 dígitos (validado no frontend)
+  deadline_days integer, -- ⬅️ novo: prazo customizado (dias) para parecer externo
   notes text,
   created_by uuid not null references profiles(id),
   created_at timestamptz not null default now(),
@@ -270,6 +271,9 @@ create table checklist_responses (
   constraint checklist_responses_status_check
     check (status in ('draft','final'))
 );
+create trigger trg_checklist_responses_updated_at
+  before update on checklist_responses
+  for each row execute function extensions.moddatetime(updated_at);
 
 -- Auditoria
 create table audit_log (
@@ -408,10 +412,10 @@ create or replace view v_prazo_pareceres_externos as
 select s.process_id, p.nup, s.type,
        date(timezone('America/Sao_Paulo', s.expedit_at)) as requested_at,
   date(timezone('America/Sao_Paulo', s.expedit_at))
-         + case when s.type='COMGAP' then 90 else 30 end as due_date,
+         + coalesce(s.deadline_days, case when s.type='COMGAP' then 90 else 30 end) as due_date,
        date(timezone('America/Sao_Paulo', s.expedit_at)) + 1 as start_count,
        date(timezone('America/Sao_Paulo', s.expedit_at))
-         + case when s.type='COMGAP' then 90 else 30 end - current_date as days_remaining
+         + coalesce(s.deadline_days, case when s.type='COMGAP' then 90 else 30 end) - current_date as days_remaining
 from sigadaer s
 join processes p on p.id = s.process_id
 where s.status = 'EXPEDIDO' and s.type in ('COMAE','COMPREP','COMGAP','GABAER');
@@ -1142,7 +1146,7 @@ begin
           'numbers', old.numbers,
           'requested_at', old.requested_at,
           'expedit_at', old.expedit_at,
-          'received_at', old.received_at
+          'received_at', old.recebido_at
         ),
         auth.uid(),
         auth.jwt()->>'email',
@@ -1331,7 +1335,11 @@ $$;
 
 -- ============== Fim do arquivo 10: Painel_AGA-main/sql/08_rename_checklist_category_to_type.sql ==============
 
--- sql/09_user_audit_events.sql
+
+-- ===============================================
+-- Início do arquivo 11: sql/09_user_audit_events.sql
+-- ===============================================
+
 -- Auditoria de sessões de usuário e acessos a módulos.
 -- Cria tabela dedicada a eventos de login/logout/acesso e expõe uma RPC para administradores.
 
@@ -1444,3 +1452,6 @@ end;
 $$;
 
 grant execute on function admin_list_user_audit(integer, uuid) to authenticated;
+
+-- ============== Fim do arquivo 11: sql/09_user_audit_events.sql ==============
+
