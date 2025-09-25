@@ -234,9 +234,9 @@ window.Modules.prazos = (() => {
     remocao: { title: 'Remoção/Rebaixamento', columns: REMOCAO_COLUMNS, getRows: getRemocaoRows },
     obras: { title: 'Término de Obra', columns: OBRAS_COLUMNS, getRows: getObraRows },
     sobrestamento: { title: 'Sobrestamento', columns: SOBRESTAMENTO_COLUMNS, getRows: getSobrestamentoRows },
-    monitor: { title: 'Monitorar Leitura/Expedição', columns: MONITOR_COLUMNS, getRows: getMonitorRows },
+    monitor: { title: 'Leitura/Expedição', columns: MONITOR_COLUMNS, getRows: getMonitorRows },
     doaga: { title: 'Prazo DO-AGA', columns: DOAGA_COLUMNS, getRows: getDoagaRows },
-    adhel: { title: 'AD/HEL - Deliberação Favorável', columns: ADHEL_COLUMNS, getRows: getAdhelRows }
+    adhel: { title: 'Realizar inscrição', columns: ADHEL_COLUMNS, getRows: getAdhelRows }
   };
 
   function exportPrazoPDF(section) {
