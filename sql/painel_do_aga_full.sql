@@ -1185,7 +1185,7 @@ begin
           'numbers', old.numbers,
           'requested_at', old.requested_at,
           'expedit_at', old.expedit_at,
-          'received_at', old.recebido_at
+          'received_at', old.received_at
         ),
         auth.uid(),
         auth.jwt()->>'email',
