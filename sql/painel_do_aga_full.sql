@@ -78,7 +78,7 @@ create type notification_type as enum (
   'DESF-INI','DESF-NAO_INI','DESF_JJAER','DESF-REM_REB',
   'NCD','NCT','REVOG','ARQ-EXTR','ARQ-PRAZ'
 );
-create type notification_status as enum ('SOLICITADA','LIDA');
+create type notification_status as enum ('SOLICITADA','LIDA','RESPONDIDA');
 
 create type sigadaer_type as enum ('COMAE','COMPREP','COMGAP','GABAER','SAC','ANAC','OPR_AD','PREF','GOV','JJAER','AJUR','AGU','OUTRO');
 create type sigadaer_status as enum ('SOLICITADO','EXPEDIDO','RECEBIDO');
