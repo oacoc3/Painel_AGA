@@ -80,7 +80,7 @@ create type notification_type as enum (
 );
 create type notification_status as enum ('SOLICITADA','LIDA');
 
-create type sigadaer_type as enum ('COMAE','COMPREP','COMGAP','GABAER','SAC','ANAC','OPR_AD','PREF','GOV','JJAER','AGU','OUTRO');
+create type sigadaer_type as enum ('COMAE','COMPREP','COMGAP','GABAER','SAC','ANAC','OPR_AD','PREF','GOV','JJAER','AJUR','AGU','OUTRO');
 create type sigadaer_status as enum ('SOLICITADO','EXPEDIDO','RECEBIDO');
 
 -- =========================
