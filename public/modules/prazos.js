@@ -214,7 +214,7 @@ window.Modules.prazos = (() => {
   }
 
   const PDF_SECTIONS = {
-    pareceres: { title: 'Pareceres', columns: PARECERES_COLUMNS, getRows: getPareceresRows },
+    pareceres: { title: 'Pareceres/Info', columns: PARECERES_COLUMNS, getRows: getPareceresRows },
     remocao: { title: 'Remoção/Rebaixamento', columns: REMOCAO_COLUMNS, getRows: getRemocaoRows },
     obras: { title: 'Término de Obra', columns: OBRAS_COLUMNS, getRows: getObraRows },
     sobrestamento: { title: 'Sobrestamento', columns: SOBRESTAMENTO_COLUMNS, getRows: getSobrestamentoRows },
