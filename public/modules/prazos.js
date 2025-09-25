@@ -127,11 +127,15 @@ window.Modules.prazos = (() => {
       }));
 
     const sigadaerRows = normalize(extRes.data)
-      .filter(row => typeof row.deadline_days === 'number')
+      .filter(row => row.due_date || typeof row.deadline_days === 'number')
       .map(row => ({
         ...row,
         origin: 'sigadaer',
-        type_label: `SIGADAER ${row.type}`
+        type_label: `SIGADAER ${row.type}`,
+        days_remaining:
+          typeof row.days_remaining === 'number'
+            ? row.days_remaining
+            : Utils.daysBetween(new Date(), row.due_date)
       }));
 
     pareceres = [...parecerRows, ...sigadaerRows]
