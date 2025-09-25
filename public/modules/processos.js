@@ -30,12 +30,14 @@ window.Modules.processos = (() => {
     if (!pager) {
       pager = document.createElement('div');
       pager.className = 'pager';
-      box.appendChild(pager);
+    }
+    if (box.firstElementChild !== pager) {
+      box.insertBefore(pager, box.firstElementChild);
     }
     const disablePrev = page <= 1;
     const disableNext = page >= pagesTotal;
     pager.innerHTML = `
-      <div class="row" style="display:flex;gap:.5rem;align-items:center;justify-content:flex-end;margin-top:.5rem;">
+      <div class="row" style="display:flex;gap:.5rem;align-items:center;justify-content:flex-end;margin-bottom:.5rem;">
         <button type="button" id="procFirstPage" ${disablePrev ? 'disabled' : ''}>&laquo;</button>
         <button type="button" id="procPrevPage" ${disablePrev ? 'disabled' : ''}>&lsaquo;</button>
         <span id="procPagerInfo">${page} / ${pagesTotal} (${count} itens)</span>
