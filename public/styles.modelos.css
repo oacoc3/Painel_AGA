@@ -12,6 +12,11 @@
 /* Formulário usa toda a largura disponível da coluna */
 #formModelo {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Primeira linha do formulário: campos e ações lado a lado */
@@ -19,6 +24,18 @@
   grid-template-columns: 1fr 1fr auto auto auto;
 }
 #formModelo .mdl-top-row label { min-width: 0; }
+
+/* Faz o campo de conteúdo ocupar todo o espaço livre do card */
+#formModelo label:last-of-type {
+  flex: 1;
+  min-height: 0;
+}
+
+#formModelo textarea {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
 
 @media (max-width: 760px) {
   .split.modelos {
