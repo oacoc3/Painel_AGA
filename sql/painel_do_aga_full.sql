@@ -22,6 +22,8 @@ drop table if exists internal_opinions cascade;
 drop table if exists processes cascade;
 drop table if exists profiles cascade;
 drop table if exists history cascade;
+drop table if exists user_audit_events cascade;
+drop table if exists prazo_signals cascade;
 
 drop type if exists user_role cascade;
 drop type if exists process_type cascade;
@@ -32,6 +34,9 @@ drop type if exists notification_type cascade;
 drop type if exists notification_status cascade;
 drop type if exists sigadaer_type cascade;
 drop type if exists sigadaer_status cascade;
+drop type if exists prazo_signal_card cascade;
+drop type if exists prazo_signal_action cascade;
+drop type if exists prazo_signal_status cascade;
 
 
 -- ============== Fim do arquivo 1: Painel_AGA-main/sql/00_reset_all.sql ==============
@@ -83,6 +88,18 @@ create type notification_status as enum ('SOLICITADA','LIDA','RESPONDIDA');
 create type sigadaer_type as enum ('COMAE','COMPREP','COMGAP','GABAER','SAC','ANAC','OPR_AD','PREF','GOV','JJAER','AJUR','AGU','OUTRO');
 create type sigadaer_status as enum ('SOLICITADO','EXPEDIDO','RECEBIDO');
 
+-- Novas ENUMs para sinalização de prazos
+create type prazo_signal_card as enum ('pareceres','remocao','obras','monitor','revogar');
+create type prazo_signal_action as enum (
+  'internal_opinion_received',
+  'external_opinion_received',
+  'notification_read',
+  'sigadaer_expedit',
+  'notification_resolved',
+  'obra_concluida'
+);
+create type prazo_signal_status as enum ('PENDENTE','VALIDADO','REJEITADO');
+
 -- =========================
 -- Helpers
 -- =========================
@@ -119,6 +136,22 @@ stable
 as $$
   select has_write_role()
          or (auth.jwt() -> 'user_metadata' ->> 'role') = 'Analista OACO';
+$$;
+
+-- Novo: quem pode sinalizar prazos
+create or replace function can_signal_deadlines()
+returns boolean
+language sql
+stable
+as $$
+  select (auth.jwt() -> 'user_metadata' ->> 'role') in (
+    'Administrador',
+    'Analista OACO',
+    'Analista OAGA',
+    'CH OACO',
+    'CH OAGA',
+    'CH AGA'
+  );
 $$;
 
 -- =========================
@@ -229,6 +262,32 @@ create trigger trg_sigadaer_updated_at
 before update on sigadaer
 for each row execute function extensions.moddatetime(updated_at);
 
+-- Nova tabela: sinais de prazo
+create table prazo_signals (
+  id uuid primary key default gen_random_uuid(),
+  process_id uuid not null references processes(id) on delete cascade,
+  source_table text not null check (source_table in ('internal_opinions','notifications','sigadaer','processes')),
+  source_id uuid not null,
+  card prazo_signal_card not null,
+  action prazo_signal_action not null,
+  status prazo_signal_status not null default 'PENDENTE',
+  payload jsonb not null default '{}'::jsonb,
+  analyst_comment text,
+  signaled_by uuid not null references profiles(id),
+  signaled_at timestamptz not null default now(),
+  validated_by uuid references profiles(id),
+  validated_at timestamptz,
+  validation_comment text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create trigger trg_prazo_signals_updated_at
+before update on prazo_signals
+for each row execute function extensions.moddatetime(updated_at);
+
+create unique index uidx_prazo_signals_pending on prazo_signals(source_table, source_id)
+where status = 'PENDENTE';
+
 -- Modelos
 create table models (
   id uuid primary key default gen_random_uuid(),
@@ -330,14 +389,10 @@ create trigger trg_opinion_allowed
 before insert on internal_opinions
 for each row execute function check_opinion_allowed();
 
--- Notificação só com status ANADOC, ANATEC-PRE, ANATEC, ANAICA
+-- Notificação: regra flexibilizada (permitido sempre)
 create or replace function check_notification_allowed()
 returns trigger language plpgsql as $$
 begin
-  -- Previously, notifications could only be inserted when the related
-  -- process was in a specific set of statuses. To allow registering
-  -- notifications regardless of the process status, the validation was
-  -- removed and this trigger now simply returns the new row.
   return new;
 end$$;
 create trigger trg_notification_allowed
@@ -397,7 +452,10 @@ create trigger audit_checklists    after insert or update on checklist_responses
 -- Pareceres internos (ATM/DT 10d; CGNA 30d) a partir do dia seguinte)
 create or replace view v_prazo_pareceres as
 with base as (
-  select io.process_id,
+  select io.id as origin_id,
+         'internal_opinions'::text as origin_table,
+         'parecer'::text as origin_kind,
+         io.process_id,
          p.nup,
          io.type,
          date(timezone('America/Sao_Paulo', io.requested_at)) as requested_at,
@@ -408,7 +466,10 @@ with base as (
   where io.status = 'SOLICITADO'
     and io.type in ('ATM','DT','CGNA')
 )
-select process_id,
+select origin_id,
+       origin_table,
+       origin_kind,
+       process_id,
        nup,
        type,
        requested_at,
@@ -421,7 +482,10 @@ from base;
 -- Pareceres externos (SIGADAER)
 create or replace view v_prazo_pareceres_externos as
 with base as (
-  select s.process_id,
+  select s.id as origin_id,
+         'sigadaer'::text as origin_table,
+         'sigadaer'::text as origin_kind,
+         s.process_id,
          p.nup,
          s.type,
          date(timezone('America/Sao_Paulo', s.expedit_at)) as requested_at,
@@ -433,7 +497,10 @@ with base as (
     and s.received_at is null
     and s.deadline_days is not null
 )
-select process_id,
+select origin_id,
+       origin_table,
+       origin_kind,
+       process_id,
        nup,
        type,
        requested_at,
@@ -447,6 +514,8 @@ from base;
 create or replace view v_prazo_termino_obra as
 select base.process_id,
        base.nup,
+       base.process_id as origin_id,
+       'processes'::text as origin_table,
        base.requested_at,
        case when base.em_atraso then base.start_count + 29
             else base.requested_at end as due_date,
@@ -480,12 +549,14 @@ from (
 
 -- Monitorar Leitura/Expedição: notificações não lidas e SIGADAER não expedidos
 create or replace view v_monitorar_tramitacao as
-select n.process_id, p.nup, n.type::text as type, null::integer as number
+select n.process_id, p.nup, n.type::text as type, null::integer as number,
+       'notifications'::text as origin_table, n.id as origin_id
 from notifications n
 join processes p on p.id = n.process_id
 where n.status = 'SOLICITADA'
 union all
-select s.process_id, p.nup, s.type::text as type, s.numbers[1] as number
+select s.process_id, p.nup, s.type::text as type, s.numbers[1] as number,
+       'sigadaer'::text as origin_table, s.id as origin_id
 from sigadaer s
 join processes p on p.id = s.process_id
 where s.status = 'SOLICITADO';
@@ -493,15 +564,18 @@ where s.status = 'SOLICITADO';
 -- Remoção / Rebaixamento (DESF-REM_REB lida)
 create or replace view v_prazo_remocao_rebaixamento as
 with base as (
-  select n.process_id,
+  select n.id as notification_id,
+         n.process_id,
          p.nup,
          date(timezone('America/Sao_Paulo', n.read_at)) as read_date
   from notifications n
   join processes p on p.id = n.process_id
   where n.type = 'DESF-REM_REB' and n.status = 'LIDA'
 )
-select process_id,
+select notification_id,
+       process_id,
        nup,
+       'notifications'::text as origin_table,
        read_date as read_at,
        (read_date + 1) + (120 - 1) as due_date,
        read_date + 1 as start_count,
@@ -554,23 +628,164 @@ cross join lateral (
 -- AD/HEL - Deliberação Favorável (2 anos a partir do dia seguinte à leitura)
 create or replace view v_prazo_ad_hel as
 with fav as (
-  select n.process_id,
-         max(date(timezone('America/Sao_Paulo', n.read_at))) as read_date
+  select distinct on (n.process_id)
+         n.process_id,
+         n.id as notification_id,
+         date(timezone('America/Sao_Paulo', n.read_at)) as read_date
   from notifications n
   join processes p on p.id = n.process_id
   where n.type = 'FAV-AD_HEL'
     and n.status = 'LIDA'
     and p.type = 'Inscrição'
-  group by n.process_id
+  order by n.process_id, n.read_at desc nulls last
 )
 select p.id as process_id,
        p.nup,
+       fav.notification_id,
+       'notifications'::text as origin_table,
        fav.read_date,
        fav.read_date + 1 as start_count,
        (fav.read_date + 1 + interval '2 years')::date as due_date,
        (fav.read_date + 1 + interval '2 years')::date - current_date as days_remaining
 from fav
 join processes p on p.id = fav.process_id;
+
+-- Nova view: sinais de prazo (com nomes de usuários)
+create or replace view v_prazo_signals as
+select s.id,
+       s.process_id,
+       s.source_table,
+       s.source_id,
+       s.card,
+       s.action,
+       s.status,
+       s.payload,
+       s.analyst_comment,
+       s.signaled_by,
+       sb.name as signaled_by_name,
+       s.signaled_at,
+       s.validated_by,
+       vb.name as validated_by_name,
+       s.validated_at,
+       s.validation_comment,
+       s.created_at,
+       s.updated_at
+from prazo_signals s
+left join profiles sb on sb.id = s.signaled_by
+left join profiles vb on vb.id = s.validated_by;
+
+-- Função para validar (ou rejeitar) sinais de prazo
+create or replace function prazo_signal_validate(
+  p_signal_id uuid,
+  p_approve boolean,
+  p_comment text default null
+)
+returns prazo_signals
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  sig prazo_signals%rowtype;
+  updated prazo_signals%rowtype;
+  now_ts timestamptz := now();
+  event_ts timestamptz;
+  event_date date;
+begin
+  if not is_admin() then
+    raise exception 'Somente administradores podem validar sinalizações.';
+  end if;
+
+  select * into sig
+  from prazo_signals
+  where id = p_signal_id
+  for update;
+
+  if not found then
+    raise exception 'Sinalização não encontrada.';
+  end if;
+
+  if sig.status <> 'PENDENTE' then
+    raise exception 'Sinalização já foi processada.';
+  end if;
+
+  if p_approve then
+    event_ts := coalesce((sig.payload ->> 'event_datetime')::timestamptz, now_ts);
+    event_date := (sig.payload ->> 'event_date')::date;
+
+    if sig.action = 'internal_opinion_received' then
+      update internal_opinions
+         set status = 'RECEBIDO',
+             received_at = event_ts
+       where id = sig.source_id;
+      if not found then
+        raise exception 'Parecer interno % não encontrado.', sig.source_id;
+      end if;
+
+    elsif sig.action = 'external_opinion_received' then
+      update sigadaer
+         set status = 'RECEBIDO',
+             received_at = event_ts
+       where id = sig.source_id;
+      if not found then
+        raise exception 'SIGADAER % não encontrado.', sig.source_id;
+      end if;
+
+    elsif sig.action = 'notification_read' then
+      update notifications
+         set status = 'LIDA',
+             read_at = event_ts
+       where id = sig.source_id;
+      if not found then
+        raise exception 'Notificação % não encontrada.', sig.source_id;
+      end if;
+
+    elsif sig.action = 'sigadaer_expedit' then
+      update sigadaer
+         set status = 'EXPEDIDO',
+             expedit_at = event_ts
+       where id = sig.source_id;
+      if not found then
+        raise exception 'SIGADAER % não encontrado.', sig.source_id;
+      end if;
+
+    elsif sig.action = 'notification_resolved' then
+      update notifications
+         set status = 'RESPONDIDA',
+             responded_at = event_ts
+       where id = sig.source_id;
+      if not found then
+        raise exception 'Notificação % não encontrada.', sig.source_id;
+      end if;
+
+    elsif sig.action = 'obra_concluida' then
+      update processes
+         set obra_concluida = true,
+             obra_termino_date = coalesce(event_date, obra_termino_date)
+       where id = sig.source_id;
+      if not found then
+        raise exception 'Processo % não encontrado.', sig.source_id;
+      end if;
+
+    else
+      raise exception 'Ação não suportada: %', sig.action;
+    end if;
+  end if;
+
+  update prazo_signals
+     set status = case when p_approve then 'VALIDADO' else 'REJEITADO' end,
+         validated_by = auth.uid(),
+         validated_at = now_ts,
+         validation_comment = p_comment,
+         updated_at = now_ts
+   where id = sig.id
+   returning * into updated;
+
+  return updated;
+end;
+$$;
+
+grant execute on function prazo_signal_validate(uuid, boolean, text) to authenticated;
 
 -- =========================
 -- RLS (Row Level Security)
@@ -585,6 +800,7 @@ alter table models               enable row level security;
 alter table checklist_templates  enable row level security;
 alter table checklist_responses  enable row level security;
 alter table audit_log            enable row level security;
+alter table prazo_signals        enable row level security;
 
 -- ---------- POLICIES ----------
 
@@ -714,6 +930,17 @@ for select using ( is_admin() );
 
 create policy "audit insert" on audit_log
 for insert with check ( auth.role() = 'authenticated' );
+
+-- prazo_signals
+create policy "prazo signals select" on prazo_signals
+for select using ( auth.role() = 'authenticated' );
+
+create policy "prazo signals insert" on prazo_signals
+for insert with check ( can_signal_deadlines() );
+
+create policy "prazo signals admin update" on prazo_signals
+for update using ( is_admin() )
+with check ( is_admin() );
 
 
 -- ============== Fim do arquivo 2: Painel_AGA-main/sql/01_schema_and_policies.sql ==============
