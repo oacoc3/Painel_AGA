@@ -55,7 +55,7 @@ window.Modules.processos = (() => {
   const NOTIFICATION_TYPES = ['FAV', 'FAV-TERM', 'FAV-AD_HEL', 'TERM-ATRA', 'DESF-INI', 'DESF-NAO_INI', 'DESF_JJAER', 'DESF-REM_REB', 'NCD', 'NCT', 'REVOG', 'ARQ-EXTR', 'ARQ-PRAZ'];
   const NOTIFICATION_OPTIONS = NOTIFICATION_TYPES.map(t => `<option>${t}</option>`).join('');
   // NOVO (patch): tipos de notificação que permitem marcação "Resolvida"
-  const NOTIFICATION_RESOLUTION_TYPES = new Set(['FAV-AD_HEL', 'TERM-ATR', 'TERM-ATRA', 'DESF-REM_REB']);
+  const NOTIFICATION_RESOLUTION_TYPES = new Set(['FAV-AD_HEL', 'TERM-ATRA', 'DESF-REM_REB']);
   const SIGADAER_TYPES = ['COMAE', 'COMPREP', 'COMGAP', 'GABAER', 'SAC', 'ANAC', 'OPR_AD', 'PREF', 'GOV', 'JJAER', 'AJUR', 'AGU', 'OUTRO'];
   const SIGADAER_OPTIONS = SIGADAER_TYPES.map(t => `<option>${t}</option>`).join('');
   // NOVO (patch): prazos padrão por tipo de SIGADAER
