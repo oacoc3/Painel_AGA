@@ -6,6 +6,6 @@ window.APP_CONFIG = {
   NETLIFY_FUNCTIONS_BASE: "/.netlify/functions",
 
   // Versão manual do app (o rodapé mostrará "versão X").
-  VERSION: "1.0.0"
+  VERSION: "1.0.0-homolog"
 };
 
