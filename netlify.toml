@@ -3,6 +3,8 @@
   publish = "public"
   functions = "netlify/functions"
   node_version = "20"
+  # Gera o public/config.js a partir de variáveis do ambiente antes do build
+  command = "bash scripts/render-config.sh"
 # Headers de segurança
 [[headers]]
   for = "/*"
