@@ -23,61 +23,6 @@ window.Modules.prazos = (() => {
     return dlg;
   }
 
-  // --- Registro no histórico (Sinalização / Validação / Rejeição) ---
-  function normalizeNupToBankFormat(input) {
-    const digits = String(input || '').replace(/\D/g, '');
-    if (!digits) return '';
-    let d = digits;
-    if (d.length > 5) d = d.slice(5);
-    if (d.length >= 12) {
-      const p1 = d.slice(0, 6);
-      const p2 = d.slice(6, 10);
-      const p3 = d.slice(10, 12);
-      return `${p1}/${p2}-${p3}`;
-    }
-    return input || '';
-  }
-
-  async function recordHistoryByNup(nup, action, extraDetails = {}) {
-    try {
-      const norm = normalizeNupToBankFormat(nup);
-      if (!norm) throw new Error('NUP inválido.');
-      const { data: procs, error: e1 } = await sb.from('processes').select('id').eq('nup', norm).limit(1);
-      if (e1) throw e1;
-      const proc = Array.isArray(procs) && procs[0];
-      if (!proc?.id) throw new Error('Processo não encontrado para o NUP informado.');
-
-      const u = await getUser();
-      const name = (window.APP_PROFILE && window.APP_PROFILE.name)
-        || (u && u.user_metadata && u.user_metadata.name)
-        || (u && u.email) || 'Usuário';
-
-      const payload = {
-        process_id: proc.id,
-        action: action,
-        user_name: name,
-        details: { nup: norm, modulo: 'Prazos', ...extraDetails }
-      };
-      const { error: e2 } = await sb.from('history').insert(payload);
-      if (e2) throw e2;
-      return true;
-    } catch (err) {
-      console.error('[Prazos] Falha ao registrar histórico:', err);
-      Utils.setMsg && Utils.setMsg('prazoMsg', String(err.message || err), true);
-      return false;
-    }
-  }
-
-  async function registrarSinalizacao(nup) {
-    return recordHistoryByNup(nup, 'SINALIZAÇÃO', { origem: 'Prazos' });
-  }
-  async function registrarValidacao(nup) {
-    return recordHistoryByNup(nup, 'VALIDAÇÃO', { origem: 'Prazos' });
-  }
-  async function registrarRejeicao(nup) {
-    return recordHistoryByNup(nup, 'REJEIÇÃO', { origem: 'Prazos' });
-  }
-
   function openPrazoClickPopup(nup) {
     const dlg = ensurePrazoClickDialog();
     const nupEl = dlg.querySelector('#prazoClickNup');
@@ -92,25 +37,17 @@ window.Modules.prazos = (() => {
       window.location.href = 'processos.html';
     };
     btnSinalizar.onclick = () => {
-      registrarSinalizacao(nup);
+      // Por enquanto, sem função (placeholder solicitado).
+      // Futuro: chamar RPC set_prazo_signal(process_id, 'LEITURA_EXPEDICAO', ...)
+      // Aqui manteremos apenas um aviso não intrusivo no console:
+      console.info('[Prazo] Botão "Sinalizar" clicado para NUP', nup);
     };
-    btnFechar.onclick = () => dlg.close();
+    btnFechar.onclick = () => {
+      if (typeof dlg.close === 'function') dlg.close();
+    };
 
-    dlg.showModal();
-  }
-
-  function bindRowLinks(tbody) {
-    if (!tbody) return;
-    tbody.querySelectorAll('tr').forEach(tr => {
-      if (!tr.dataset.row) return;
-      try {
-        const data = JSON.parse(tr.dataset.row);
-        if (!data?.nup) return;
-        tr.addEventListener('click', () => {
-          openPrazoClickPopup(String(data.nup));
-        });
-      } catch {}
-    });
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+    else dlg.style.display = 'block';
   }
 
   let pareceres = [];
@@ -126,14 +63,7 @@ window.Modules.prazos = (() => {
     {
       key: 'type_label',
       label: 'Tipo',
-      value: r => {
-        if (!r.type) return '';
-        if (r.type === 'PDIR') return 'Parecer PDIR';
-        if (r.type === 'EXPL') return 'Parecer Exploração';
-        if (r.type === 'INSC') return 'Parecer Inscrição';
-        if (r.type === 'ALTR') return 'Parecer Alteração';
-        return r.type;
-      }
+      value: r => r.type_label || r.type || ''
     },
     { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
     { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
@@ -150,47 +80,64 @@ window.Modules.prazos = (() => {
     {
       key: 'due_date',
       label: 'Prazo',
-      value: r => Utils.fmtDate(r.due_date)
+      value: r => Utils.fmtDate(r.due_date),
+      render: r => {
+        const prazo = Utils.fmtDate(r.due_date);
+        if (!r.em_atraso) return `<div>${prazo}</div>`;
+        return `<div>${prazo}</div><div class="text-danger">ADICIONAL</div>`;
+      }
     },
-    {
-      key: 'days_remaining',
-      label: '',
-      value: r => Utils.daysBetween(new Date(), r.due_date)
-    }
+    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
   ];
 
   const SOBRESTAMENTO_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
+    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
+    { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
 
   const MONITOR_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
+    { key: 'type', label: 'Tipo' },
+    { key: 'number', label: 'Número', value: r => (r.number ? String(r.number).padStart(6, '0') : '') }
   ];
 
   const DOAGA_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
+    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
+    { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
 
   const ADHEL_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
+    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : '') },
+    { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
 
-  function getParecerRows() {
+  function bindRowLinks(tbody) {
+    if (!tbody) return;
+    tbody.querySelectorAll('tr').forEach(tr => {
+      if (!tr.dataset.row) return;
+      try {
+        const data = JSON.parse(tr.dataset.row);
+        if (!data?.nup) return;
+        tr.addEventListener('click', () => {
+          openPrazoClickPopup(String(data.nup));
+        });
+      } catch {}
+    });
+  }
+
+  function getPareceresRows() {
     return pareceres;
   }
+
   function renderPareceres() {
-    const rows = getParecerRows();
+    const rows = getPareceresRows();
     const { tbody } = Utils.renderTable('prazoParec', PARECERES_COLUMNS, rows);
     bindRowLinks(tbody);
   }
+
   async function loadPareceres() {
     const [intRes, extRes] = await Promise.all([
       sb
@@ -201,27 +148,44 @@ window.Modules.prazos = (() => {
         .select('nup,type,due_date,days_remaining,deadline_days')
     ]);
 
-    const intRows = (intRes.data || []).map(r => ({
-      ...r,
-      type_label: r.type
-    }));
-    const extRows = (extRes.data || []).map(r => ({
-      ...r,
-      type_label: r.type
-    }));
+    const normalize = rows => (Array.isArray(rows) ? rows : []);
 
-    pareceres = [...intRows, ...extRows].sort(
-      (a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
+    const parecerRows = normalize(intRes.data)
+      .filter(row => ['ATM', 'DT', 'CGNA'].includes(row.type))
+      .map(row => ({
+        ...row,
+        origin: 'parecer',
+        type_label: `Parecer ${row.type}`
+      }));
+
+    const sigadaerRows = normalize(extRes.data)
+      .filter(row => row.due_date || typeof row.deadline_days === 'number')
+      .map(row => ({
+        ...row,
+        origin: 'sigadaer',
+        type_label: `SIGADAER ${row.type}`,
+        days_remaining:
+          typeof row.days_remaining === 'number'
+            ? row.days_remaining
+            : Utils.daysBetween(new Date(), row.due_date)
+      }));
+
+    pareceres = [...parecerRows, ...sigadaerRows]
+      .filter(row => row.due_date)
+      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
     renderPareceres();
   }
 
-  function getRemocaoRows() { return remocao; }
+  function getRemocaoRows() {
+    return remocao;
+  }
+
   function renderRemocao() {
     const rows = getRemocaoRows();
     const { tbody } = Utils.renderTable('prazoRemocao', REMOCAO_COLUMNS, rows);
     bindRowLinks(tbody);
   }
+
   async function loadRemocao() {
     const { data } = await sb.from('v_prazo_remocao_rebaixamento')
       .select('nup,due_date,days_remaining');
@@ -229,60 +193,67 @@ window.Modules.prazos = (() => {
     renderRemocao();
   }
 
-  function getObraRows() { return obras; }
+  function getObraRows() {
+    return obras;
+  }
+
   function renderObra() {
     const rows = getObraRows();
     const { tbody } = Utils.renderTable('prazoObra', OBRAS_COLUMNS, rows);
     bindRowLinks(tbody);
   }
+
   async function loadObra() {
     const { data } = await sb.from('v_prazo_termino_obra')
-      .select('nup,due_date,days_remaining');
-    obras = (data || []).sort(
-      (a, b) =>
-        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
+      .select('nup,due_date,days_remaining,em_atraso');
+    obras = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
     renderObra();
   }
 
-  function getSobrestamentoRows() { return sobrestamento; }
+  function getSobrestamentoRows() {
+    return sobrestamento;
+  }
+
   function renderSobrestamento() {
     const rows = getSobrestamentoRows();
-    const { tbody } = Utils.renderTable('prazoSobrest', SOBRESTAMENTO_COLUMNS, rows);
+    const { tbody } = Utils.renderTable('prazoSobrestamento', SOBRESTAMENTO_COLUMNS, rows);
     bindRowLinks(tbody);
   }
+
   async function loadSobrestamento() {
     const { data } = await sb.from('v_prazo_sobrestamento')
       .select('nup,due_date,days_remaining');
-    sobrestamento = (data || []).sort(
-      (a, b) =>
-        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
+    sobrestamento = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
     renderSobrestamento();
   }
 
-  function getMonitorRows() { return monitor; }
+  function getMonitorRows() {
+    return monitor;
+  }
+
   function renderMonitor() {
     const rows = getMonitorRows();
-    const { tbody } = Utils.renderTable('prazoMonitor', MONITOR_COLUMNS, rows);
+    const { tbody } = Utils.renderTable('prazoMonit', MONITOR_COLUMNS, rows);
     bindRowLinks(tbody);
   }
+
   async function loadMonitor() {
     const { data } = await sb.from('v_monitorar_tramitacao')
-      .select('nup,due_date,days_remaining');
-    monitor = (data || []).sort(
-      (a, b) =>
-        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
+      .select('nup,type,number');
+    monitor = data || [];
     renderMonitor();
   }
 
-  function getDoagaRows() { return doaga; }
+  function getDoagaRows() {
+    return doaga;
+  }
+
   function renderDOAGA() {
     const rows = getDoagaRows();
     const { tbody } = Utils.renderTable('prazoDOAGA', DOAGA_COLUMNS, rows);
     bindRowLinks(tbody);
   }
+
   async function loadDOAGA() {
     const { data } = await sb.from('v_prazo_do_aga')
       .select('nup,due_date,days_remaining');
@@ -293,12 +264,16 @@ window.Modules.prazos = (() => {
     renderDOAGA();
   }
 
-  function getADHELRows() { return adhel; }
+  function getAdhelRows() {
+    return adhel;
+  }
+
   function renderADHEL() {
-    const rows = getADHELRows();
+    const rows = getAdhelRows();
     const { tbody } = Utils.renderTable('prazoADHEL', ADHEL_COLUMNS, rows);
     bindRowLinks(tbody);
   }
+
   async function loadADHEL() {
     const { data } = await sb.from('v_prazo_ad_hel')
       .select('nup,due_date,days_remaining');
@@ -308,6 +283,10 @@ window.Modules.prazos = (() => {
     );
     renderADHEL();
   }
+
+  
+
+  
 
   function init() {}
 
@@ -323,5 +302,5 @@ window.Modules.prazos = (() => {
     ]);
   }
 
-  return { init, load, registrarSinalizacao, registrarValidacao, registrarRejeicao };
+  return { init, load };
 })();
