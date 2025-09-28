@@ -333,6 +333,7 @@
   function bindNav() {
     const nav = document.getElementById('topNav');
     if (!nav) return;
+    // segue compat com botões antigos (se existirem)
     nav.addEventListener('click', (ev) => {
       const btn = ev.target.closest('button[data-route]');
       if (!btn) return;
@@ -412,20 +413,17 @@
     return data;
   }
 
-  // Garante que o JWT (JSON Web Token) contenha 'role' e 'name' iguais ao perfil.
+  // Garante que o JWT (JSON Web Token) contenha 'role' e 'name' iguais ao perfil (apenas checagem/log).
   async function ensureJwtMetadataFromProfile() {
     const u = await getUser();
     if (!u) return false;
-    const roleJwt = (u.user_metadata && u.user_metadata.role) || null;
-    const nameJwt = (u.user_metadata && u.user_metadata.name) || null;
-
-    // Usa o profile carregado no estado ou recarrega se necessário
-    const p = state.profile || (await sb.from('profiles').select('*').eq('id', u.id).maybeSingle()).data;
-    if (!p) return false;
+    const roleJwt = u.user_metadata?.role ?? null;
+    const nameJwt = u.user_metadata?.name ?? null;
+    const p = state.profile; // já carregado por loadProfile()
+    if (!p) return true; // nada a fazer
 
     try {
       if (roleJwt !== p.role || nameJwt !== (p.name || null)) {
-        // Apenas exibe no console; atualização real do user_metadata é feita em outro fluxo administrativo
         console.info('[mpa] JWT metadata difere do profile (role/name).');
       }
     } catch (err) {
@@ -510,32 +508,36 @@
     ['procNUP','opNUP','ntNUP','sgNUP','adNUP'].forEach(Utils.bindNUPMask);
 
     const client = getClient();
-    try {
-      client?.auth?.onAuthStateChange?.(async (event, session) => {
-        try {
-          state.session = session || null;
-          if (session?.user?.id) {
-            renderHeaderStamp();
-            const uid = session.user.id;
-            if (!state.audit.loginRecorded || state.audit.recordedUserId !== uid) {
-              const logged = await recordLoginEvent(session);
-              if (!logged) {
-                clearAuditState();
-              } else {
-                state.audit.recordedUserId = uid;
-              }
+    client?.auth?.onAuthStateChange?.(async (event, session) => {
+      try {
+        state.session = session || null;
+
+        if (session?.user?.id) {
+          renderHeaderStamp();
+          const uid = session.user.id;
+          if (!state.audit.loginRecorded || state.audit.recordedUserId !== uid) {
+            const logged = await recordLoginEvent(session);
+            if (!logged) {
+              clearAuditState();
             } else {
               state.audit.recordedUserId = uid;
             }
           } else {
-            clearAuditState();
+            state.audit.recordedUserId = uid;
           }
-        } else if (event === 'SIGNED_OUT') {
+        } else {
+          // sem usuário: limpa estado
+          clearAuditState();
+        }
+
+        // Evento explícito de sign out
+        if (event === 'SIGNED_OUT') {
           clearAuditState();
         }
       } catch (err) {
         console.error('[mpa] Erro ao tratar evento de autenticação:', err);
       }
+
       try {
         await ensureAuthAndUI();
         bootModules();
@@ -543,14 +545,14 @@
         console.error('[mpa] Falha ao atualizar UI após evento auth:', err);
       }
     });
-  }
 
-  // Always wait for DOMContentLoaded to ensure all modules (e.g. auth) have loaded
-  // before running the initialization routine. This avoids race conditions where
-  // scripts loaded later via <script defer> are not yet available when init() runs.
+    // Inicialização dos módulos da rota atual
+    bootModules();
+  }
 
   // Exponibiliza init no escopo global para handlers legados
   window.init = init;
 
+  // Garante execução após DOM pronto
   document.addEventListener('DOMContentLoaded', init);
 })();
