@@ -3,6 +3,31 @@
 // Mantém o visual e os módulos existentes; apenas substitui o roteamento da SPA.
 
 (() => {
+
+  // Polyfill defensivo: garante Utils.bindNUPBankMask mesmo se o utils.js antigo estiver em cache
+  function __ensureBindNUPBankMask() {
+    try {
+      if (!window.Utils) return false;
+      if (typeof window.Utils.bindNUPBankMask === 'function') return true;
+      window.Utils.bindNUPBankMask = function(id) {
+        const input = typeof id === 'string' ? document.getElementById(id) : id;
+        if (!input) return;
+        input.addEventListener('input', () => {
+          const d = input.value.replace(/\D/g, '').slice(0, 12);
+          let v = d.slice(0, 6);
+          if (d.length > 6) v += '/' + d.slice(6, 10);
+          if (d.length > 10) v += '-' + d.slice(10, 12);
+          input.value = v;
+        });
+      };
+      return true;
+    } catch (e) {
+      console.warn('[mpa] Falha ao definir bindNUPBankMask:', e);
+      return false;
+    }
+  }
+
+
   const ROUTE_TO_PAGE = {
     login: 'index.html',
     dashboard: 'dashboard.html',
