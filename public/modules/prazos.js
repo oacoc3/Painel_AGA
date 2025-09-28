@@ -24,30 +24,33 @@ window.Modules.prazos = (() => {
     return dlg;
   }
 
-  function openPrazoClickPopup(nup) {
-    const dlg = ensurePrazoClickDialog();
-    const nupEl = dlg.querySelector('#prazoClickNup');
-    if (nupEl) nupEl.textContent = `NUP: ${nup}`;
-    // Limpa handlers anteriores para evitar múltiplos binds
-    const btnVer = dlg.querySelector('#prazoVerLista');
-    const btnSinalizar = dlg.querySelector('#prazoSinalizar');
-    const btnValidacao = dlg.querySelector('#prazoValidacao');
-    const btnFechar = dlg.querySelector('#prazoFechar');
+  
+function openPrazoClickPopup(nup) {
+  const dlg = ensurePrazoClickDialog();
+  const nupEl = dlg.querySelector('#prazoClickNup');
+  if (nupEl) nupEl.textContent = `NUP: ${nup}`;
+  const btnVer = dlg.querySelector('#prazoVerLista');
+  const btnSinalizar = dlg.querySelector('#prazoSinalizar');
+  const btnValidacao = dlg.querySelector('#prazoValidacao');
+  const btnFechar = dlg.querySelector('#prazoFechar');
 
-    btnVer.onclick = () => {
-      try { sessionStorage.setItem('procPreSelect', nup); } catch (_) {}
-      window.location.href = 'processos.html';
-    };
-    btnSinalizar.onclick = () => {
-      // Por enquanto, sem função (placeholder solicitado).
-      // Futuro: chamar RPC set_prazo_signal(process_id, 'LEITURA_EXPEDICAO', ...)
-      // Aqui manteremos apenas um aviso não intrusivo no console:
-      console.info('[Prazo] Botão "Sinalizar" clicado para NUP', nup);
-    };
-    btnFechar.onclick = () => {
-      if (typeof dlg.close === 'function') dlg.close();
-    };
-    const PARECERES_COLUMNS = [
+  btnVer.onclick = () => {
+    try { sessionStorage.setItem('procPreSelect', nup); } catch (_) {}
+    window.location.href = 'processos.html';
+  };
+  btnSinalizar.onclick = () => {
+    console.info('[Prazo] Botão "Sinalizar" clicado para NUP', nup);
+  };
+  btnValidacao.onclick = () => {
+    console.info('[Prazo] Botão "Validação" clicado para NUP', nup);
+  };
+  btnFechar.onclick = () => {
+    if (typeof dlg.close === 'function') dlg.close();
+  };
+  if (typeof dlg.showModal === 'function') dlg.showModal();
+  else dlg.style.display = 'block';
+}
+const PARECERES_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
     {
       key: 'type_label',
