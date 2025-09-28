@@ -31,7 +31,7 @@ function openPrazoClickPopup(nup) {
   if (nupEl) nupEl.textContent = `NUP: ${nup}`;
   const btnVer = dlg.querySelector('#prazoVerLista');
   const btnSinalizar = dlg.querySelector('#prazoSinalizar');
-  const btnValidacao = dlg.querySelector('#prazoValidacao');
+  btnValidacao = dlg.querySelector('#prazoValidacao');
   const btnFechar = dlg.querySelector('#prazoFechar');
 
   btnVer.onclick = () => {
@@ -384,7 +384,7 @@ const PARECERES_COLUMNS = [
 
     const btnVer = dlg.querySelector('#prazoVerLista');
     const btnSinalizar = dlg.querySelector('#prazoSinalizar');
-    const btnValidacao = dlg.querySelector('#prazoValidacao');
+    btnValidacao = dlg.querySelector('#prazoValidacao');
     const btnFechar = dlg.querySelector('#prazoFechar');
 
     btnVer.onclick = () => {
