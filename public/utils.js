@@ -193,20 +193,6 @@
     });
   }
 
-
-  // Máscara no formato do banco: XXXXXX/XXXX-XX (6+4+2 dígitos)
-  function bindNUPBankMask(id) {
-    const input = typeof id === 'string' ? el(id) : id;
-    if (!input) return;
-    input.addEventListener('input', () => {
-      const d = input.value.replace(/\D/g, '').slice(0, 12);
-      let v = d.slice(0, 6);
-      if (d.length > 6) v += '/' + d.slice(6, 10);
-      if (d.length > 10) v += '-' + d.slice(10, 12);
-      input.value = v;
-    });
-  }
-
   // Novas utilitárias para barras de processo
   function band(value, min, max) {
     const t = (value - min) / Math.max(1e-6, (max - min));
