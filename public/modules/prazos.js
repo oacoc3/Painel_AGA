@@ -235,25 +235,6 @@ window.Modules.prazos = (() => {
     );
     renderADHEL();
   }
-
-  const PDF_SECTIONS = {
-    pareceres: { title: 'Pareceres/Info', columns: PARECERES_COLUMNS, getRows: getPareceresRows },
-    remocao: { title: 'Remoção/Rebaixamento', columns: REMOCAO_COLUMNS, getRows: getRemocaoRows },
-    obras: { title: 'Término de Obra', columns: OBRAS_COLUMNS, getRows: getObraRows },
-    sobrestamento: { title: 'Sobrestamento', columns: SOBRESTAMENTO_COLUMNS, getRows: getSobrestamentoRows },
-    monitor: { title: 'Leitura/Expedição', columns: MONITOR_COLUMNS, getRows: getMonitorRows },
-    doaga: { title: 'Prazo DO-AGA', columns: DOAGA_COLUMNS, getRows: getDoagaRows },
-    adhel: { title: 'Revogar plano', columns: ADHEL_COLUMNS, getRows: getAdhelRows }
-  };
-
-  function exportPrazoPDF(section) {
-    const config = PDF_SECTIONS[section];
-    if (!config) return;
-    if (!window.jspdf?.jsPDF) {
-      alert('Biblioteca de PDF indisponível.');
-      return;
-    }
-
     const data = typeof config.getRows === 'function' ? config.getRows() : [];
     const rows = Array.isArray(data) ? data : [];
 
@@ -302,19 +283,7 @@ window.Modules.prazos = (() => {
     const win = window.open(url, '_blank');
     if (win) win.opener = null;
   }
-
-  function bindPdfButtons() {
-    document.querySelectorAll('[data-pdf]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const section = btn.getAttribute('data-pdf');
-        exportPrazoPDF(section);
-      });
-    });
-  }
-
-  function init() {
-    bindPdfButtons();
-  }
+  function init() {}
 
   async function load() {
     await Promise.all([
