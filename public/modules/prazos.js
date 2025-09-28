@@ -15,6 +15,7 @@ window.Modules.prazos = (() => {
         <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
           <button id="prazoVerLista" value="ver" type="button">Ver na lista de processos</button>
           <button id="prazoSinalizar" value="sinalizar" type="button">Sinalizar</button>
+          <button id="prazoValidacao" value="validacao" type="button">Validação</button>
           <button id="prazoFechar" value="close" type="button">Fechar</button>
         </div>
       </form>`;
@@ -30,6 +31,7 @@ window.Modules.prazos = (() => {
     // Limpa handlers anteriores para evitar múltiplos binds
     const btnVer = dlg.querySelector('#prazoVerLista');
     const btnSinalizar = dlg.querySelector('#prazoSinalizar');
+    const btnValidacao = dlg.querySelector('#prazoValidacao');
     const btnFechar = dlg.querySelector('#prazoFechar');
 
     btnVer.onclick = () => {
@@ -45,76 +47,7 @@ window.Modules.prazos = (() => {
     btnFechar.onclick = () => {
       if (typeof dlg.close === 'function') dlg.close();
     };
-    // Ação do botão "Validação": abre popup com Validar/Rejeitar
-    if (btnValidacao) {
-      btnValidacao.onclick = () => {
-        const vdlg = ensurePrazoValidationDialog();
-        const nupVal = dlg.dataset.nup || '';
-        const rowKey = dlg.dataset.rowKey || '';
-        const [nupKey, numberKey, typeKey] = rowKey.split('|');
-
-        vdlg.dataset.nup = nupVal || nupKey || '';
-        vdlg.dataset.type = typeKey || '';
-        vdlg.dataset.number = numberKey || '';
-
-        const nupEl2 = vdlg.querySelector('#prazoValNup');
-        if (nupEl2) nupEl2.textContent = `NUP: ${vdlg.dataset.nup}`;
-        const infoEl = vdlg.querySelector('#prazoValInfo');
-        if (infoEl) {
-          const parts = [];
-          if (vdlg.dataset.type) parts.push(`Tipo: ${vdlg.dataset.type}`);
-          if (vdlg.dataset.number) parts.push(`Nº: ${String(vdlg.dataset.number).padStart(6,'0')}`);
-          infoEl.textContent = parts.join(' • ');
-        }
-        const obsEl = vdlg.querySelector('#prazoValObs'); if (obsEl) obsEl.value = '';
-
-        const doClose = () => { if (typeof vdlg.close === 'function') vdlg.close(); };
-
-        const btnApprove = vdlg.querySelector('#prazoValApprove');
-        const btnReject = vdlg.querySelector('#prazoValReject');
-        const btnCloseV = vdlg.querySelector('#prazoValClose');
-
-        if (btnApprove) btnApprove.onclick = async () => {
-          try {
-            await window.PrazoSignalHistory?.validarSinalizacao(
-              vdlg.dataset.nup, vdlg.dataset.type, vdlg.dataset.number, obsEl?.value || null
-            );
-          } catch (e) { console.error('[Prazo] Validação (Admin) falhou:', e); }
-          doClose();
-          if (typeof prazoClickDialog?.close === 'function') prazoClickDialog.close();
-        };
-
-        if (btnReject) btnReject.onclick = async () => {
-          try {
-            await window.PrazoSignalHistory?.rejeitarSinalizacao(
-              vdlg.dataset.nup, vdlg.dataset.type, vdlg.dataset.number, obsEl?.value || null
-            );
-          } catch (e) { console.error('[Prazo] Rejeição (Admin) falhou:', e); }
-          doClose();
-          if (typeof prazoClickDialog?.close === 'function') prazoClickDialog.close();
-        };
-
-        if (btnCloseV) btnCloseV.onclick = () => doClose();
-
-        if (typeof vdlg.showModal === 'function') vdlg.showModal();
-        else vdlg.setAttribute('open','open');
-      };
-    }
-
-
-    if (typeof dlg.showModal === 'function') dlg.showModal();
-    else dlg.style.display = 'block';
-  }
-
-  let pareceres = [];
-  let remocao = [];
-  let obras = [];
-  let sobrestamento = [];
-  let monitor = [];
-  let doaga = [];
-  let adhel = [];
-
-  const PARECERES_COLUMNS = [
+    const PARECERES_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
     {
       key: 'type_label',
@@ -448,6 +381,7 @@ window.Modules.prazos = (() => {
 
     const btnVer = dlg.querySelector('#prazoVerLista');
     const btnSinalizar = dlg.querySelector('#prazoSinalizar');
+    const btnValidacao = dlg.querySelector('#prazoValidacao');
     const btnFechar = dlg.querySelector('#prazoFechar');
 
     btnVer.onclick = () => {
