@@ -7,11 +7,18 @@
   <title>Painel DO-AGA</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
+  <!-- CSS específico do módulo Modelos (CSS = Cascading Style Sheets) -->
+  <link rel="stylesheet" href="./styles.modelos.css" />
+  <!-- App config -->
   <script src="./config.js" defer></script>
+  <!-- Supabase library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
+  <!-- Sessão pronta antes de inicializar a página -->
   <script src="./auth-ready.js" defer></script>
   <script src="./utils.js" defer></script>
+  <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
   <script src="./mpa.js" defer></script>
   <script src="./modules/modelos.js" defer></script>
@@ -25,15 +32,12 @@
         <small class="build" id="buildInfo">build: carregando…</small>
       </div>
       <nav id="topNav" class="nav hidden">
-        <label for="moduleSelect" class="sr-only">Módulo</label>
-        <select id="moduleSelect" name="moduleSelect">
-          <option value="dashboard">Início</option>
-          <option value="processos">Processos</option>
-          <option value="prazos">Prazos</option>
-          <option value="modelos">Modelos</option>
-          <option value="analise">Documental</option>
-          <option value="admin" id="optAdmin">Administração</option>
-        </select>
+        <button data-route="dashboard">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos" class="active">Modelos</button>
+        <button data-route="analise">Documental</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
       </nav>
       <div id="userBox" class="user hidden">
         <span id="userName"></span>
@@ -44,8 +48,32 @@
 
     <main class="main">
       <section id="viewModelos" class="view">
-        <!-- conteúdo original da página permanece inalterado -->
-...
+        <div class="split modelos">
+          <div class="card">
+            <h2>Cadastrar / Atualizar Modelo</h2>
+            <form id="formModelo" data-ajax>
+              <input type="hidden" id="mdlId">
+              <div class="row mdl-top-row">
+                <label>Categoria <input id="mdlCat" required></label>
+                <label>Título <input id="mdlTit" required></label>
+                <button id="btnSalvarModelo" type="button">Salvar</button>
+                <button id="btnCopiarModelo" type="button">Copiar</button>
+                <button id="btnLimparModelo" type="button">Limpar</button>
+              </div>
+              <label>Conteúdo <textarea id="mdlTxt" rows="8" required disabled></textarea></label>
+              <div id="mdlMsg" class="msg"></div>
+            </form>
+          </div>
+          <div class="card">
+            <h2>Modelos</h2>
+            <label>Categoria
+              <select id="mdlFiltroCat">
+                <option value="">Todas</option>
+              </select>
+            </label>
+            <div id="listaModelos" class="table scrolly"></div>
+          </div>
+        </div>
       </section>
     </main>
 
@@ -56,6 +84,7 @@
     </footer>
   </div>
 
+  <!-- Preenche build no cabeçalho e rodapé -->
   <script defer src="./build-info-client.js"></script>
 </body>
 </html>

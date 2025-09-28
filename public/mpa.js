@@ -1,6 +1,6 @@
 // public/mpa.js
 // Inicialização e navegação para MPA (Multi-Page Application)
-// Mantém o visual e os módulos existentes; apenas adiciona navegação via dropdown no cabeçalho.
+// Mantém o visual e os módulos existentes; apenas substitui o roteamento da SPA.
 
 (() => {
   const ROUTE_TO_PAGE = {
@@ -19,17 +19,34 @@
   const AUDIT_LOGIN_UID_KEY = 'auditLoginUserId';
 
   function readAuditStorage(key) {
-    try { return sessionStorage.getItem(key); }
-    catch (err) { console.warn('[audit] Falha ao ler sessionStorage:', err); return null; }
+    try {
+      return sessionStorage.getItem(key);
+    } catch (err) {
+      console.warn('[audit] Falha ao ler sessionStorage:', err);
+      return null;
+    }
   }
+
   function writeAuditStorage(key, value) {
-    try { if (value == null) sessionStorage.removeItem(key); else sessionStorage.setItem(key, value); }
-    catch (err) { console.warn('[audit] Falha ao gravar sessionStorage:', err); }
+    try {
+      if (value == null) sessionStorage.removeItem(key);
+      else sessionStorage.setItem(key, value);
+    } catch (err) {
+      console.warn('[audit] Falha ao gravar sessionStorage:', err);
+    }
   }
+
   function generateAuditSessionId() {
-    try { if (window.crypto?.randomUUID) return window.crypto.randomUUID(); } catch (_) {}
+    try {
+      if (window.crypto?.randomUUID) {
+        return window.crypto.randomUUID();
+      }
+    } catch (_) {}
+    // Fallback RFC4122-ish
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-      const r = Math.random()*16|0, v = c === 'x' ? r : (r&0x3|0x8); return v.toString(16);
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
     });
   }
   // ---- Fim: suporte a auditoria de sessão/uso ----
@@ -42,6 +59,7 @@
       const name = file.replace('.html', '');
       return (name === '' || name === 'index') ? 'login' : name;
     })(),
+    // ---- Estado de auditoria ----
     audit: {
       clientSessionId: readAuditStorage(AUDIT_SESSION_KEY),
       loginRecorded: readAuditStorage(AUDIT_LOGIN_FLAG_KEY) === '1',
@@ -54,15 +72,23 @@
     state.audit.clientSessionId = null;
     state.audit.loginRecorded = false;
     state.audit.recordedUserId = null;
+    state.audit.lastModuleKey = null;
     writeAuditStorage(AUDIT_SESSION_KEY, null);
     writeAuditStorage(AUDIT_LOGIN_FLAG_KEY, null);
     writeAuditStorage(AUDIT_LOGIN_UID_KEY, null);
   }
+
   function ensureClientSessionId() {
     if (state.audit.clientSessionId) return state.audit.clientSessionId;
     const stored = readAuditStorage(AUDIT_SESSION_KEY);
-    if (stored) { state.audit.clientSessionId = stored; return stored; }
-    const gen = generateAuditSessionId(); state.audit.clientSessionId = gen; writeAuditStorage(AUDIT_SESSION_KEY, gen); return gen;
+    if (stored) {
+      state.audit.clientSessionId = stored;
+      return stored;
+    }
+    const generated = generateAuditSessionId();
+    state.audit.clientSessionId = generated;
+    writeAuditStorage(AUDIT_SESSION_KEY, generated);
+    return generated;
   }
 
   async function recordAuditEvent(eventType, moduleName = null, { session, metadata } = {}) {
@@ -70,33 +96,45 @@
       const client = window.sb;
       if (!client?.from) return false;
       const currentSession = session || state.session || await getSession();
-      const userId = currentSession?.user?.id; if (!userId) return false;
+      const userId = currentSession?.user?.id;
+      if (!userId) return false;
+      const clientSessionId = ensureClientSessionId();
       const payload = {
         profile_id: userId,
         event_type: eventType,
         event_module: moduleName || null,
-        client_session_id: ensureClientSessionId(),
+        client_session_id: clientSessionId,
       };
-      if (metadata && typeof metadata === 'object' && Object.keys(metadata).length) payload.event_metadata = metadata;
-      const { error } = await client.from('user_audit_events').insert(payload);
-      if (error) { console.warn('[audit] Falha ao registrar evento', eventType, error); return false; }
-      return true;
-    } catch (err) { console.warn('[audit] Erro inesperado no recordAuditEvent:', err); return false; }
-  }
-  async function recordLoginEvent(session) {
-    try {
-      const s = session || state.session || await getSession();
-      const uid = s?.user?.id; if (!uid) return false;
-      const ok = await recordAuditEvent('login', null, { session: s });
-      if (ok) {
-        state.audit.loginRecorded = true;
-        state.audit.recordedUserId = uid;
-        writeAuditStorage(AUDIT_LOGIN_FLAG_KEY, '1');
-        writeAuditStorage(AUDIT_LOGIN_UID_KEY, uid);
+      if (metadata && typeof metadata === 'object' && Object.keys(metadata).length) {
+        payload.event_metadata = metadata;
       }
-      return ok;
-    } catch (err) { console.warn('[audit] Falha ao registrar login:', err); return false; }
+      const { error } = await client.from('user_audit_events').insert(payload);
+      if (error) {
+        console.warn('[audit] Falha ao registrar evento', eventType, error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('[audit] Erro ao registrar evento', eventType, err);
+      return false;
+    }
   }
+
+  async function recordLoginEvent(session) {
+    if (!session?.user?.id) return false;
+    const uid = session.user.id;
+    const already = state.audit.loginRecorded && state.audit.recordedUserId === uid;
+    if (already) return false;
+    const ok = await recordAuditEvent('login', null, { session });
+    if (ok) {
+      state.audit.loginRecorded = true;
+      state.audit.recordedUserId = uid;
+      writeAuditStorage(AUDIT_LOGIN_FLAG_KEY, '1');
+      writeAuditStorage(AUDIT_LOGIN_UID_KEY, uid);
+    }
+    return ok;
+  }
+
   async function recordLogoutEvent() {
     const ok = await recordAuditEvent('logout');
     if (ok) {
@@ -107,6 +145,7 @@
     }
     return ok;
   }
+
   async function recordModuleAccess(route) {
     if (!route || route === 'login') return false;
     const session = state.session || await getSession();
@@ -114,93 +153,196 @@
     const sessionId = ensureClientSessionId();
     const key = `${route}|${sessionId}|${session.user.id}`;
     if (state.audit.lastModuleKey === key) return false;
-    const ok = await recordAuditEvent('module_access', route, { metadata: { path: location.pathname || '', title: document.title || '' } });
-    if (ok) state.audit.lastModuleKey = key;
+    const ok = await recordAuditEvent('module_access', route, {
+      metadata: { path: window.location?.pathname || '', title: document.title || '' }
+    });
+    if (ok) {
+      state.audit.lastModuleKey = key;
+    }
     return ok;
   }
 
   function renderFooterVersion() {
-    try {
-      const footBuild = document.getElementById('footBuild');
-      const bi = window.BUILD_INFO || {};
-      if (!footBuild) return;
-      if (bi.deploy_id || bi.commit) footBuild.textContent = `build: ${bi.deploy_id || ''} ${bi.commit ? '(' + (bi.commit.slice(0,7)) + ')' : ''}`;
-      else footBuild.textContent = '';
-    } catch (_) {}
+    const e = document.getElementById('footBuild');
+    if (!e) return;
+    const x = window.BUILD_INFO || {};
+    const parts = [];
+    if (x.commit) parts.push(x.commit.slice(0,7));
+    if (x.time) parts.push(new Date(x.time).toLocaleString());
+    e.textContent = parts.join(' • ');
   }
+
   function renderHeaderStamp() {
+    const p = state.profile;
     const userLbl = document.getElementById('userName');
     const roleLbl = document.getElementById('userRole');
     const buildLbl = document.getElementById('buildInfo');
-    const p = state.profile || window.APP_PROFILE || null;
+
     if (userLbl) userLbl.textContent = p ? (p.name || p.email || '') : '';
     if (roleLbl) roleLbl.textContent = p ? (p.role || '') : '';
+
     const bi = window.BUILD_INFO || {};
-    if (buildLbl && (bi.deploy_id || bi.commit)) buildLbl.textContent = [bi.deploy_id || '', (bi.commit || '').slice(0,7), new Date().toLocaleString()].join(' • ');
-    else if (buildLbl) buildLbl.textContent = '';
+    if (buildLbl && (bi.deploy_id || bi.commit)) {
+      const s = [bi.deploy_id || '', (bi.commit || '').slice(0,7), new Date().toLocaleString()].join(' • ');
+      buildLbl.textContent = s;
+    } else if (buildLbl) {
+      buildLbl.textContent = '';
+    }
   }
+
   function setActiveNav() {
     const r = state.route;
     document.querySelectorAll('#topNav button[data-route]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.route === r);
     });
-    const sel = document.getElementById('moduleSelect');
-    if (sel) { try { sel.value = r; } catch(_) {} }
   }
 
-  // ---- Limpeza local de sessão (fallback) ----
+  // ---- Novo: limpeza local de sessão Supabase (fallback de segurança) ----
   function clearSupabaseStoredSession(client) {
     let cleared = false;
     try {
-      const auth = client?.auth; if (!auth) return false;
-      const storage = auth.storage || window.localStorage; if (!storage?.removeItem) return false;
-      [auth.storageKey, auth.persistSessionKey, auth.debug].filter(Boolean).forEach(key => { try { storage.removeItem(key); cleared = true; } catch(e) { console.warn('[mpa] rm key', key, e); } });
-      try {
-        const ks = []; for (let i=0;i<storage.length;i++){ const k = storage.key(i); if (k?.startsWith('sb-')) ks.push(k); }
-        ks.forEach(k => { try { storage.removeItem(k); cleared = true; } catch(e){ console.warn('[mpa] rm derived', k, e); } });
-      } catch(e) { console.warn('[mpa] list derived keys failed', e); }
-    } catch (err) { console.warn('[mpa] Falha ao limpar sessão local do Supabase:', err); }
+      const auth = client?.auth;
+      if (!auth) return false;
+      const storage = auth.storage || window.localStorage;
+      if (!storage || typeof storage.removeItem !== 'function') return false;
+      const knownKeys = [
+        auth.storageKey,
+        auth.persistSessionKey,
+        auth.recoverSessionKey,
+        auth.multiTabKey,
+      ].filter((key) => typeof key === 'string' && key.length);
+      knownKeys.forEach((key) => {
+        try {
+          storage.removeItem(key);
+          cleared = true;
+        } catch (err) {
+          console.warn(`[mpa] Falha ao remover chave de sessão Supabase ${key}:`, err);
+        }
+      });
+      if (!cleared && typeof storage.length === 'number' && typeof storage.key === 'function') {
+        const candidateKeys = [];
+        for (let i = 0; i < storage.length; i += 1) {
+          const key = storage.key(i);
+          if (key && key.startsWith('sb-')) {
+            candidateKeys.push(key);
+          }
+        }
+        candidateKeys.forEach((key) => {
+          try {
+            storage.removeItem(key);
+            cleared = true;
+          } catch (err) {
+            console.warn(`[mpa] Falha ao remover chave Supabase derivada ${key}:`, err);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[mpa] Falha ao limpar sessão local do Supabase:', err);
+    }
     return cleared;
   }
 
+  // Trata o logout e atualiza a UI antes de redirecionar
   async function handleLogout() {
+    let stayOnLogin = false;
     let shouldReload = true;
-    try { await recordLogoutEvent(); } catch (e) { console.warn('[mpa] audit logout:', e); }
+    let sessionCleared = false;
+    let primarySignOutError = null;
+
+    try {
+      await recordLogoutEvent();
+    } catch (err) {
+      console.warn('[mpa] Falha ao registrar logout:', err);
+    }
+
     const client = window.sb;
     if (client?.auth?.signOut) {
-      let primaryErr = null;
-      try { const { error } = await client.auth.signOut({ scope: 'global' }); if (error) primaryErr = error; }
-      catch (e) { primaryErr = e; }
-      if (primaryErr) {
-        try { await client.auth.signOut({ scope: 'local' }); }
-        catch (e) { if (!clearSupabaseStoredSession(client)) console.warn('[mpa] não limpou sessão local:', e); }
+      try {
+        const { error } = await client.auth.signOut();
+        if (error) {
+          primarySignOutError = error;
+        }
+      } catch (err) {
+        primarySignOutError = err;
+        console.error('[mpa] Erro inesperado ao encerrar sessão:', err);
+      }
+    } else {
+      primarySignOutError = new Error('Supabase auth.signOut indisponível');
+    }
+
+    if (primarySignOutError) {
+      console.warn('[mpa] Falha no signOut padrão, tentando fallback local:', primarySignOutError);
+      let fallbackSucceeded = false;
+      if (client?.auth?.signOut) {
+        try {
+          const { error: localError } = await client.auth.signOut({ scope: 'local' });
+          if (localError) {
+            console.warn('[mpa] SignOut local também falhou:', localError);
+          } else {
+            fallbackSucceeded = true;
+          }
+        } catch (err) {
+          console.warn('[mpa] Erro ao tentar signOut local:', err);
+        }
+      }
+      if (!fallbackSucceeded) {
+        fallbackSucceeded = clearSupabaseStoredSession(client);
+      }
+      if (!fallbackSucceeded) {
+        console.warn('[mpa] Não foi possível limpar sessão local do Supabase.');
       }
     }
+
+    let finalSession = null;
+    let sessionCheckFailed = false;
     try {
-      document.getElementById('topNav')?.classList.add('hidden');
-      document.getElementById('userBox')?.classList.add('hidden');
-    } catch(_) {}
-    window.location.replace('index.html');
-    return { shouldReload, sessionCleared: true };
+      finalSession = await getSession();
+      if (finalSession?.user) {
+        sessionCleared = false;
+      } else {
+        sessionCleared = true;
+      }
+    } catch (err) {
+      sessionCheckFailed = true;
+      sessionCleared = false;
+      console.error('[mpa] Falha ao verificar sessão após logout:', err);
+    }
+
+    if (!sessionCheckFailed) {
+      state.session = finalSession;
+    }
+
+    if (!sessionCleared) {
+      shouldReload = false;
+      if (!sessionCheckFailed && finalSession?.user) {
+        console.error('[mpa] Sessão Supabase permanece ativa após tentativa de logout.');
+      }
+      try {
+        window.alert('Não foi possível encerrar a sessão. A página não será recarregada.');
+      } catch (err) {
+        console.warn('[mpa] Falha ao exibir alerta de erro de logout:', err);
+      }
+      return { stayOnLogin: false, shouldReload, sessionCleared };
+    }
+
+    clearAuditState();
+
+    try {
+      stayOnLogin = await ensureAuthAndUI();
+    } catch (err) {
+      console.error('[mpa] Erro ao atualizar interface após logout:', err);
+    }
+
+    if (!stayOnLogin) {
+      window.location.replace('index.html');
+    }
+
+    return { stayOnLogin, shouldReload, sessionCleared };
   }
 
   function bindNav() {
     const nav = document.getElementById('topNav');
     if (!nav) return;
-
-    // 1) Suporte ao DROPDOWN de módulos
-    const sel = document.getElementById('moduleSelect');
-    if (sel) {
-      // reflete rota atual
-      try { sel.value = state.route; } catch(_) {}
-      sel.addEventListener('change', (ev) => {
-        const r = ev.target.value;
-        const page = ROUTE_TO_PAGE[r] || 'dashboard.html';
-        window.location.href = page;
-      });
-    }
-
-    // 2) Compat com botões antigos (se ainda existirem)
     nav.addEventListener('click', (ev) => {
       const btn = ev.target.closest('button[data-route]');
       if (!btn) return;
@@ -209,83 +351,137 @@
       window.location.href = page;
     });
 
-    // 3) Logout
-    document.getElementById('btnLogout')?.addEventListener('click', async (ev) => {
-      ev.preventDefault();
-      try {
-        const r = await handleLogout();
-        if (r?.shouldReload) { try { window.location.reload(); } catch { window.location.replace('index.html'); } }
-      } catch (err) { console.error('[mpa] logout:', err); }
-    });
+    const btnLogout = document.getElementById('btnLogout');
+    if (btnLogout) {
+      btnLogout.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        let shouldReload = false;
+        try {
+          const result = await handleLogout();
+          shouldReload = result?.shouldReload === true;
+        } catch (err) {
+          console.error('[mpa] Falha inesperada ao processar logout:', err);
+          shouldReload = false;
+        }
+        if (shouldReload) {
+          try {
+            window.location.reload();
+          } catch (err) {
+            console.warn('[mpa] Falha ao recarregar após logout:', err);
+            window.location.replace('index.html');
+          }
+        }
+      });
+    }
   }
 
-  function getClient(){ return window.sb || window.supabase || null; }
-  async function getSession(){ const c=getClient(); if(!c?.auth?.getSession) return null; const {data,error}=await c.auth.getSession(); if(error){console.warn('[mpa] getSession erro:',error); return null;} return data?.session||null; }
-  async function getUser(){ const s=state.session||await getSession(); return s?.user||null; }
-
   async function loadProfile() {
-    const sb = getClient(); if (!sb?.from) return null;
     const u = await getUser();
     if (!u) {
-      state.profile = null; window.APP_PROFILE = null; renderHeaderStamp();
-      document.getElementById('btnAdmin')?.classList.add('hidden');
-      document.getElementById('optAdmin')?.setAttribute('hidden','');
+      state.profile = null;
+      window.APP_PROFILE = null;
+      renderHeaderStamp();
+      const a = document.getElementById('btnAdmin'); if (a) a.classList.add('hidden');
       return null;
     }
     const { data, error } = await sb.from('profiles').select('*').eq('id', u.id).maybeSingle();
-    if (error) { console.error(error); state.profile=null; window.APP_PROFILE=null; renderHeaderStamp(); document.getElementById('btnAdmin')?.classList.add('hidden'); return null; }
-    state.profile = data; window.APP_PROFILE = data; renderHeaderStamp();
+    if (error) {
+      console.error(error);
+      state.profile = null;
+      window.APP_PROFILE = null;
+      renderHeaderStamp();
+      const a = document.getElementById('btnAdmin'); if (a) a.classList.add('hidden');
+      return null;
+    }
+    state.profile = data;
+    window.APP_PROFILE = data;
+    renderHeaderStamp();
     const isAdmin = data.role === 'Administrador';
     const a = document.getElementById('btnAdmin'); if (a) a.classList.toggle('hidden', !isAdmin);
-    const oa = document.getElementById('optAdmin'); if (oa) { if (isAdmin) oa.removeAttribute('hidden'); else oa.setAttribute('hidden',''); }
-    // também mantém o valor do select coerente com a rota
-    const sel = document.getElementById('moduleSelect'); if (sel) { try { sel.value = state.route; } catch(_){} }
     return data;
   }
 
+  // Garante que o JWT (JSON Web Token) contenha 'role' e 'name' iguais ao perfil.
   async function ensureJwtMetadataFromProfile() {
-    const u = await getUser(); if (!u) return false;
-    const roleJwt = u.user_metadata?.role ?? null;
-    const nameJwt = u.user_metadata?.name ?? null;
-    const p = state.profile; if (!p) return true;
-    try { if (roleJwt !== p.role || nameJwt !== (p.name || null)) console.info('[mpa] JWT metadata difere do profile (role/name).'); }
-    catch (err) { console.warn('[mpa] Verif JWT falhou:', err); }
-    return true;
+    const u = await getUser();
+    if (!u) return false;
+    const roleJwt = (u.user_metadata && u.user_metadata.role) || null;
+    const nameJwt = (u.user_metadata && u.user_metadata.name) || null;
+
+    // Usa o profile carregado no estado ou recarrega se necessário
+    const p = state.profile || (await sb.from('profiles').select('*').eq('id', u.id).maybeSingle()).data;
+    if (!p) return false;
+
+    const needUpdate = (roleJwt !== p.role) || (!nameJwt && p.name);
+    if (!needUpdate) return false;
+
+    try {
+      await sb.auth.updateUser({ data: { role: p.role, name: p.name } });
+      // Força refresh para que o novo JWT (com role) passe nas RLS imediatamente
+      await sb.auth.refreshSession();
+      return true;
+    } catch (e) {
+      console.warn('[mpa] Falha ao sincronizar JWT metadata:', e);
+      return false;
+    }
   }
 
   let clockTimer = null;
-  function startClock(){ stopClock(); clockTimer = setInterval(()=>{ try{ renderHeaderStamp(); }catch(_){}} , 60000); }
-  function stopClock(){ if (clockTimer) { clearInterval(clockTimer); clockTimer = null; } }
+  function startClock() {
+    stopClock();
+    clockTimer = setInterval(() => renderHeaderStamp(), 60_000);
+  }
+  function stopClock() {
+    if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+  }
 
   async function ensureAuthAndUI() {
     state.session = await getSession();
     const onLogin = state.route === 'login';
 
     if (!state.session) {
-      clearAuditState(); stopClock();
-      if (onLogin) { document.getElementById('topNav')?.classList.add('hidden'); document.getElementById('userBox')?.classList.add('hidden'); return true; }
-      window.location.replace('index.html'); return false;
+      clearAuditState();
+      stopClock();
+      if (onLogin) {
+        // Esconde barras
+        document.getElementById('topNav')?.classList.add('hidden');
+        document.getElementById('userBox')?.classList.add('hidden');
+        return true; // permanecer na tela de login
+      } else {
+        // redireciona para login
+        window.location.replace('index.html');
+        return false;
+      }
     }
 
     await loadProfile();
     await ensureJwtMetadataFromProfile();
-    state.session = await getSession(); // refresco
-    ensureClientSessionId(); startClock();
-
-    if (!onLogin) {
-      document.getElementById('topNav')?.classList.remove('hidden');
-      document.getElementById('userBox')?.classList.remove('hidden');
+    state.session = await getSession(); // reobtém sessão após possível refresh
+    ensureClientSessionId();
+    startClock();
+    // Mostra barras exceto na tela de login
+    document.getElementById('topNav')?.classList.toggle('hidden', onLogin);
+    document.getElementById('userBox')?.classList.toggle('hidden', onLogin);
+    if (onLogin) {
+      window.location.replace('dashboard.html');
+      return false;
     }
+    if (state.route === 'admin' && state.profile?.role !== 'Administrador') {
+      window.location.replace('dashboard.html');
+      return false;
+    }
+    setActiveNav();
     return true;
   }
 
   function bootModules() {
     const onLogin = state.route === 'login';
-    if (onLogin && !state.session) { window.Modules?.auth?.init?.(); return; }
-
+    if (onLogin && !state.session) {
+      window.Modules?.auth?.init?.();
+      return;
+    }
     Object.values(window.Modules || {}).forEach(m => m.init?.());
     const isAdmin = (state.profile?.role || window.APP_PROFILE?.role) === 'Administrador';
-
     switch (state.route) {
       case 'dashboard':  window.Modules.dashboard?.load?.(); break;
       case 'processos':  window.Modules.processos?.load?.(); break;
@@ -295,7 +491,10 @@
       case 'admin':      if (isAdmin) { window.Modules.admin?.load?.(); window.Modules.checklists?.load?.(); } break;
     }
 
-    recordModuleAccess(state.route).catch(err => console.warn('[mpa] audit módulo:', err));
+    // Auditoria de acesso ao módulo
+    recordModuleAccess(state.route).catch(err => {
+      console.warn('[mpa] Falha ao registrar acesso ao módulo:', err);
+    });
   }
 
   async function init() {
@@ -303,43 +502,43 @@
     bindNav();
     const ok = await ensureAuthAndUI();
     if (!ok) return;
-    // aplica máscara de NUP (se existirem esses IDs na página)
-    ['procNUP','opNUP','ntNUP','sgNUP','adNUP'].forEach(Utils?.bindNUPMask);
+    ['procNUP','opNUP','ntNUP','sgNUP','adNUP'].forEach(Utils.bindNUPMask);
+    bootModules();
 
-    const client = getClient();
-    client?.auth?.onAuthStateChange?.(async (event, session) => {
+    // Listener de autenticação para registrar login/logout e manter UI atualizada
+    sb.auth.onAuthStateChange(async (event, session) => {
       try {
-        state.session = session || null;
-        if (session?.user?.id) {
-          renderHeaderStamp();
-          const uid = session.user.id;
-          if (!state.audit.loginRecorded || state.audit.recordedUserId !== uid) {
-            const logged = await recordLoginEvent(session);
-            if (!logged) clearAuditState(); else state.audit.recordedUserId = uid;
+        if (event === 'SIGNED_IN') {
+          clearAuditState();
+          await recordLoginEvent(session);
+        } else if (event === 'INITIAL_SESSION') {
+          if (session?.user?.id) {
+            state.audit.clientSessionId = state.audit.clientSessionId || readAuditStorage(AUDIT_SESSION_KEY);
+            const uid = session.user.id;
+            if (!state.audit.loginRecorded || state.audit.recordedUserId !== uid) {
+              await recordLoginEvent(session);
+            } else {
+              state.audit.recordedUserId = uid;
+            }
           } else {
-            state.audit.recordedUserId = uid;
+            clearAuditState();
           }
-        } else {
+        } else if (event === 'SIGNED_OUT') {
           clearAuditState();
         }
-        if (event === 'SIGNED_OUT') clearAuditState();
       } catch (err) {
-        console.error('[mpa] evento auth:', err);
+        console.error('[mpa] Erro ao tratar evento de autenticação:', err);
       }
       try {
         await ensureAuthAndUI();
-        bootModules();
       } catch (err) {
-        console.error('[mpa] pós-auth UI:', err);
+        console.error('[mpa] Falha ao atualizar UI após evento auth:', err);
       }
     });
-
-    setActiveNav();
-    bootModules();
   }
 
-  // Compat: alguns handlers legados chamam init() global
-  window.init = init;
-
+  // Always wait for DOMContentLoaded to ensure all modules (e.g. auth) have loaded
+  // before running the initialization routine. This avoids race conditions where
+  // scripts loaded later via <script defer> are not yet available when init() runs.
   document.addEventListener('DOMContentLoaded', init);
 })();

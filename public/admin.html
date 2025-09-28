@@ -7,15 +7,20 @@
   <title>Painel DO-AGA</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
+  <!-- App config -->
   <script src="./config.js" defer></script>
+  <!-- Supabase library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
+  <!-- Sessão pronta antes de inicializar a página -->
   <script src="./auth-ready.js" defer></script>
   <script src="./utils.js" defer></script>
+  <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
   <script src="./mpa.js" defer></script>
-  <script src="./modules/checklists/pdf.js" defer></script>
   <script src="./modules/admin.js" defer></script>
+  <script src="./modules/checklists.js" defer></script>
 </head>
 <body data-route="admin">
   <div id="app" class="vh">
@@ -26,15 +31,12 @@
         <small class="build" id="buildInfo">build: carregando…</small>
       </div>
       <nav id="topNav" class="nav hidden">
-        <label for="moduleSelect" class="sr-only">Módulo</label>
-        <select id="moduleSelect" name="moduleSelect">
-          <option value="dashboard">Início</option>
-          <option value="processos">Processos</option>
-          <option value="prazos">Prazos</option>
-          <option value="modelos">Modelos</option>
-          <option value="analise">Documental</option>
-          <option value="admin" id="optAdmin">Administração</option>
-        </select>
+        <button data-route="dashboard">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise">Documental</button>
+        <button data-route="admin" id="btnAdmin" class="hidden active">Administração</button>
       </nav>
       <div id="userBox" class="user hidden">
         <span id="userName"></span>
@@ -45,8 +47,86 @@
 
     <main class="main">
       <section id="viewAdmin" class="view">
-        <!-- conteúdo original da página permanece inalterado -->
-...
+        <div class="grid admin-grid">
+          <div class="admin-col admin-col-users">
+            <div class="card">
+              <h2>Criar usuários</h2>
+              <form id="formUser" data-ajax>
+                <label>E-mail <input id="adEmail" type="email" required></label>
+                <label>Posto/Gad + Nome <input id="adName" required></label>
+                <label>Perfil
+                  <select id="adRole">
+                    <option>Administrador</option>
+                    <option>Analista OACO</option>
+                    <option>Analista OAGA</option>
+                    <option>CH OACO</option>
+                    <option>CH OAGA</option>
+                    <option>CH AGA</option>
+                    <option>Visitante</option>
+                  </select>
+                </label>
+                <button id="btnCreateUser" type="button">Criar</button>
+                <div id="adminMsg" class="msg"></div>
+              </form>
+            </div>
+
+            <div class="card">
+              <h2>Usuários</h2>
+              <div id="listaUsers" class="table scrolly"></div>
+            </div>
+          </div>
+
+          <div class="admin-col admin-col-audit">
+            <div class="card">
+              <h2>Auditoria de sessões</h2>
+              <p class="muted">Registros recentes de login, logout e acesso aos módulos.</p>
+                <div class="row" style="display:flex;gap:.5rem;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+                <input id="auditFilterName" type="search" placeholder="Filtrar por usuário" style="flex:1;" />
+                <button id="btnAuditRefresh" type="button">Atualizar</button>
+              </div>
+              <div id="auditLogMsg" class="msg"></div>
+              <div id="auditLogTable" class="table scrolly"></div>
+            </div>
+          </div>
+
+          <div class="admin-col admin-col-checklists">
+            <div class="card">
+              <h2>Checklists</h2>
+              <div class="row ck-manage-actions">
+                <button id="btnNewChecklist" type="button">Novo checklist</button>
+                <button id="btnEditChecklist" type="button" disabled>Editar selecionado</button>
+                <button id="btnDeleteChecklist" class="danger" type="button" disabled>Excluir selecionado</button>
+              </div>
+              <div id="ckManageMsg" class="msg"></div>
+
+              <div id="listaCk" class="table scrolly"></div>
+              <dialog id="ckFormDialog">
+                <form id="formChecklist" data-ajax method="dialog">
+                  <input type="hidden" id="ckId">
+                  <label>Tipo
+                    <select id="ckCat" required>
+                      <option>PDIR - Documental</option>
+                      <option>Inscrição - Documental</option>
+                      <option>Alteração - Documental</option>
+                      <option>Exploração - Documental</option>
+                      <option>OPEA - Documental</option>
+                    </select>
+                  </label>
+                  <label>Itens</label>
+                  <div id="ckCats" class="scrolly"></div>
+                  <button id="btnAddCat" type="button">Adicionar categoria</button>
+                  <menu>
+                    <button id="adminBtnSalvarChecklist" type="button">Salvar</button>
+                    <button id="btnAprovarChecklist" type="button">Aprovar</button>
+                    <button id="btnExcluirChecklist" class="danger" type="button">Excluir</button>
+                    <button id="btnCloseChecklist" type="button">Fechar</button>
+                  </menu>
+                  <div id="ckMsg" class="msg"></div>
+                </form>
+              </dialog>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
 
@@ -57,6 +137,7 @@
     </footer>
   </div>
 
+  <!-- Preenche build no cabeçalho e rodapé -->
   <script defer src="./build-info-client.js"></script>
 </body>
 </html>

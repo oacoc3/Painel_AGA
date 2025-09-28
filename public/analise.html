@@ -7,12 +7,19 @@
   <title>Painel DO-AGA</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
+  <!-- App config -->
   <script src="./config.js" defer></script>
+  <!-- Supabase library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
+  <!-- Sessão pronta antes de inicializar a página -->
   <script src="./auth-ready.js" defer></script>
   <script src="./utils.js" defer></script>
+  <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
+  <!-- jsPDF para exportar PDF (Análise Documental) -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
   <script src="./mpa.js" defer></script>
   <script src="./modules/checklists/pdf.js" defer></script>
   <script src="./modules/analise.js" defer></script>
@@ -26,15 +33,12 @@
         <small class="build" id="buildInfo">build: carregando…</small>
       </div>
       <nav id="topNav" class="nav hidden">
-        <label for="moduleSelect" class="sr-only">Módulo</label>
-        <select id="moduleSelect" name="moduleSelect">
-          <option value="dashboard">Início</option>
-          <option value="processos">Processos</option>
-          <option value="prazos">Prazos</option>
-          <option value="modelos">Modelos</option>
-          <option value="analise">Documental</option>
-          <option value="admin" id="optAdmin">Administração</option>
-        </select>
+        <button data-route="dashboard">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise" class="active">Documental</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
       </nav>
       <div id="userBox" class="user hidden">
         <span id="userName"></span>
@@ -45,8 +49,42 @@
 
     <main class="main">
       <section id="viewAnalise" class="view">
-        <!-- conteúdo original da página permanece inalterado -->
-...
+        <div class="analysis-grid">
+          <div class="analysis-col">
+            <div class="card">
+              <h2>Nova Análise Documental</h2>
+              <form id="formAD" data-ajax>
+                <label>NUP <input id="adNUP" required></label>
+                <label>Tipo do Processo
+                  <select id="adTipo">
+                    <option>PDIR</option>
+                    <option>Inscrição</option>
+                    <option>Alteração</option>
+                    <option>Exploração</option>
+                    <option>OPEA</option>
+                  </select>
+                </label>
+                <div class="row actions">
+                  <button id="btnLimparAD" type="button">Limpar</button>
+                  <button id="btnIniciarAD" type="button">Iniciar Preenchimento de Checklist</button>
+                </div>
+                <div id="adMsg" class="msg"></div>
+              </form>
+            </div>
+              <div class="card" id="adApprovedChecklistsCard">
+              <h2>Checklists aprovadas</h2>
+              <div id="adApprovedList" class="table scrolly"></div>
+            </div>
+          </div>
+          <div class="card" id="adChecklistCard">
+            <h2>Checklist</h2>
+              <div id="ckContainer" class="scrolly"></div>
+            <div class="row actions" id="adActions">
+              <button id="btnLimparChecklist" type="button" disabled>Limpar</button>
+               <button id="adBtnFinalizarChecklist" type="button" disabled>Finalizar</button>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
 
@@ -57,6 +95,7 @@
     </footer>
   </div>
 
+  <!-- Preenche build no cabeçalho e rodapé -->
   <script defer src="./build-info-client.js"></script>
 </body>
 </html>

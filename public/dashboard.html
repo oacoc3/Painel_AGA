@@ -31,15 +31,12 @@
         <small class="build" id="buildInfo">build: carregando…</small>
       </div>
       <nav id="topNav" class="nav hidden">
-        <label for="moduleSelect" class="sr-only">Módulo</label>
-        <select id="moduleSelect" name="moduleSelect">
-          <option value="dashboard">Início</option>
-          <option value="processos">Processos</option>
-          <option value="prazos">Prazos</option>
-          <option value="modelos">Modelos</option>
-          <option value="analise">Documental</option>
-          <option value="admin" id="optAdmin">Administração</option>
-        </select>
+        <button data-route="dashboard" class="active">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise">Documental</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
       </nav>
       <div id="userBox" class="user hidden">
         <span id="userName"></span>
@@ -58,14 +55,67 @@
           <div class="dashboard-col">
             <div class="card chart-card">
               <div class="card-title">
-                <h2>Novos processos por mês</h2>
-                <div class="actions"><select id="anoNovos"></select></div>
+                <h2>Novos processos</h2>
+                <div class="card-title-meta">
+                  <label class="card-select">
+                    <span class="card-select-label">Ano</span>
+                    <select id="entryYearSelect" disabled></select>
+                  </label>
+                  <div class="chart-total" aria-live="polite">
+                    <span>Total no ano</span>
+                    <strong id="entryYearTotal">—</strong>
+                  </div>
+                </div>
               </div>
-              <div id="chartNovos" class="chart"></div>
+              <div id="entryChart" class="bar-chart">
+                <p class="muted chart-placeholder">Carregando…</p>
+              </div>
             </div>
-            <div class="card">
-              <h2>Métricas</h2>
-              <div id="metricas" class="metricas"></div>
+            <div class="card metrics-card">
+              <h2>Atividades</h2>
+              <div class="metrics-grid">
+                <div class="metric">
+                  <span class="metric-label">
+                    <span class="metric-label-line">Análises</span>
+                    <span class="metric-label-line">documentais</span>
+                  </span>
+                  <strong class="metric-value" id="dashboardMetricAnadoc">—</strong>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">
+                    <span class="metric-label-line">Análises técnicas</span>
+                    <span class="metric-label-line">preliminares</span>
+                  </span>
+                  <strong class="metric-value" id="dashboardMetricAnatecPre">—</strong>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">
+                    <span class="metric-label-line">Análises</span>
+                    <span class="metric-label-line">técnicas</span>
+                  </span>
+                  <strong class="metric-value" id="dashboardMetricAnatec">—</strong>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">
+                    <span class="metric-label-line">Notificações</span>
+                   </span>
+                  <strong class="metric-value" id="dashboardMetricNotifications">—</strong>
+                </div>
+                 <div class="metric">
+                  <span class="metric-label">
+                    <span class="metric-label-line">Processos</span>
+                    <span class="metric-label-line">JJAer</span>
+                  </span>
+                  <strong class="metric-value" id="dashboardMetricSigadaerJjaer">—</strong>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">
+                    <span class="metric-label-line">Processos</span>
+                    <span class="metric-label-line">AGU</span>
+                  </span>
+                  <strong class="metric-value" id="dashboardMetricSigadaerAgu">—</strong>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -79,6 +129,7 @@
     </footer>
   </div>
 
+  <!-- Preenche build no cabeçalho e rodapé -->
   <script defer src="./build-info-client.js"></script>
 </body>
 </html>
