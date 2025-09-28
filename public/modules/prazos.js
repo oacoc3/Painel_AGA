@@ -1,7 +1,8 @@
-// public/modules/prazos.js (reconstruído a partir do homolog10, com Sinalizar/Validação)
+// public/modules/prazos.js — homolog10 + ajustes de Sinalizar/Validação e histórico
 window.Modules = window.Modules || {};
 window.Modules.prazos = (() => {
   const HIGHLIGHT_COLOR = '#fff3b0';
+  const CARD_MONITOR_ID = 'prazoMonit'; // Leitura/Expedição
 
   // ================= Popups =================
   let prazoClickDialog = null;
@@ -113,6 +114,7 @@ window.Modules.prazos = (() => {
 
     dlg.dataset.nup = nup;
     dlg.dataset.rowKey = rowKey;
+    dlg.dataset.originId = originId;
 
     const nupEl = dlg.querySelector('#prazoClickNup');
     if (nupEl) nupEl.textContent = `NUP: ${nup}`;
@@ -122,20 +124,24 @@ window.Modules.prazos = (() => {
     const btnValidacao = dlg.querySelector('#prazoValidacao');
     const btnFechar = dlg.querySelector('#prazoFechar');
 
+    // Exibir Sinalizar/Validação SOMENTE no card Leitura/Expedição
+    const enableActions = originId === 'prazoMonit';
+    btnSinalizar.style.display = enableActions ? '' : 'none';
+    btnValidacao.style.display = enableActions ? '' : 'none';
+
     // Ver na lista
     btnVer.onclick = () => {
       try { sessionStorage.setItem('procPreSelect', nup); } catch {}
       window.location.href = 'processos.html';
     };
 
-    // Sinalizar
-    btnSinalizar.onclick = () => {
+    // Sinalizar (apenas quando permitido)
+    btnSinalizar.onclick = enableActions ? () => {
       const sdlg = ensurePrazoSignalDialog();
       sdlg.dataset.originId = originId || 'prazoMonit';
       sdlg.dataset.rowKey = rowKey || '';
       sdlg.dataset.nup = nup || '';
 
-      // Texto de contexto
       const nEl = sdlg.querySelector('#prazoSignalNup');
       if (nEl) nEl.textContent = `NUP: ${nup}`;
       const infoEl = sdlg.querySelector('#prazoSignalInfo');
@@ -150,10 +156,7 @@ window.Modules.prazos = (() => {
       const obs = sdlg.querySelector('#prazoSignalObs');
       const send = sdlg.querySelector('#prazoSignalSend');
       const closeBtn = sdlg.querySelector('#prazoSignalClose');
-      if (dt) dt.value = '';
-      if (obs) obs.value = '';
-      if (send) send.disabled = true;
-
+      if (dt) dt.value = ''; if (obs) obs.value = ''; if (send) send.disabled = true;
       const validate = () => { send.disabled = !dt?.value; };
       dt?.addEventListener('input', validate);
 
@@ -161,7 +164,6 @@ window.Modules.prazos = (() => {
 
       send.onclick = async () => {
         if (!dt?.value) return;
-        // Grava histórico (Analista)
         try {
           const rk = sdlg.dataset.rowKey || '';
           const [nupKey, numberKey2, typeKey2] = rk.split('|');
@@ -174,29 +176,29 @@ window.Modules.prazos = (() => {
               observacoes: obs?.value || null
             };
             const u = await (window.getUser ? window.getUser() : null);
-            await sb.from('history').insert({
+            const { error: hErr } = await sb.from('history').insert({
               process_id: processId,
               action: 'Sinalização Leitura/Expedição',
               details,
               created_by: u ? u.id : null
             });
+            if (hErr) console.error('[Prazo] insert history (analista) erro:', hErr);
+          } else {
+            console.error('[Prazo] process_id não encontrado para NUP', nupToUse);
           }
-        } catch (e) { console.error('[Prazo] Histórico (analista):', e); }
+        } catch (e) { console.error('[Prazo] Histórico (analista) exceção:', e); }
 
-        // UI
         if (typeof sdlg.close === 'function') sdlg.close();
         if (typeof prazoClickDialog?.close === 'function') prazoClickDialog.close();
-        const cid = sdlg.dataset.originId || 'prazoMonit';
-        const rk = sdlg.dataset.rowKey || '';
-        highlightRowByKey(cid, rk);
+        highlightRowByKey(sdlg.dataset.originId || 'prazoMonit', sdlg.dataset.rowKey || '');
       };
 
       if (typeof sdlg.showModal === 'function') sdlg.showModal();
       else sdlg.setAttribute('open','open');
-    };
+    } : null;
 
-    // Validação (Admin)
-    btnValidacao.onclick = async () => {
+    // Validação (apenas quando permitido)
+    btnValidacao.onclick = enableActions ? async () => {
       const vdlg = ensurePrazoValidationDialog();
       const rk = dlg.dataset.rowKey || rowKey || '';
       const [nupKey, numberKey3, typeKey3] = rk.split('|');
@@ -220,51 +222,43 @@ window.Modules.prazos = (() => {
       const btnCloseV = vdlg.querySelector('#prazoValClose');
       const doClose = () => { if (typeof vdlg.close === 'function') vdlg.close(); };
 
-      let processId = await resolveProcessIdByNup(vdlg.dataset.nup);
+      const processId = await resolveProcessIdByNup(vdlg.dataset.nup);
 
       if (btnApprove) btnApprove.onclick = async () => {
         try {
           const u = await (window.getUser ? window.getUser() : null);
-          const details = {
-            tipo: vdlg.dataset.type || null,
-            numero_sigadaer: vdlg.dataset.number || null,
-            observacoes: obsEl?.value || null
-          };
-          await sb.from('history').insert({
+          const details = { tipo: vdlg.dataset.type || null, numero_sigadaer: vdlg.dataset.number || null, observacoes: obsEl?.value || null };
+          const { error: hErr } = await sb.from('history').insert({
             process_id: processId,
             action: 'Sinalização Leitura/Expedição validada',
             details,
             created_by: u ? u.id : null
           });
-        } catch (e) { console.error('[Prazo] Validação (Admin):', e); }
-        doClose();
-        if (typeof prazoClickDialog?.close === 'function') prazoClickDialog.close();
+          if (hErr) console.error('[Prazo] insert history (validar) erro:', hErr);
+        } catch (e) { console.error('[Prazo] Validação (Admin) exceção:', e); }
+        doClose(); if (typeof prazoClickDialog?.close === 'function') prazoClickDialog.close();
       };
 
       if (btnReject) btnReject.onclick = async () => {
         try {
           const u = await (window.getUser ? window.getUser() : null);
-          const details = {
-            tipo: vdlg.dataset.type || null,
-            numero_sigadaer: vdlg.dataset.number || null,
-            observacoes: obsEl?.value || null
-          };
-          await sb.from('history').insert({
+          const details = { tipo: vdlg.dataset.type || null, numero_sigadaer: vdlg.dataset.number || null, observacoes: obsEl?.value || null };
+          const { error: hErr } = await sb.from('history').insert({
             process_id: processId,
             action: 'Sinalização Leitura/Expedição rejeitada',
             details,
             created_by: u ? u.id : null
           });
-        } catch (e) { console.error('[Prazo] Rejeição (Admin):', e); }
-        doClose();
-        if (typeof prazoClickDialog?.close === 'function') prazoClickDialog.close();
+          if (hErr) console.error('[Prazo] insert history (rejeitar) erro:', hErr);
+        } catch (e) { console.error('[Prazo] Rejeição (Admin) exceção:', e); }
+        doClose(); if (typeof prazoClickDialog?.close === 'function') prazoClickDialog.close();
       };
 
       if (btnCloseV) btnCloseV.onclick = () => doClose();
 
       if (typeof vdlg.showModal === 'function') vdlg.showModal();
       else vdlg.setAttribute('open','open');
-    };
+    } : null;
 
     // Fechar
     btnFechar.onclick = () => { if (typeof dlg.close === 'function') dlg.close(); };
@@ -276,54 +270,36 @@ window.Modules.prazos = (() => {
   // ================= Colunas (homolog10) =================
   const PARECERES_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    {
-      key: 'type_label',
-      label: 'Tipo',
-      value: r => r.type_label || r.type || ''
-    },
+    { key: 'type_label', label: 'Tipo', value: r => r.type_label || r.type || '' },
     { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
     { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
   ];
-
   const REMOCAO_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
     { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
     { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
   ];
-
   const OBRAS_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    {
-      key: 'due_date',
-      label: 'Prazo',
-      value: r => Utils.fmtDate(r.due_date),
-      render: r => {
-        const prazo = Utils.fmtDate(r.due_date);
-        if (!r.em_atraso) return `<div>${prazo}</div>`;
-        return `<div>${prazo}</div><div class="text-danger">ADICIONAL</div>`;
-      }
-    },
+    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date),
+      render: r => { const prazo = Utils.fmtDate(r.due_date); return r.em_atraso ? `<div>${prazo}</div><div class="text-danger">ADICIONAL</div>` : `<div>${prazo}</div>`; } },
     { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
   ];
-
   const SOBRESTAMENTO_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
     { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
     { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
-
   const MONITOR_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
     { key: 'type', label: 'Tipo' },
     { key: 'number', label: 'Número', value: r => (r.number ? String(r.number).padStart(6, '0') : '') }
   ];
-
   const DOAGA_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
     { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
     { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
-
   const ADHEL_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
     { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : '') },
@@ -355,14 +331,8 @@ window.Modules.prazos = (() => {
     });
   }
 
-  // ================= Carregamento (homolog10, sem alterações) =================
-  let pareceres = [];
-  let remocao = [];
-  let obras = [];
-  let sobrestamento = [];
-  let monitor = [];
-  let doaga = [];
-  let adhel = [];
+  // ================= Carregamento (homolog10) =================
+  let pareceres = [], remocao = [], obras = [], sobrestamento = [], monitor = [], doaga = [], adhel = [];
 
   async function loadPareceres() {
     const [intRes, extRes] = await Promise.all([
@@ -376,14 +346,10 @@ window.Modules.prazos = (() => {
     const sigadaerRows = normalize(extRes.data)
       .filter(row => row.due_date || typeof row.deadline_days === 'number')
       .map(row => ({
-        ...row,
-        origin: 'sigadaer',
-        type_label: `SIGADAER ${row.type}`,
+        ...row, origin: 'sigadaer', type_label: `SIGADAER ${row.type}`,
         days_remaining: typeof row.days_remaining === 'number' ? row.days_remaining : Utils.daysBetween(new Date(), row.due_date)
       }));
-    pareceres = [...parecerRows, ...sigadaerRows].sort(
-      (a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
+    pareceres = [...parecerRows, ...sigadaerRows].sort((a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31'));
     const { tbody } = Utils.renderTable('prazoParec', PARECERES_COLUMNS, pareceres);
     bindRowLinks(tbody);
   }
@@ -434,13 +400,8 @@ window.Modules.prazos = (() => {
   async function init() { await load(); }
   async function load() {
     await Promise.all([
-      loadPareceres(),
-      loadRemocao(),
-      loadObra(),
-      loadSobrestamento(),
-      loadMonitor(),
-      loadDOAGA(),
-      loadADHEL()
+      loadPareceres(), loadRemocao(), loadObra(),
+      loadSobrestamento(), loadMonitor(), loadDOAGA(), loadADHEL()
     ]);
   }
 
