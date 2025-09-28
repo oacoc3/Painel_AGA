@@ -41,7 +41,7 @@
       timeZone: 'America/Sao_Paulo',
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric'
+      year: '2-digit'
     }).format(x);
   }
 
@@ -58,7 +58,7 @@
       timeZone: 'America/Sao_Paulo',
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric'
+      year: '2-digit'
     }).format(x);
     const tm = new Intl.DateTimeFormat('pt-BR', {
       timeZone: 'America/Sao_Paulo',
