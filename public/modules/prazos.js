@@ -120,6 +120,13 @@ window.Modules.prazos = (() => {
     bindRowLinks(tbody);
   }
 
+  // >>> FALTAVA ESTA FUNÇÃO <<<
+  function renderADHEL() {
+    const rows = adhel.slice(0, 6);
+    const { tbody } = Utils.renderTable('adhel', ADHEL_COLUMNS, rows);
+    bindRowLinks(tbody);
+  }
+
   async function loadPareceres() {
     const { data } = await sb.from('v_prazo_pareceres')
       .select('nup,type,due_date,days_remaining')
@@ -208,6 +215,16 @@ window.Modules.prazos = (() => {
     renderDOAGA();
   }
 
+  async function loadADHEL() {
+    const { data } = await sb.from('v_prazo_ad_hel')
+      .select('nup,due_date,days_remaining');
+    adhel = (data || []).sort(
+      (a, b) =>
+        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
+    );
+    renderADHEL();
+  }
+
   function exportPrazoPDF(section) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
@@ -265,16 +282,6 @@ window.Modules.prazos = (() => {
         exportPrazoPDF(section);
       });
     });
-  }
-
-  async function loadADHEL() {
-    const { data } = await sb.from('v_prazo_ad_hel')
-      .select('nup,due_date,days_remaining');
-    adhel = (data || []).sort(
-      (a, b) =>
-        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
-    renderADHEL();
   }
 
   function init() {
