@@ -3,60 +3,90 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Base na raiz para resolver caminhos de assets -->
   <base href="/" />
-  <title>Processos - Painel DO-AGA</title>
+  <title>Painel DO-AGA</title>
+
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
+  <!-- CSS específico do módulo Processos (apenas layout do módulo) -->
+  <link rel="stylesheet" href="./styles.processos.css" />
+
   <!-- App config -->
   <script src="./config.js" defer></script>
   <!-- Supabase library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
   <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
   <!-- Sessão pronta antes de inicializar a página -->
   <script src="./auth-ready.js" defer></script>
   <script src="./utils.js" defer></script>
-  <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
-  <!-- MPA router -->
   <script src="./mpa.js" defer></script>
-  <!-- Módulo Processos -->
+   <script src="./modules/checklists/pdf.js" defer></script>
+  <script src="./modules/statuses.js" defer></script>
   <script src="./modules/processos.js" defer></script>
 </head>
-<body>
-  <header class="bar head">
-    <div class="logo">
-      <span class="brand">Painel DO-AGA</span>
-    </div>
-    <nav id="topNav" class="nav hidden">
-      <button data-route="dashboard">Início</button>
-      <button data-route="analise">Documental</button>
-      <button data-route="processos" class="active">Processos</button>
-      <button data-route="prazos">Prazos</button>
-      <button data-route="modelos">Modelos</button>
-      <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
-    </nav>
-    <div id="userBox" class="user hidden">
-      <span id="userName"></span>
-      <small id="userRole"></small>
-      <button id="btnLogout" class="button">Sair</button>
-    </div>
-  </header>
-
-  <main class="container">
-    <section class="card">
-      <div class="card-title">
-        <h1>Processos</h1>
+<body data-route="processos">
+  <div id="app" class="vh">
+    <header class="bar">
+      <div class="brand">
+        <span class="logo">■</span>
+        <strong>Painel DO-AGA</strong>
+        <small class="build" id="buildInfo">build…</small>
       </div>
-      <div id="procContent" class="content"></div>
-    </section>
-  </main>
+      <nav id="topNav" class="nav hidden">
+        <button data-route="dashboard">Início</button>
+        <button data-route="processos" class="active">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise">Documental</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+      </nav>
+      <div id="userBox" class="user hidden">
+        <span id="userName"></span>
+        <small id="userRole" class="muted"></small>
+        <button id="btnLogout" class="danger" type="button">Sair</button>
+      </div>
+    </header>
 
-  <footer class="bar foot">
-    
-  </footer>
+    <main class="main">
+      <section id="viewProcessos" class="view">
+        <div class="split processos">
+          <!-- COLUNA ESQUERDA: Formulário de processo -->
+          <div class="card">
+            <h2>Busca</h2>
 
-  <!-- Build info (não altera visual) -->
+            <form id="formProc" data-ajax>
+              <div class="row">
+                <label class="grow">NUP <input id="procNUP" required placeholder="000000/0000-00"></label>
+              </div>
+              <div class="row">
+                <button id="btnBuscarProc" type="button">Buscar</button>
+                <button id="btnLimparProc" type="button">Limpar</button>
+              </div>
+
+              <div id="procMsg" class="msg"></div>
+            </form>
+          </div>
+
+          <!-- COLUNA DO MEIO: Lista de processos -->
+          <div class="card">
+            <h2>Processos</h2>
+            <div id="procLista" class="table scrolly"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="bar foot">
+      <span>Retro-UI</span>
+      <span>© DO-AGA</span>
+      <span id="footBuild"></span>
+    </footer>
+  </div>
+
   <script defer src="./build-info-client.js"></script>
 </body>
 </html>

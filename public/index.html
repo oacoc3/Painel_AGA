@@ -18,45 +18,54 @@
   <script src="./utils.js" defer></script>
   <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
-  <!-- MPA router -->
   <script src="./mpa.js" defer></script>
+  <script src="./modules/auth.js" defer></script>
 </head>
-<body>
-  <header class="bar head">
-    <div class="logo">
-      <span class="brand">Painel DO-AGA</span>
-    </div>
-    <nav id="topNav" class="nav hidden">
-      <button data-route="dashboard" class="active">Início</button>
-      <button data-route="analise">Documental</button>
-      <button data-route="processos">Processos</button>
-      <button data-route="prazos">Prazos</button>
-      <button data-route="modelos">Modelos</button>
-      <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
-    </nav>
-    <div id="userBox" class="user hidden">
-      <span id="userName"></span>
-      <small id="userRole"></small>
-      <button id="btnLogout" class="button">Sair</button>
-    </div>
-  </header>
-
-  <main class="container">
-    <section class="card">
-      <div class="card-title">
-        <h1>Bem-vindo</h1>
+<body data-route="login">
+  <div id="app" class="vh">
+    <header class="bar">
+      <div class="brand">
+        <span class="logo">■</span>
+        <strong>Painel DO-AGA</strong>
+        <small class="build" id="buildInfo">build: carregando…</small>
       </div>
-      <div class="content">
-        <p>Selecione um módulo acima.</p>
+      <nav id="topNav" class="nav hidden">
+        <button data-route="dashboard" class="active">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise">Documental</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+      </nav>
+      <div id="userBox" class="user hidden">
+        <span id="userName"></span>
+        <small id="userRole" class="muted"></small>
+        <button id="btnLogout" class="danger" type="button">Sair</button>
       </div>
-    </section>
-  </main>
+    </header>
 
-  <footer class="bar foot">
-    
-  </footer>
+    <main class="main">
+      <section id="viewLogin" class="view centered">
+        <div class="panel">
+          <h1>Login</h1>
+          <!-- AJAX: evitamos navegação por submit tradicional -->
+          <form id="loginForm" data-ajax>
+            <label>E-mail <input id="loginEmail" type="email" required></label>
+            <button id="btnDoLogin" type="submit">Enviar link de acesso</button>
+          </form>
+          <div id="loginMsg" class="msg"></div>
+        </div>
+      </section>
+    </main>
 
-  <!-- Build info (não altera visual) -->
+    <footer class="bar foot">
+      <span>Retro-UI</span>
+      <span>© DO-AGA</span>
+      <span id="footBuild"></span>
+    </footer>
+  </div>
+
+  <!-- Preenche build no cabeçalho e rodapé -->
   <script defer src="./build-info-client.js"></script>
 </body>
 </html>

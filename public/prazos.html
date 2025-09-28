@@ -4,13 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <base href="/" />
-  <title>Prazos - Painel DO-AGA</title>
+  <title>Painel DO-AGA</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
   <!-- App config -->
   <script src="./config.js" defer></script>
   <!-- Supabase library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
   <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
   <!-- Sessão pronta antes de inicializar a página -->
@@ -18,115 +19,123 @@
   <script src="./utils.js" defer></script>
   <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
-  <!-- MPA router -->
   <script src="./mpa.js" defer></script>
-  <!-- Módulo Prazos -->
   <script src="./modules/prazos.js" defer></script>
 </head>
-<body>
-  <header class="bar head">
-    <div class="logo">
-      <span class="brand">Painel DO-AGA</span>
-    </div>
-    <nav id="topNav" class="nav hidden">
-      <button data-route="dashboard">Início</button>
-      <button data-route="analise">Documental</button>
-      <button data-route="processos">Processos</button>
-      <button data-route="prazos" class="active">Prazos</button>
-      <button data-route="modelos">Modelos</button>
-      <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
-    </nav>
-    <div id="userBox" class="user hidden">
-      <span id="userName"></span>
-      <small id="userRole"></small>
-      <button id="btnLogout" class="button">Sair</button>
-    </div>
-  </header>
-
-  <main class="container">
-    <section class="card">
-      <div class="card-title">
-        <h1>Prazos</h1>
-        <div class="card-title-meta">
-        </div>
+<body data-route="prazos">
+  <div id="app" class="vh">
+    <header class="bar">
+      <div class="brand">
+        <span class="logo">■</span>
+        <strong>Painel DO-AGA</strong>
+        <small class="build" id="buildInfo">build: carregando…</small>
       </div>
-
-      <div class="prazo-grid">
-
-        <div class="prazo-col">
-          <div class="card">
-            <div class="card-title">
-              <h2>Pareceres/Info</h2>
-              <div class="card-title-meta">
-              </div>
-            </div>
-            <div id="prazoParec" class="table scrolly"></div>
-          </div>
-          <div class="card">
-            <div class="card-title">
-              <h2>Remoção/Rebaixamento</h2>
-              <div class="card-title-meta">
-              </div>
-            </div>
-            <div id="prazoRemocao" class="table scrolly"></div>
-          </div>
-          <div class="card">
-            <div class="card-title">
-              <h2>Término de Obra</h2>
-              <div class="card-title-meta">
-              </div>
-            </div>
-            <div id="prazoObra" class="table scrolly"></div>
-          </div>
-          <div class="card">
-            <div class="card-title">
-              <h2>Leitura/Expedição</h2>
-              <div class="card-title-meta">
-              </div>
-            </div>
-            <div id="prazoMonitor" class="table scrolly"></div>
-          </div>
-        </div>
-
-        <div class="prazo-col">
-          <div class="card">
-            <div class="card-title">
-              <h2>Sobrestamento</h2>
-              <div class="card-title-meta">
-              </div>
-            </div>
-            <div id="prazoSobrestamento" class="table scrolly"></div>
-          </div>
-          <div class="card">
-            <div class="card-title">
-               <h2>Revogar plano</h2>
-              <div class="card-title-meta">
-              </div>
-            </div>
-            <div id="prazoADHEL" class="table scrolly"></div>
-          </div>
-        </div>
-
-        <div class="prazo-col">
-          <div class="card">
-            <div class="card-title">
-              <h2>Prazo DO-AGA</h2>
-              <div class="card-title-meta">
-              </div>
-            </div>
-            <div id="prazoDOAGA" class="table scrolly"></div>
-          </div>
-        </div>
-
+      <nav id="topNav" class="nav hidden">
+        <button data-route="dashboard">Início</button>
+        <button data-route="processos">Processos</button>
+        <button data-route="prazos" class="active">Prazos</button>
+        <button data-route="modelos">Modelos</button>
+        <button data-route="analise">Documental</button>
+        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+      </nav>
+      <div id="userBox" class="user hidden">
+        <span id="userName"></span>
+        <small id="userRole" class="muted"></small>
+        <button id="btnLogout" class="danger" type="button">Sair</button>
       </div>
-    </section>
-  </main>
+    </header>
 
-  <footer class="bar foot">
-    
-  </footer>
+    <main class="main">
+      <section id="viewPrazos" class="view">
+        <div class="prazo-grid">
 
-  <!-- Build info (não altera visual) -->
+          <div class="prazo-col">
+            <div class="card">
+              <div class="card-title">
+                <h2>Pareceres/Info</h2>
+                <div class="card-title-meta">
+                  <button type="button" data-pdf="pareceres">PDF</button>
+                </div>
+              </div>
+              <div id="prazoParec" class="table scrolly"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">
+                <h2>Remoção/Rebaixamento</h2>
+                <div class="card-title-meta">
+                  <button type="button" data-pdf="remocao">PDF</button>
+                </div>
+              </div>
+              <div id="prazoRemocao" class="table scrolly"></div>
+            </div>
+          </div>
+
+          <div class="prazo-col">
+            <div class="card">
+              <div class="card-title">
+                <h2>Término de Obra</h2>
+                <div class="card-title-meta">
+                  <button type="button" data-pdf="obras">PDF</button>
+                </div>
+              </div>
+              <div id="prazoObra" class="table scrolly"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">
+                 <h2>Leitura/Expedição</h2>
+                <div class="card-title-meta">
+                  <button type="button" data-pdf="monitor">PDF</button>
+                </div>
+              </div>
+              <div id="prazoMonit" class="table scrolly"></div>
+            </div>
+          </div>
+
+          <div class="prazo-col">
+            <div class="card">
+              <div class="card-title">
+                <h2>Sobrestamento</h2>
+                <div class="card-title-meta">
+                  <button type="button" data-pdf="sobrestamento">PDF</button>
+                </div>
+              </div>
+              <div id="prazoSobrestamento" class="table scrolly"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">
+                 <h2>Revogar plano</h2>
+                <div class="card-title-meta">
+                  <button type="button" data-pdf="adhel">PDF</button>
+                </div>
+              </div>
+              <div id="prazoADHEL" class="table scrolly"></div>
+            </div>
+          </div>
+
+          <div class="prazo-col">
+            <div class="card">
+              <div class="card-title">
+                <h2>Prazo DO-AGA</h2>
+                <div class="card-title-meta">
+                  <button type="button" data-pdf="doaga">PDF</button>
+                </div>
+              </div>
+              <div id="prazoDOAGA" class="table scrolly"></div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+    </main>
+
+    <footer class="bar foot">
+      <span>Retro-UI</span>
+      <span>© DO-AGA</span>
+      <span id="footBuild"></span>
+    </footer>
+  </div>
+
+  <!-- Preenche build no cabeçalho e rodapé -->
   <script defer src="./build-info-client.js"></script>
 </body>
 </html>
