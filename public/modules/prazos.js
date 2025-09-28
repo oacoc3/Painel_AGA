@@ -47,33 +47,45 @@ window.Modules.prazos = (() => {
     return dlg;
   }
 
-  function highlightMonitorUI(nup) {
-    // Destacar a linha do NUP no card Leitura/Expedição (id prazoMonit)
+  // Destaque apenas da linha (nup, number) no card Leitura/Expedição
+  function highlightMonitorRow(nup, number) {
     const box = document.getElementById('prazoMonit');
-    if (box) {
-      const trList = box.querySelectorAll('tbody tr');
-      trList.forEach(tr => {
-        try {
-          const data = JSON.parse(tr.dataset.row || '{}');
-          if (String(data?.nup) === String(nup)) {
-            tr.style.backgroundColor = '#fff3b0'; // amarelo claro
-          }
-        } catch {}
-      });
-      const cardTitle = box.closest('.card')?.querySelector('.card-title h2');
-      if (cardTitle) {
-        cardTitle.style.backgroundColor = '#fff3b0';
-        cardTitle.style.padding = '2px 4px';
-        cardTitle.style.borderRadius = '4px';
-      }
+    if (!box) return;
+
+    // Destaca apenas a linha que casa (nup, number)
+    const trList = box.querySelectorAll('tbody tr');
+    trList.forEach(tr => {
+      try {
+        const data = JSON.parse(tr.dataset.row || '{}');
+        const sameNup = String(data?.nup) === String(nup);
+        const sameNumber = (data?.number == null && number == null)
+          || String(data?.number) === String(number);
+        if (sameNup && sameNumber) {
+          tr.style.backgroundColor = '#fff3b0'; // amarelo claro
+        }
+      } catch {}
+    });
+
+    // Título do card em amarelo (único por card)
+    const cardTitle = box.closest('.card')?.querySelector('.card-title h2');
+    if (cardTitle) {
+      cardTitle.style.backgroundColor = '#fff3b0';
+      cardTitle.style.padding = '2px 4px';
+      cardTitle.style.borderRadius = '4px';
     }
   }
 
-  function openPrazoSignalPopup(nup) {
+  function openPrazoSignalPopup(nup, number) {
     const dlg = ensurePrazoSignalDialog();
+
+    // Guarda identificadores no próprio dialog
+    dlg.dataset.nup = String(nup);
+    dlg.dataset.number = number != null ? String(number) : '';
+
     // Preenche NUP e limpa campos
     const nupEl = dlg.querySelector('#prazoSignalNup');
-    if (nupEl) nupEl.textContent = `NUP: ${nup}`;
+    if (nupEl) nupEl.textContent = `NUP: ${nup}${number != null ? ` • Nº: ${String(number).padStart(6, '0')}` : ''}`;
+
     const dt = dlg.querySelector('#prazoSignalDateTime');
     const obs = dlg.querySelector('#prazoSignalObs');
     const btnSend = dlg.querySelector('#prazoSignalSend');
@@ -98,17 +110,28 @@ window.Modules.prazos = (() => {
       // Futuro: poderá chamar RPC para persistência; por ora apenas UI
       if (typeof dlg.close === 'function') dlg.close();
       if (prazoClickDialog && typeof prazoClickDialog.close === 'function') prazoClickDialog.close();
-      highlightMonitorUI(nup);
+
+      // Usa os identificadores que salvamos no dialog
+      const selNup = dlg.dataset.nup;
+      const selNumber = dlg.dataset.number || null;
+      highlightMonitorRow(selNup, selNumber);
     };
 
     if (typeof dlg.showModal === 'function') dlg.showModal();
     else dlg.setAttribute('open', 'open');
   }
 
-  function openPrazoClickPopup(nup, originId) {
+  function openPrazoClickPopup(nup, number, originId) {
     const dlg = ensurePrazoClickDialog();
     const nupEl = dlg.querySelector('#prazoClickNup');
-    if (nupEl) nupEl.textContent = `NUP: ${nup}`; dlg.dataset.origin = originId || ''; dlg.dataset.nup = String(nup);
+    if (nupEl) {
+      const numStr = number != null ? ` • Nº: ${String(number).padStart(6, '0')}` : '';
+      nupEl.textContent = `NUP: ${nup}${numStr}`;
+    }
+    dlg.dataset.origin = originId || '';
+    dlg.dataset.nup = String(nup);
+    dlg.dataset.number = number != null ? String(number) : '';
+
     // Limpa handlers anteriores para evitar múltiplos binds
     const btnVer = dlg.querySelector('#prazoVerLista');
     const btnSinalizar = dlg.querySelector('#prazoSinalizar');
@@ -121,7 +144,7 @@ window.Modules.prazos = (() => {
     btnSinalizar.onclick = () => {
       const origin = dlg.dataset.origin || '';
       if (origin === 'prazoMonit') {
-        openPrazoSignalPopup(nup);
+        openPrazoSignalPopup(nup, number);
       } else {
         console.info('[Prazo] Sinalizar clicado (sem ação específica) para', nup, 'em', origin);
       }
@@ -185,6 +208,7 @@ window.Modules.prazos = (() => {
     { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
 
+  // Importante: passamos também o "number" ao abrir o popup
   function bindRowLinks(tbody) {
     if (!tbody) return;
     tbody.querySelectorAll('tr').forEach(tr => {
@@ -195,7 +219,7 @@ window.Modules.prazos = (() => {
         tr.addEventListener('click', () => {
           const container = tbody.closest('div[id]');
           const originId = container ? container.id : '';
-          openPrazoClickPopup(String(data.nup), originId);
+          openPrazoClickPopup(String(data.nup), data?.number ?? null, originId);
         });
       } catch {}
     });
@@ -268,6 +292,7 @@ window.Modules.prazos = (() => {
   let monitor = [];
   let doaga = [];
   let adhel = [];
+  let sobrestamento = [];
 
   async function loadPareceres() {
     // v_prazo_parecer: NUP, tipo, prazo, em_atraso, etc.
@@ -322,31 +347,11 @@ window.Modules.prazos = (() => {
     renderMonitor();
   }
 
-  function getDoagaRows() {
-    return doaga;
-  }
-
-  function renderDOAGA() {
-    const rows = getDoagaRows();
-    const { tbody } = Utils.renderTable('prazoDOAGA', DOAGA_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
   async function loadDOAGA() {
     const { data } = await sb.from('v_prazo_revogar_validade')
       .select('nup,due_date,days_remaining');
     doaga = data || [];
     renderDOAGA();
-  }
-
-  function getADHELRows() {
-    return adhel;
-  }
-
-  function renderADHEL() {
-    const rows = getADHELRows();
-    const { tbody } = Utils.renderTable('prazoADHEL', ADHEL_COLUMNS, rows);
-    bindRowLinks(tbody);
   }
 
   async function loadADHEL() {
