@@ -235,54 +235,11 @@ window.Modules.prazos = (() => {
     );
     renderADHEL();
   }
-    const data = typeof config.getRows === 'function' ? config.getRows() : [];
-    const rows = Array.isArray(data) ? data : [];
 
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    const lineHeight = 16;
-    const margin = 40;
+  
 
-    let cursorY = margin;
+  
 
-    function addParagraph(text) {
-      doc.text(String(text ?? ''), margin, cursorY);
-    }
-    function addGap(px) { cursorY += px; }
-
-    doc.setFont('helvetica', 'bold');
-    addParagraph(config.title);
-    doc.setFont('helvetica', 'normal');
-    addGap(8);
-
-    if (!rows.length) {
-      addParagraph('Nenhum registro disponível.');
-    } else {
-      rows.forEach(row => {
-        const text = config.columns
-          .map(col => {
-            const label = col.label || '';
-            let value = '';
-            if (typeof col.pdfValue === 'function') value = col.pdfValue(row);
-            else if (typeof col.value === 'function') value = col.value(row);
-            else if (col.key) value = row[col.key];
-            if (value instanceof Date) value = Utils.fmtDateTime(value);
-            if (value == null) value = '';
-            value = String(value);
-            if (label) return `${label}: ${value}`;
-            return value;
-          })
-          .filter(Boolean)
-          .join('  |  ');
-        addParagraph(text);
-        addGap(lineHeight / 2);
-      });
-    }
-
-    const url = doc.output('bloburl');
-    const win = window.open(url, '_blank');
-    if (win) win.opener = null;
-  }
   function init() {}
 
   async function load() {
