@@ -25,7 +25,7 @@ window.Modules.processos = (() => {
 
 
   // Normaliza entrada de NUP para o formato do banco: XXXXXX/XXXX-XX
-+function normalizeNupToBankFormat(input) {
+function normalizeNupToBankFormat(input) {
   const digits = String(input || '').replace(/\D/g, '');
   if (!digits) return '';
   // espelha a normalização do banco (public.normalize_nup):
