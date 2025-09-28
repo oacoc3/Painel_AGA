@@ -80,73 +80,37 @@ window.Modules.prazos = (() => {
     });
   }
 
+  function getPareceresRows() {
+    return pareceres;
+  }
+
   function renderPareceres() {
-    const rows = pareceres.slice(0, 8);
-    const { tbody } = Utils.renderTable('pareceres', PARECERES_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
-  function renderRemocao() {
-    const rows = remocao.slice(0, 8);
-    const { tbody } = Utils.renderTable('remocao', REMOCAO_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
-  function renderObras() {
-    const rows = obras.slice(0, 8);
-    const { tbody } = Utils.renderTable('obras', OBRAS_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
-  function renderSobrestamento() {
-    const rows = sobrestamento.slice(0, 8);
-    const { tbody } = Utils.renderTable('sobrestamento', SOBRESTAMENTO_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
-  function renderMonitor() {
-    const rows = monitor.slice(0, 8);
-    const { tbody } = Utils.renderTable('monitor', MONITOR_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
-  function getDoagaRows() {
-    return doaga;
-  }
-
-  function renderDOAGA() {
-    const rows = getDoagaRows();
-    const { tbody } = Utils.renderTable('prazoDOAGA', DOAGA_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
-  // >>> FALTAVA ESTA FUNÇÃO <<<
-  function renderADHEL() {
-    const rows = adhel.slice(0, 6);
-    const { tbody } = Utils.renderTable('adhel', ADHEL_COLUMNS, rows);
+    const rows = getPareceresRows();
+    const { tbody } = Utils.renderTable('prazoParec', PARECERES_COLUMNS, rows);
     bindRowLinks(tbody);
   }
 
   async function loadPareceres() {
-    const { data } = await sb.from('v_prazo_pareceres')
-      .select('nup,type,due_date,days_remaining')
-      .order('due_date', { ascending: true });
+    const [intRes, extRes] = await Promise.all([
+      sb
+        .from('v_prazo_pareceres')
+        .select('nup,type,due_date,days_remaining,deadline_days'),
+      sb
+        .from('v_prazo_pareceres_externos')
+        .select('nup,type,due_date,days_remaining,deadline_days')
+    ]);
 
-    const { data: sigData } = await sb.from('v_prazo_sigadaer_ext')
-      .select('nup,type,due_date,deadline_days,days_remaining');
+    const normalize = rows => (Array.isArray(rows) ? rows : []);
 
-    const normalizeType = t => (t || '').toUpperCase().trim();
-    const preferidos = ['OPR_AD', 'PREF'];
-
-    const parecerRows = (data || [])
-      .filter(row => preferidos.includes(normalizeType(row.type)))
+    const parecerRows = normalize(intRes.data)
+      .filter(row => ['ATM', 'DT', 'CGNA'].includes(row.type))
       .map(row => ({
         ...row,
         origin: 'parecer',
         type_label: `Parecer ${row.type}`
       }));
 
-    const sigadaerRows = (sigData || [])
+    const sigadaerRows = normalize(extRes.data)
       .filter(row => row.due_date || typeof row.deadline_days === 'number')
       .map(row => ({
         ...row,
@@ -159,43 +123,70 @@ window.Modules.prazos = (() => {
       }));
 
     pareceres = [...parecerRows, ...sigadaerRows]
-      .filter(r => r.type_label && r.nup)
-      .sort((a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31'));
-
+      .filter(row => row.due_date)
+      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
     renderPareceres();
+  }
+
+  function getRemocaoRows() {
+    return remocao;
+  }
+
+  function renderRemocao() {
+    const rows = getRemocaoRows();
+    const { tbody } = Utils.renderTable('prazoRemocao', REMOCAO_COLUMNS, rows);
+    bindRowLinks(tbody);
   }
 
   async function loadRemocao() {
     const { data } = await sb.from('v_prazo_remocao_rebaixamento')
-      .select('nup,due_date,days_remaining')
-      .order('due_date', { ascending: true });
-
-    remocao = (data || []).sort(
-      (a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
+      .select('nup,due_date,days_remaining');
+    remocao = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
     renderRemocao();
+  }
+
+  function getObraRows() {
+    return obras;
+  }
+
+  function renderObra() {
+    const rows = getObraRows();
+    const { tbody } = Utils.renderTable('prazoObra', OBRAS_COLUMNS, rows);
+    bindRowLinks(tbody);
   }
 
   async function loadObra() {
     const { data } = await sb.from('v_prazo_termino_obra')
-      .select('nup,due_date,days_remaining,em_atraso')
-      .order('due_date', { ascending: true });
+      .select('nup,due_date,days_remaining,em_atraso');
+    obras = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+    renderObra();
+  }
 
-    obras = (data || []).sort(
-      (a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
-    renderObras();
+  function getSobrestamentoRows() {
+    return sobrestamento;
+  }
+
+  function renderSobrestamento() {
+    const rows = getSobrestamentoRows();
+    const { tbody } = Utils.renderTable('prazoSobrestamento', SOBRESTAMENTO_COLUMNS, rows);
+    bindRowLinks(tbody);
   }
 
   async function loadSobrestamento() {
     const { data } = await sb.from('v_prazo_sobrestamento')
-      .select('nup,due_date,days_remaining')
-      .order('due_date', { ascending: true });
-
-    sobrestamento = (data || []).sort(
-      (a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
+      .select('nup,due_date,days_remaining');
+    sobrestamento = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
     renderSobrestamento();
+  }
+
+  function getMonitorRows() {
+    return monitor;
+  }
+
+  function renderMonitor() {
+    const rows = getMonitorRows();
+    const { tbody } = Utils.renderTable('monitorTramitacao', MONITOR_COLUMNS, rows);
+    bindRowLinks(tbody);
   }
 
   async function loadMonitor() {
@@ -203,6 +194,16 @@ window.Modules.prazos = (() => {
       .select('nup,type,number');
     monitor = data || [];
     renderMonitor();
+  }
+
+  function getDoagaRows() {
+    return doaga;
+  }
+
+  function renderDOAGA() {
+    const rows = getDoagaRows();
+    const { tbody } = Utils.renderTable('prazoDOAGA', DOAGA_COLUMNS, rows);
+    bindRowLinks(tbody);
   }
 
   async function loadDOAGA() {
@@ -215,6 +216,16 @@ window.Modules.prazos = (() => {
     renderDOAGA();
   }
 
+  function getAdhelRows() {
+    return adhel;
+  }
+
+  function renderADHEL() {
+    const rows = getAdhelRows();
+    const { tbody } = Utils.renderTable('prazoADHEL', ADHEL_COLUMNS, rows);
+    bindRowLinks(tbody);
+  }
+
   async function loadADHEL() {
     const { data } = await sb.from('v_prazo_ad_hel')
       .select('nup,due_date,days_remaining');
@@ -225,24 +236,31 @@ window.Modules.prazos = (() => {
     renderADHEL();
   }
 
+  const PDF_SECTIONS = {
+    pareceres: { title: 'Pareceres/Info', columns: PARECERES_COLUMNS, getRows: getPareceresRows },
+    remocao: { title: 'Remoção/Rebaixamento', columns: REMOCAO_COLUMNS, getRows: getRemocaoRows },
+    obras: { title: 'Término de Obra', columns: OBRAS_COLUMNS, getRows: getObraRows },
+    sobrestamento: { title: 'Sobrestamento', columns: SOBRESTAMENTO_COLUMNS, getRows: getSobrestamentoRows },
+    monitor: { title: 'Leitura/Expedição', columns: MONITOR_COLUMNS, getRows: getMonitorRows },
+    doaga: { title: 'Prazo DO-AGA', columns: DOAGA_COLUMNS, getRows: getDoagaRows },
+    adhel: { title: 'Revogar plano', columns: ADHEL_COLUMNS, getRows: getAdhelRows }
+  };
+
   function exportPrazoPDF(section) {
+    const config = PDF_SECTIONS[section];
+    if (!config) return;
+    if (!window.jspdf?.jsPDF) {
+      alert('Biblioteca de PDF indisponível.');
+      return;
+    }
+
+    const data = typeof config.getRows === 'function' ? config.getRows() : [];
+    const rows = Array.isArray(data) ? data : [];
+
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const lineHeight = 16;
     const margin = 40;
-
-    const sections = {
-      pareceres: { title: 'Pareceres/Info', cols: PARECERES_COLUMNS, rows: pareceres.slice(0, 8) },
-      obras: { title: 'Término de Obra', cols: OBRAS_COLUMNS, rows: obras.slice(0, 8) },
-      sobrestamento: { title: 'Sobrestamento', cols: SOBRESTAMENTO_COLUMNS, rows: sobrestamento.slice(0, 8) },
-      doaga: { title: 'Prazo DO-AGA', cols: DOAGA_COLUMNS, rows: getDoagaRows().slice(0, 10) },
-      revogar: { title: 'Revogar plano', cols: DOAGA_COLUMNS, rows: getDoagaRows().slice(0, 10) },
-      adhel: { title: 'Leitura/Expedição', cols: ADHEL_COLUMNS, rows: adhel.slice(0, 6) },
-      monitor: { title: 'Monitorar Tramitação', cols: MONITOR_COLUMNS, rows: monitor.slice(0, 8) }
-    };
-
-    const cfg = sections[section];
-    if (!cfg) return;
 
     let cursorY = margin;
 
@@ -252,23 +270,33 @@ window.Modules.prazos = (() => {
     function addGap(px) { cursorY += px; }
 
     doc.setFont('helvetica', 'bold');
-    addParagraph(cfg.title);
+    addParagraph(config.title);
     doc.setFont('helvetica', 'normal');
     addGap(8);
 
-    cfg.rows.forEach(r => {
-      const line = cfg.cols
-        .map(col => {
-          const label = col.label;
-          const value = (typeof col.value === 'function') ? col.value(r) : r[col.key];
-          if (value == null || value === '') return '';
-          return label ? `${label}: ${value}` : String(value);
-        })
-        .filter(Boolean)
-        .join('  |  ');
-      addParagraph(line);
-      addGap(lineHeight / 2);
-    });
+    if (!rows.length) {
+      addParagraph('Nenhum registro disponível.');
+    } else {
+      rows.forEach(row => {
+        const text = config.columns
+          .map(col => {
+            const label = col.label || '';
+            let value = '';
+            if (typeof col.pdfValue === 'function') value = col.pdfValue(row);
+            else if (typeof col.value === 'function') value = col.value(row);
+            else if (col.key) value = row[col.key];
+            if (value instanceof Date) value = Utils.fmtDateTime(value);
+            if (value == null) value = '';
+            value = String(value);
+            if (label) return `${label}: ${value}`;
+            return value;
+          })
+          .filter(Boolean)
+          .join('  |  ');
+        addParagraph(text);
+        addGap(lineHeight / 2);
+      });
+    }
 
     const url = doc.output('bloburl');
     const win = window.open(url, '_blank');
