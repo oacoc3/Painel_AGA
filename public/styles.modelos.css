@@ -3,7 +3,7 @@
 /* Cards lado a lado dividindo igualmente o espaço disponível */
 .split.modelos {
   display: grid;
-  grid-template-columns: repeat(2, minmax(320px, 1fr)); /* 50% para cada card */
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); /* responsivo: 2→1 col */
   gap: 12px;
   height: 100%;
 }
@@ -19,26 +19,24 @@
   min-height: 0;
 }
 
-/* Primeira linha do formulário: campos e ações lado a lado */
-#formModelo .mdl-top-row {
-  grid-template-columns: 1fr 1fr auto auto auto;
+/* Primeira linha com campos básicos */
+#modeloCamposBasicos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
-#formModelo .mdl-top-row label { min-width: 0; }
+@media (max-width: 900px) {
+  #modeloCamposBasicos { grid-template-columns: 1fr; }
+}
 
-/* Faz o campo de conteúdo ocupar todo o espaço livre do card */
-#formModelo label:last-of-type {
-  flex: 1;
+/* Área de itens do modelo */
+#modeloItens {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   min-height: 0;
 }
-
-#formModelo textarea {
+#modeloItens .table {
   flex: 1;
   min-height: 0;
-  height: 100%;
-}
-
-@media (max-width: 760px) {
-  .split.modelos {
-    grid-template-columns: 1fr;
-  }
 }
