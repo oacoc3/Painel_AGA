@@ -16,6 +16,7 @@ window.Modules.prazos = (() => {
           <button id="prazoVerLista" value="ver" type="button">Ver na lista de processos</button>
           <button id="prazoSinalizar" value="sinalizar" type="button">Sinalizar</button>
           <button id="prazoValidacao" value="validacao" type="button">Validação</button>
+          <button id="prazoValidacao" value="validacao" type="button">Validação</button>
           <button id="prazoFechar" value="close" type="button">Fechar</button>
         </div>
       </form>`;
@@ -30,15 +31,55 @@ function openPrazoClickPopup(nup) {
   const nupEl = dlg.querySelector('#prazoClickNup');
   if (nupEl) nupEl.textContent = `NUP: ${nup}`;
   const btnVer = dlg.querySelector('#prazoVerLista');
-  const btnSinalizar = dlg.querySelector('#prazoSinalizar');
-  btnValidacao = dlg.querySelector('#prazoValidacao');
-  const btnFechar = dlg.querySelector('#prazoFechar');
+    const btnSinalizar = dlg.querySelector('#prazoSinalizar');
+    const btnValidacao = dlg.querySelector('#prazoValidacao');
+    const btnFechar = dlg.querySelector('#prazoFechar');
 
   btnVer.onclick = () => {
     try { sessionStorage.setItem('procPreSelect', nup); } catch (_) {}
     window.location.href = 'processos.html';
   };
-  btnSinalizar.onclick = () => {
+  
+    // --- Validação (Admin) ---
+    if (btnValidacao) btnValidacao.onclick = async () => {
+      const vdlg = ensurePrazoValidationDialog();
+      const rkNow = dlg.dataset.rowKey || rowKey || '';
+      const [nupKey, numberKey3, typeKey3] = rkNow.split('|');
+      vdlg.dataset.nup = nup || nupKey || '';
+      vdlg.dataset.type = typeKey3 || '';
+      vdlg.dataset.number = numberKey3 || '';
+      const nupEl2 = vdlg.querySelector('#prazoValNup');
+      if (nupEl2) nupEl2.textContent = `NUP: ${vdlg.dataset.nup}`;
+      const infoEl = vdlg.querySelector('#prazoValInfo');
+      if (infoEl) {
+        const parts = [];
+        if (vdlg.dataset.type) parts.push(`Tipo: ${vdlg.dataset.type}`);
+        if (vdlg.dataset.number) parts.push(`Nº: ${String(vdlg.dataset.number).padStart(6,'0')}`);
+        infoEl.textContent = parts.join(' • ');
+      }
+      const obsEl = vdlg.querySelector('#prazoValObs'); if (obsEl) obsEl.value = '';
+      const btnApprove = vdlg.querySelector('#prazoValApprove');
+      const btnReject = vdlg.querySelector('#prazoValReject');
+      const btnCloseV = vdlg.querySelector('#prazoValClose');
+      const doClose = () => { if (typeof vdlg.close === 'function') vdlg.close(); };
+      // Resolve processId por NUP (igualdade exata)
+      let processId = null;
+      if (vdlg.dataset.nup) {
+        const { data: procRows, error: pErr } = await sb.from('processes').select('id').eq('nup', vdlg.dataset.nup).limit(1);
+        if (!pErr && Array.isArray(procRows) && procRows[0]?.id) processId = procRows[0].id;
+      }
+      if (btnApprove) btnApprove.onclick = async () => {
+        await window.PrazoSignalHistory?.validarSinalizacao(processId, vdlg.dataset.nup, vdlg.dataset.type, vdlg.dataset.number, obsEl?.value || null);
+        doClose(); if (typeof prazoClickDialog?.close === 'function') prazoClickDialog.close();
+      };
+      if (btnReject) btnReject.onclick = async () => {
+        await window.PrazoSignalHistory?.rejeitarSinalizacao(processId, vdlg.dataset.nup, vdlg.dataset.type, vdlg.dataset.number, obsEl?.value || null);
+        doClose(); if (typeof prazoClickDialog?.close === 'function') prazoClickDialog.close();
+      };
+      if (btnCloseV) btnCloseV.onclick = () => doClose();
+      if (typeof vdlg.showModal === 'function') vdlg.showModal(); else vdlg.setAttribute('open','open');
+    };
+    btnSinalizar.onclick = () => {
     console.info('[Prazo] Botão "Sinalizar" clicado para NUP', nup);
   };
   btnValidacao.onclick = () => {
