@@ -185,7 +185,7 @@ window.Modules.prazos = (() => {
 
   function renderMonitor() {
     const rows = getMonitorRows();
-    const { tbody } = Utils.renderTable('monitorTramitacao', MONITOR_COLUMNS, rows);
+    const { tbody } = Utils.renderTable('prazoMonit', MONITOR_COLUMNS, rows);
     bindRowLinks(tbody);
   }
 
