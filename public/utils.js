@@ -41,7 +41,7 @@
       timeZone: 'America/Sao_Paulo',
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric'
+      year: '2-digit'
     }).format(x);
   }
 
@@ -58,7 +58,7 @@
       timeZone: 'America/Sao_Paulo',
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric'
+      year: '2-digit'
     }).format(x);
     const tm = new Intl.DateTimeFormat('pt-BR', {
       timeZone: 'America/Sao_Paulo',
@@ -184,11 +184,11 @@
     const input = typeof id === 'string' ? el(id) : id;
     if (!input) return;
     input.addEventListener('input', () => {
-      const d = input.value.replace(/\D/g, '').slice(0, 17);
-      let v = d.slice(0, 5);
-      if (d.length > 5) v += '.' + d.slice(5, 11);
-      if (d.length > 11) v += '/' + d.slice(11, 15);
-      if (d.length > 15) v += '-' + d.slice(15, 17);
+      // Mantém apenas dígitos e limita a 12 (formato 000000/0000-00)
+      const d = input.value.replace(/\D/g, '').slice(0, 12);
+      let v = d.slice(0, 6);
+      if (d.length > 6) v += '/' + d.slice(6, 10);
+      if (d.length > 10) v += '-' + d.slice(10, 12);
       input.value = v;
     });
   }

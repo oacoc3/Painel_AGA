@@ -23,6 +23,19 @@ window.Modules.processos = (() => {
   let PROC_PAGE = 1;
   const PROC_PAGE_SIZE = 50; // ajuste se necessário
 
+
+  // Normaliza entrada de NUP para o formato do banco: XXXXXX/XXXX-00
+  // Aceita NUP colado com/sem prefixo de 5 dígitos, com ou sem pontuação.
+  function normalizeNupToBankFormat(input) {
+    const digits = String(input || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.length < 10) return input || '';
+    const core = digits.slice(-10);
+    const part1 = core.slice(0, 6);
+    const part2 = core.slice(6, 10);
+    return `${part1}/${part2}-00`;
+  }
+
   function renderProcPagination({ page, pagesTotal, count }) {
     const box = el('procLista');
     if (!box) return;
@@ -259,7 +272,9 @@ window.Modules.processos = (() => {
   }
 
   async function buscarProcesso() {
-    const nup = (el('procNUP')?.value || '').trim();
+    let nup = (el('procNUP')?.value || '').trim();
+    nup = normalizeNupToBankFormat(nup);
+    if (el('procNUP')) el('procNUP').value = nup;
     if (!nup) return U.setMsg('procMsg', 'Informe o NUP (Número Único de Protocolo).', true);
 
     U.setMsg('procMsg', 'Buscando…');
@@ -416,7 +431,9 @@ window.Modules.processos = (() => {
 
   async function upsertProcess() {
     if (!guardProcessWrite('procMsg')) return;
-    const nup = (el('procNUP')?.value || '').trim();
+    let nup = (el('procNUP')?.value || '').trim();
+    nup = normalizeNupToBankFormat(nup);
+    if (el('procNUP')) el('procNUP').value = nup;
     if (!nup) return U.setMsg('procMsg', 'Informe o NUP.', true);
 
     const payload = { nup };

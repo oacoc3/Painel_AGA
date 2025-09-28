@@ -1,0 +1,338 @@
+-- ============================================================
+-- Migração AGA (revisada) - NUP, Extensões, Fuso, Políticas, Pareceres
+-- Idempotente e segura para reexecução.
+-- ============================================================
+
+DO $mig$
+BEGIN
+  ----------------------------------------------------------------
+  -- 1) Extensões necessárias (no schema "extensions")
+  ----------------------------------------------------------------
+  EXECUTE 'CREATE SCHEMA IF NOT EXISTS extensions';
+
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto') THEN
+    EXECUTE 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'moddatetime') THEN
+    EXECUTE 'CREATE EXTENSION IF NOT EXISTS moddatetime WITH SCHEMA extensions';
+  END IF;
+
+  ----------------------------------------------------------------
+  -- 2) Fuso horário do banco
+  ----------------------------------------------------------------
+  EXECUTE 'ALTER DATABASE ' || current_database() || ' SET TIMEZONE TO ''America/Recife''';
+
+  ----------------------------------------------------------------
+  -- 3) Função de normalização de NUP
+  --    Regras:
+  --      - mantém apenas dígitos
+  --      - se tiver 5 dígitos de prefixo, descarta
+  --      - formata como XXXXXX/XXXX-XX (6/4-2)
+  ----------------------------------------------------------------
+  EXECUTE $sql$
+    CREATE OR REPLACE FUNCTION public.normalize_nup(n text)
+    RETURNS text
+    LANGUAGE plpgsql
+    STABLE
+    AS $$
+    DECLARE
+      d text := regexp_replace(coalesce(n,''), '\D', '', 'g');
+    BEGIN
+      IF length(d) > 5 THEN
+        d := substr(d, 6);
+      END IF;
+
+      IF length(d) >= 12 THEN
+        RETURN substr(d,1,6) || '/' || substr(d,7,4) || '-' || substr(d,11,2);
+      END IF;
+
+      RETURN n;
+    END;
+    $$;
+  $sql$;
+
+  ----------------------------------------------------------------
+  -- 4) Constraint de NUP
+  --    - Remover a antiga (qualquer definição)
+  --    - Normalizar os DADOS EXISTENTES primeiro
+  --    - Adicionar a nova como NOT VALID e, em seguida, VALIDATE
+  ----------------------------------------------------------------
+  IF EXISTS (
+    SELECT 1
+    FROM   information_schema.table_constraints
+    WHERE  table_schema = 'public'
+      AND  table_name   = 'processes'
+      AND  constraint_name = 'nup_format'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.processes DROP CONSTRAINT nup_format';
+  END IF;
+
+  -- Normaliza os registros já existentes antes de criar a nova constraint
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='processes' AND column_name='nup') THEN
+    EXECUTE $sql$
+      UPDATE public.processes
+         SET nup = public.normalize_nup(nup)
+       WHERE nup IS NOT NULL
+         AND nup <> public.normalize_nup(nup)
+    $sql$;
+  END IF;
+
+  -- Cria a nova constraint como NOT VALID (para não falhar agora)
+  EXECUTE $sql$
+    ALTER TABLE public.processes
+    ADD CONSTRAINT nup_format
+    CHECK (nup ~ '^[0-9]{6}/[0-9]{4}-[0-9]{2}$')
+    NOT VALID
+  $sql$;
+
+  -- Valida a constraint (só valida se ainda estiver "not valid")
+  PERFORM 1
+  FROM pg_constraint c
+  JOIN pg_class t ON t.oid=c.conrelid
+  JOIN pg_namespace n ON n.oid=t.relnamespace
+  WHERE c.conname='nup_format' AND n.nspname='public' AND t.relname='processes';
+
+  -- A validação lança erro se existirem linhas inválidas.
+  -- Como já normalizamos, deve passar; se não, corrija manualmente os outliers e reexecute este bloco.
+  EXECUTE 'ALTER TABLE public.processes VALIDATE CONSTRAINT nup_format';
+
+  ----------------------------------------------------------------
+  -- 5) Trigger para manter o formato em novos INSERT/UPDATE
+  ----------------------------------------------------------------
+  EXECUTE $sql$
+    CREATE OR REPLACE FUNCTION public.trg_processes_normalize_nup()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      NEW.nup := public.normalize_nup(NEW.nup);
+      RETURN NEW;
+    END;
+    $$;
+  $sql$;
+
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_processes_normalize_nup') THEN
+    EXECUTE 'DROP TRIGGER trg_processes_normalize_nup ON public.processes';
+  END IF;
+
+  EXECUTE $sql$
+    CREATE TRIGGER trg_processes_normalize_nup
+    BEFORE INSERT OR UPDATE ON public.processes
+    FOR EACH ROW
+    EXECUTE FUNCTION public.trg_processes_normalize_nup()
+  $sql$;
+
+  ----------------------------------------------------------------
+  -- 6) Políticas: remover “profiles self update name”
+  ----------------------------------------------------------------
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE  schemaname = 'public'
+      AND  tablename  = 'profiles'
+      AND  policyname = 'profiles self update name'
+  ) THEN
+    EXECUTE 'DROP POLICY "profiles self update name" ON public.profiles';
+  END IF;
+  -- (mantém políticas de Administrador já presentes)
+
+  ----------------------------------------------------------------
+  -- 7) Pareceres internos: liberar (sem exigir ANATEC-PRE/ANATEC)
+  ----------------------------------------------------------------
+  EXECUTE $sql$
+    CREATE OR REPLACE FUNCTION public.check_opinion_allowed()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      -- Libera inserções/atualizações de pareceres internos, sem checagem de status do processo
+      RETURN NEW;
+    END;
+    $$;
+  $sql$;
+
+  ----------------------------------------------------------------
+  -- 8) Views: usar timezone 'America/Recife'
+  ----------------------------------------------------------------
+  -- v_prazo_ad_hel
+  IF EXISTS (SELECT 1 FROM pg_views WHERE schemaname='public' AND viewname='v_prazo_ad_hel') THEN
+    EXECUTE $sql$
+      CREATE OR REPLACE VIEW public.v_prazo_ad_hel AS
+      WITH fav AS (
+        SELECT n.process_id,
+               max(date(timezone('America/Recife', n.read_at))) AS read_date
+        FROM public.notifications n
+        JOIN public.processes p_1 ON p_1.id = n.process_id
+        WHERE n.type = 'FAV-AD_HEL'::public.notification_type
+          AND n.status = 'LIDA'::public.notification_status
+          AND p_1.type = 'Inscrição'::public.process_type
+        GROUP BY n.process_id
+      )
+      SELECT p.id AS process_id,
+             p.nup,
+             fav.read_date,
+             (fav.read_date + 1) AS start_count,
+             (((fav.read_date + 1) + interval '2 years')::date) AS due_date,
+             ((((fav.read_date + 1) + interval '2 years')::date) - CURRENT_DATE) AS days_remaining
+      FROM fav
+      JOIN public.processes p ON p.id = fav.process_id
+    $sql$;
+  END IF;
+
+  -- v_prazo_pareceres
+  IF EXISTS (SELECT 1 FROM pg_views WHERE schemaname='public' AND viewname='v_prazo_pareceres') THEN
+    EXECUTE $sql$
+      CREATE OR REPLACE VIEW public.v_prazo_pareceres AS
+      WITH base AS (
+        SELECT io.process_id,
+               p.nup,
+               io.type,
+               date(timezone('America/Recife', io.requested_at)) AS requested_at,
+               (date(timezone('America/Recife', io.requested_at)) + 1) AS start_count,
+               CASE
+                 WHEN io.type IN ('ATM'::public.opinion_type, 'DT'::public.opinion_type) THEN 10
+                 ELSE 30
+               END AS deadline_days
+        FROM public.internal_opinions io
+        JOIN public.processes p ON p.id = io.process_id
+        WHERE io.status = 'SOLICITADO'::public.opinion_status
+          AND io.type IN ('ATM'::public.opinion_type, 'DT'::public.opinion_type, 'CGNA'::public.opinion_type)
+      )
+      SELECT process_id,
+             nup,
+             type,
+             requested_at,
+             deadline_days,
+             (start_count + (deadline_days - 1)) AS due_date,
+             start_count,
+             ((start_count + (deadline_days - 1)) - CURRENT_DATE) AS days_remaining
+      FROM base
+    $sql$;
+  END IF;
+
+  -- v_prazo_pareceres_externos
+  IF EXISTS (SELECT 1 FROM pg_views WHERE schemaname='public' AND viewname='v_prazo_pareceres_externos') THEN
+    EXECUTE $sql$
+      CREATE OR REPLACE VIEW public.v_prazo_pareceres_externos AS
+      WITH base AS (
+        SELECT s.process_id,
+               p.nup,
+               s.type,
+               date(timezone('America/Recife', s.expedit_at)) AS requested_at,
+               (date(timezone('America/Recife', s.expedit_at)) + 1) AS start_count,
+               s.deadline_days
+        FROM public.sigadaer s
+        JOIN public.processes p ON p.id = s.process_id
+        WHERE s.status = 'EXPEDIDO'::public.sigadaer_status
+          AND s.received_at IS NULL
+          AND s.deadline_days IS NOT NULL
+      )
+      SELECT process_id,
+             nup,
+             type,
+             requested_at,
+             deadline_days,
+             (start_count + (deadline_days - 1)) AS due_date,
+             start_count,
+             ((start_count + (deadline_days - 1)) - CURRENT_DATE) AS days_remaining
+      FROM base
+    $sql$;
+  END IF;
+
+  -- v_prazo_remocao_rebaixamento
+  IF EXISTS (SELECT 1 FROM pg_views WHERE schemaname='public' AND viewname='v_prazo_remocao_rebaixamento') THEN
+    EXECUTE $sql$
+      CREATE OR REPLACE VIEW public.v_prazo_remocao_rebaixamento AS
+      WITH base AS (
+        SELECT n.process_id,
+               p.nup,
+               date(timezone('America/Recife', n.read_at)) AS read_date
+        FROM public.notifications n
+        JOIN public.processes p ON p.id = n.process_id
+        WHERE n.type = 'DESF-REM_REB'::public.notification_type
+          AND n.status = 'LIDA'::public.notification_status
+      )
+      SELECT process_id,
+             nup,
+             read_date AS read_at,
+             ((read_date + 1) + (120 - 1)) AS due_date,
+             (read_date + 1) AS start_count,
+             (((read_date + 1) + (120 - 1)) - CURRENT_DATE) AS days_remaining
+      FROM base
+    $sql$;
+  END IF;
+
+  -- v_prazo_sobrestamento
+  IF EXISTS (SELECT 1 FROM pg_views WHERE schemaname='public' AND viewname='v_prazo_sobrestamento') THEN
+    EXECUTE $sql$
+      CREATE OR REPLACE VIEW public.v_prazo_sobrestamento AS
+      WITH base AS (
+        SELECT p.id AS process_id,
+               p.nup,
+               p.status,
+               date(timezone('America/Recife', p.status_since)) AS status_start_date,
+               CASE p.status
+                 WHEN 'SOB-TEC'::public.process_status THEN 120
+                 WHEN 'SOB-DOC'::public.process_status THEN 60
+                 ELSE NULL::integer
+               END AS deadline_days
+        FROM public.processes p
+        WHERE p.status IN ('SOB-TEC'::public.process_status, 'SOB-DOC'::public.process_status)
+      )
+      SELECT process_id,
+             nup,
+             CASE WHEN status_start_date IS NOT NULL THEN ((status_start_date + 1) + (deadline_days - 1)) END AS due_date,
+             CASE WHEN status_start_date IS NOT NULL THEN (status_start_date + 1) END AS start_count,
+             CASE WHEN status_start_date IS NOT NULL THEN (((status_start_date + 1) + (deadline_days - 1)) - CURRENT_DATE) END AS days_remaining
+      FROM base
+      WHERE status_start_date IS NOT NULL
+    $sql$;
+  END IF;
+
+  -- v_prazo_termino_obra
+  IF EXISTS (SELECT 1 FROM pg_views WHERE schemaname='public' AND viewname='v_prazo_termino_obra') THEN
+    EXECUTE $sql$
+      CREATE OR REPLACE VIEW public.v_prazo_termino_obra AS
+      SELECT process_id,
+             nup,
+             requested_at,
+             CASE WHEN em_atraso THEN (start_count + 29)
+                  ELSE requested_at END AS due_date,
+             start_count,
+             CASE WHEN em_atraso THEN ((start_count + 29) - CURRENT_DATE)
+                  ELSE (requested_at - CURRENT_DATE) END AS days_remaining,
+             em_atraso
+      FROM (
+        WITH term_atra AS (
+          SELECT n.process_id, min(n.read_at) AS read_at
+          FROM public.notifications n
+          WHERE n.type = 'TERM-ATRA'::public.notification_type
+            AND n.status = 'LIDA'::public.notification_status
+          GROUP BY n.process_id
+        ),
+        fav_term AS (
+          SELECT DISTINCT n.process_id
+          FROM public.notifications n
+          WHERE n.type = 'FAV-TERM'::public.notification_type
+            AND n.status = 'LIDA'::public.notification_status
+        )
+        SELECT p.id AS process_id,
+               p.nup,
+               CASE WHEN ta.read_at IS NOT NULL
+                    THEN date(timezone('America/Recife', ta.read_at))
+                    ELSE p.obra_termino_date END AS requested_at,
+               CASE WHEN ta.read_at IS NOT NULL
+                    THEN (date(timezone('America/Recife', ta.read_at)) + 1)
+                    ELSE NULL::date END AS start_count,
+               (ta.read_at IS NOT NULL) AS em_atraso
+        FROM public.processes p
+        JOIN fav_term f ON f.process_id = p.id
+        LEFT JOIN term_atra ta ON ta.process_id = p.id
+        WHERE p.obra_concluida = false
+      ) base
+    $sql$;
+  END IF;
+
+END
+$mig$;
