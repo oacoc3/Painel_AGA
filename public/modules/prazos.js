@@ -1,55 +1,6 @@
 // public/modules/prazos.js
 window.Modules = window.Modules || {};
 window.Modules.prazos = (() => {
-  // Popup ao clicar em um processo nos cards de Prazos
-  let prazoClickDialog = null;
-  function ensurePrazoClickDialog() {
-    if (prazoClickDialog) return prazoClickDialog;
-    // Usa <dialog> nativo para não alterar CSS do projeto
-    const dlg = document.createElement('dialog');
-    dlg.id = 'prazoClickDlg';
-    dlg.innerHTML = `
-      <form method="dialog" style="min-width:320px; max-width:90vw;">
-        <h3 style="margin:0 0 12px 0;">Ação para o processo</h3>
-        <div id="prazoClickNup" style="margin:0 0 16px 0; font-weight:600;"></div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-          <button id="prazoVerLista" value="ver" type="button">Ver na lista de processos</button>
-          <button id="prazoSinalizar" value="sinalizar" type="button">Sinalizar</button>
-          <button id="prazoFechar" value="close" type="button">Fechar</button>
-        </div>
-      </form>`;
-    document.body.appendChild(dlg);
-    prazoClickDialog = dlg;
-    return dlg;
-  }
-
-  function openPrazoClickPopup(nup) {
-    const dlg = ensurePrazoClickDialog();
-    const nupEl = dlg.querySelector('#prazoClickNup');
-    if (nupEl) nupEl.textContent = `NUP: ${nup}`;
-    // Limpa handlers anteriores para evitar múltiplos binds
-    const btnVer = dlg.querySelector('#prazoVerLista');
-    const btnSinalizar = dlg.querySelector('#prazoSinalizar');
-    const btnFechar = dlg.querySelector('#prazoFechar');
-
-    btnVer.onclick = () => {
-      try { sessionStorage.setItem('procPreSelect', nup); } catch (_) {}
-      window.location.href = 'processos.html';
-    };
-    btnSinalizar.onclick = () => {
-      // Por enquanto, sem função (placeholder solicitado).
-      // Futuro: chamar RPC set_prazo_signal(process_id, 'LEITURA_EXPEDICAO', ...)
-      // Aqui manteremos apenas um aviso não intrusivo no console:
-      console.info('[Prazo] Botão "Sinalizar" clicado para NUP', nup);
-    };
-    btnFechar.onclick = () => {
-      if (typeof dlg.close === 'function') dlg.close();
-    };
-
-    if (typeof dlg.showModal === 'function') dlg.showModal();
-    else dlg.style.display = 'block';
-  }
-
   let pareceres = [];
   let remocao = [];
   let obras = [];
@@ -122,7 +73,8 @@ window.Modules.prazos = (() => {
         const data = JSON.parse(tr.dataset.row);
         if (!data?.nup) return;
         tr.addEventListener('click', () => {
-          openPrazoClickPopup(String(data.nup));
+          sessionStorage.setItem('procPreSelect', data.nup);
+          window.location.href = 'processos.html';
         });
       } catch {}
     });
