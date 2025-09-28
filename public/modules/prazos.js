@@ -17,10 +17,23 @@ window.Modules.prazos = (() => {
           <button id="prazoSinalizar" value="sinalizar" type="button">Sinalizar</button>
           <button id="prazoFechar" value="close" type="button">Fechar</button>
         </div>
-      </form>`;
+      </form>
+    `;
     document.body.appendChild(dlg);
     prazoClickDialog = dlg;
     return dlg;
+  }
+
+  async function resolveProcIdByNup(nup) {
+    const sb = window.supabaseClient;
+    // Consulta direta por NUP já formatado (a tabela 'processes' tem constraint de formato)
+    const { data, error } = await sb
+      .from('processes')
+      .select('id')
+      .eq('nup', String(nup))
+      .maybeSingle();
+    if (error) throw error;
+    return data?.id || null;
   }
 
   function openPrazoClickPopup(nup) {
@@ -36,19 +49,36 @@ window.Modules.prazos = (() => {
       try { sessionStorage.setItem('procPreSelect', nup); } catch (_) {}
       window.location.href = 'processos.html';
     };
-    btnSinalizar.onclick = () => {
-      // Por enquanto, sem função (placeholder solicitado).
-      // Futuro: chamar RPC set_prazo_signal(process_id, 'LEITURA_EXPEDICAO', ...)
-      // Aqui manteremos apenas um aviso não intrusivo no console:
-      console.info('[Prazo] Botão "Sinalizar" clicado para NUP', nup);
+    btnSinalizar.onclick = async () => {
+      try {
+        const procId = await resolveProcIdByNup(nup);
+        if (!procId) {
+          console.warn('Processo não encontrado para NUP', nup);
+          if (typeof dlg.close === 'function') dlg.close();
+          return;
+        }
+        const sb = window.supabaseClient;
+        const { error } = await sb.from('le_signals').insert({
+          process_id: procId,
+          signal_type: 'SINALIZAR',
+          reason: null,
+          extra: { origem: 'Prazos/LeituraExpedicao' }
+        });
+        if (error) throw error;
+      } catch (e) {
+        console.error('Falha ao sinalizar LE:', e);
+      } finally {
+        if (typeof dlg.close === 'function') dlg.close();
+      }
     };
     btnFechar.onclick = () => {
       if (typeof dlg.close === 'function') dlg.close();
     };
-
     if (typeof dlg.showModal === 'function') dlg.showModal();
-    else dlg.style.display = 'block';
   }
+
+  // === Dados dos cards ===
+  const sb = window.supabaseClient;
 
   let pareceres = [];
   let remocao = [];
@@ -65,53 +95,53 @@ window.Modules.prazos = (() => {
       label: 'Tipo',
       value: r => r.type_label || r.type || ''
     },
-    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
+    { key: 'days', label: 'Dias', value: r => r.days ?? '' },
+    { key: 'days_deadline', label: 'Prazo', value: r => r.days_deadline ?? '' },
+    { key: 'em_atraso', label: 'Em atraso', value: r => r.em_atraso ? 'Sim' : 'Não' },
   ];
 
   const REMOCAO_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
+    { key: 'days', label: 'Dias', value: r => r.days ?? '' },
+    { key: 'days_deadline', label: 'Prazo', value: r => r.days_deadline ?? '' },
+    { key: 'em_atraso', label: 'Em atraso', value: r => r.em_atraso ? 'Sim' : 'Não' },
   ];
 
-  const OBRAS_COLUMNS = [
+  const OBRA_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    {
-      key: 'due_date',
-      label: 'Prazo',
-      value: r => Utils.fmtDate(r.due_date),
-      render: r => {
-        const prazo = Utils.fmtDate(r.due_date);
-        if (!r.em_atraso) return `<div>${prazo}</div>`;
-        return `<div>${prazo}</div><div class="text-danger">ADICIONAL</div>`;
-      }
-    },
-    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
+    { key: 'status_label', label: 'Status', value: r => r.status_label || r.status || '' },
+    { key: 'days', label: 'Dias', value: r => r.days ?? '' },
+    { key: 'days_deadline', label: 'Prazo', value: r => r.days_deadline ?? '' },
+    { key: 'em_atraso', label: 'Em atraso', value: r => r.em_atraso ? 'Sim' : 'Não' },
   ];
 
-  const SOBRESTAMENTO_COLUMNS = [
+  const SOBREST_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
-    { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
+    { key: 'days', label: 'Dias', value: r => r.days ?? '' },
+    { key: 'days_deadline', label: 'Prazo', value: r => r.days_deadline ?? '' },
+    { key: 'em_atraso', label: 'Em atraso', value: r => r.em_atraso ? 'Sim' : 'Não' },
   ];
 
   const MONITOR_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'type', label: 'Tipo' },
-    { key: 'number', label: 'Número', value: r => (r.number ? String(r.number).padStart(6, '0') : '') }
+    { key: 'days', label: 'Dias', value: r => r.days ?? '' },
+    { key: 'days_deadline', label: 'Prazo', value: r => r.days_deadline ?? '' },
+    { key: 'em_atraso', label: 'Em atraso', value: r => r.em_atraso ? 'Sim' : 'Não' },
   ];
 
   const DOAGA_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
-    { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
+    { key: 'type_label', label: 'Tipo', value: r => r.type_label || r.type || '' },
+    { key: 'days', label: 'Dias', value: r => r.days ?? '' },
+    { key: 'days_deadline', label: 'Prazo', value: r => r.days_deadline ?? '' },
+    { key: 'em_atraso', label: 'Em atraso', value: r => r.em_atraso ? 'Sim' : 'Não' },
   ];
 
   const ADHEL_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : '') },
-    { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
+    { key: 'days', label: 'Dias', value: r => r.days ?? '' },
+    { key: 'days_deadline', label: 'Prazo', value: r => r.days_deadline ?? '' },
+    { key: 'em_atraso', label: 'Em atraso', value: r => r.em_atraso ? 'Sim' : 'Não' },
   ];
 
   function bindRowLinks(tbody) {
@@ -138,59 +168,14 @@ window.Modules.prazos = (() => {
     bindRowLinks(tbody);
   }
 
-  async function loadPareceres() {
-    const [intRes, extRes] = await Promise.all([
-      sb
-        .from('v_prazo_pareceres')
-        .select('nup,type,due_date,days_remaining,deadline_days'),
-      sb
-        .from('v_prazo_pareceres_externos')
-        .select('nup,type,due_date,days_remaining,deadline_days')
-    ]);
-
-    const normalize = rows => (Array.isArray(rows) ? rows : []);
-
-    const parecerRows = normalize(intRes.data)
-      .filter(row => ['ATM', 'DT', 'CGNA'].includes(row.type))
-      .map(row => ({
-        ...row,
-        origin: 'parecer',
-        type_label: `Parecer ${row.type}`
-      }));
-
-    const sigadaerRows = normalize(extRes.data)
-      .filter(row => row.due_date || typeof row.deadline_days === 'number')
-      .map(row => ({
-        ...row,
-        origin: 'sigadaer',
-        type_label: `SIGADAER ${row.type}`,
-        days_remaining:
-          typeof row.days_remaining === 'number'
-            ? row.days_remaining
-            : Utils.daysBetween(new Date(), row.due_date)
-      }));
-
-    pareceres = [...parecerRows, ...sigadaerRows]
-      .filter(row => row.due_date)
-      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-    renderPareceres();
-  }
-
   function getRemocaoRows() {
     return remocao;
   }
 
   function renderRemocao() {
     const rows = getRemocaoRows();
-    const { tbody } = Utils.renderTable('prazoRemocao', REMOCAO_COLUMNS, rows);
+    const { tbody } = Utils.renderTable('prazoRemoc', REMOCAO_COLUMNS, rows);
     bindRowLinks(tbody);
-  }
-
-  async function loadRemocao() {
-    const { data } = await sb.from('v_prazo_remocao_rebaixamento')
-      .select('nup,due_date,days_remaining');
-    remocao = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-    renderRemocao();
   }
 
   function getObraRows() {
@@ -199,32 +184,18 @@ window.Modules.prazos = (() => {
 
   function renderObra() {
     const rows = getObraRows();
-    const { tbody } = Utils.renderTable('prazoObra', OBRAS_COLUMNS, rows);
+    const { tbody } = Utils.renderTable('prazoObra', OBRA_COLUMNS, rows);
     bindRowLinks(tbody);
   }
 
-  async function loadObra() {
-    const { data } = await sb.from('v_prazo_termino_obra')
-      .select('nup,due_date,days_remaining,em_atraso');
-    obras = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-    renderObra();
-  }
-
-  function getSobrestamentoRows() {
+  function getSobrestRows() {
     return sobrestamento;
   }
 
-  function renderSobrestamento() {
-    const rows = getSobrestamentoRows();
-    const { tbody } = Utils.renderTable('prazoSobrestamento', SOBRESTAMENTO_COLUMNS, rows);
+  function renderSobrest() {
+    const rows = getSobrestRows();
+    const { tbody } = Utils.renderTable('prazoSobrest', SOBREST_COLUMNS, rows);
     bindRowLinks(tbody);
-  }
-
-  async function loadSobrestamento() {
-    const { data } = await sb.from('v_prazo_sobrestamento')
-      .select('nup,due_date,days_remaining');
-    sobrestamento = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-    renderSobrestamento();
   }
 
   function getMonitorRows() {
@@ -235,13 +206,6 @@ window.Modules.prazos = (() => {
     const rows = getMonitorRows();
     const { tbody } = Utils.renderTable('prazoMonit', MONITOR_COLUMNS, rows);
     bindRowLinks(tbody);
-  }
-
-  async function loadMonitor() {
-    const { data } = await sb.from('v_monitorar_tramitacao')
-      .select('nup,type,number');
-    monitor = data || [];
-    renderMonitor();
   }
 
   function getDoagaRows() {
@@ -255,12 +219,11 @@ window.Modules.prazos = (() => {
   }
 
   async function loadDOAGA() {
-    const { data } = await sb.from('v_prazo_do_aga')
-      .select('nup,due_date,days_remaining');
-    doaga = (data || []).sort(
-      (a, b) =>
-        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
+    const { data } = await sb.from('v_prazo_doaga').select('*').order('em_atraso', { ascending: false }).order('days', { ascending: false });
+    doaga = Array.isArray(data) ? data.map(row => ({
+      ...row,
+      type_label: row?.type_label || row?.type || ''
+    })) : [];
     renderDOAGA();
   }
 
@@ -275,20 +238,59 @@ window.Modules.prazos = (() => {
   }
 
   async function loadADHEL() {
-    const { data } = await sb.from('v_prazo_ad_hel')
-      .select('nup,due_date,days_remaining');
-    adhel = (data || []).sort(
-      (a, b) =>
-        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
+    const { data } = await sb.from('v_prazo_adhel').select('*').order('em_atraso', { ascending: false }).order('days', { ascending: false });
+    adhel = Array.isArray(data) ? data.map(row => ({
+      ...row,
+      type_label: row?.type_label || row?.type || ''
+    })) : [];
     renderADHEL();
   }
 
-  
+  async function loadPareceres() {
+    const { data: parecerRows } = await sb.from('v_prazo_pareceres').select('*').order('em_atraso', { ascending: false }).order('days', { ascending: false });
+    const { data: sigadaerRows } = await sb.from('v_prazo_sigadaer').select('*').order('em_atraso', { ascending: false }).order('days', { ascending: false });
+    pareceres = [...parecerRows, ...sigadaerRows]
+      .map(row => ({
+        ...row,
+        type_label: row?.type_label || row?.type || ''
+      }));
+    renderPareceres();
+  }
 
-  
+  async function loadRemocao() {
+    const { data } = await sb.from('v_prazo_remocao').select('*').order('em_atraso', { ascending: false }).order('days', { ascending: false });
+    remocao = Array.isArray(data) ? data : [];
+    renderRemocao();
+  }
 
-  function init() {}
+  async function loadObra() {
+    const { data } = await sb.from('v_prazo_obra').select('*').order('em_atraso', { ascending: false }).order('days', { ascending: false });
+    obras = Array.isArray(data) ? data : [];
+    renderObra();
+  }
+
+  async function loadSobrestamento() {
+    const { data } = await sb.from('v_prazo_sobrestamento').select('*').order('em_atraso', { ascending: false }).order('days', { ascending: false });
+    sobrestamento = Array.isArray(data) ? data : [];
+    renderSobrest();
+  }
+
+  async function loadMonitor() {
+    const { data } = await sb.from('v_prazo_monitor').select('*').order('em_atraso', { ascending: false }).order('days', { ascending: false });
+    monitor = Array.isArray(data) ? data : [];
+    renderMonitor();
+  }
+
+  async function init() {
+    // Bind inicial das tabelas quando a página carregar
+    await load();
+    // Rebind nos tbodys para novos dados
+    ['prazoParec','prazoRemoc','prazoObra','prazoSobrest','prazoMonit','prazoDOAGA','prazoADHEL']
+      .forEach(id => {
+        const { tbody } = Utils.renderTable(id, [], []);
+        bindRowLinks(tbody);
+      });
+  }
 
   async function load() {
     await Promise.all([
