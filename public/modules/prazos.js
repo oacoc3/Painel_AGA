@@ -432,10 +432,7 @@ window.Modules.prazos = (() => {
 
     // Garante a existência do botão "Validação" entre Sinalizar e Fechar
     let btnValidacao = dlg.querySelector('#prazoValidacao');
-    const btnVer = dlg.querySelector('#prazoVerLista');
-    const btnSinalizar = dlg.querySelector('#prazoSinalizar');
-    const btnFechar = dlg.querySelector('#prazoFechar');
-    if (!btnValidacao) {
+        if (!btnValidacao) {
       btnValidacao = document.createElement('button');
       btnValidacao.id = 'prazoValidacao';
       btnValidacao.type = 'button';
