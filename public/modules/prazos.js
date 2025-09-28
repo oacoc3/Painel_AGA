@@ -372,7 +372,7 @@ window.Modules.prazos = (() => {
 (function() {
   const HIGHLIGHT_COLOR = '#fff3b0';
 
-  }
+  
 
   let prazoSignalDialog = null;
   function ensurePrazoSignalDialog() {
@@ -499,8 +499,7 @@ window.Modules.prazos = (() => {
             if ((!procRows || !procRows[0]) && nupNorm) {
               // tentativa 2: ilike por trecho numérico
               const pat = `%${nupNorm.slice(-10)}%`;
-              const { data: procRows2 } = await sb.from('processes').select('id,nup').ilike('nup', pat).limit(1);
-              if (Array.isArray(procRows2) && procRows2[0]?.id) processId = procRows2[0].id;
+              const { data: procRows2 } = await sb.from('processes').select('id,nup')if (Array.isArray(procRows2) && procRows2[0]?.id) processId = procRows2[0].id;
             }
             if (!pErr && Array.isArray(procRows) && procRows[0]?.id) {
               processId = procRows[0].id;
@@ -598,44 +597,37 @@ window.Modules.prazos = (() => {
 
 // === Auxiliar: registros de Validação/Rejeição pelo Administrador ===
 // Estes helpers podem ser chamados quando os botões de Admin forem implementados.
+
+
 window.PrazoSignalHistory = {
-  async validarSinalizacao(nup, type, number, observacoes) {
-    // Resolve process_id por NUP
-    let processId = null;
-    if (nup) {
+  async validarSinalizacao(processId, nup, type, number, observacoes) {
+    if (!processId && nup) {
       const { data: procRows, error: pErr } = await sb.from('processes').select('id').eq('nup', nup).limit(1);
       if (!pErr && Array.isArray(procRows) && procRows[0]?.id) processId = procRows[0].id;
-    }%`;
-        const { data: procRows2 } = await sb.from('processes').select('id,nup').ilike('nup', pat).limit(1);
-        if (Array.isArray(procRows2) && procRows2[0]?.id) processId = procRows2[0].id;
-      }
     }
     if (!processId) return;
-    const details = {
-      tipo: type || null,
-      numero_sigadaer: number || null,
-      observacoes: observacoes || null
-    };
-    const uV = await (window.getUser ? window.getUser() : null);
-    await sb.from('history').insert({ process_id: processId, action: 'Sinalização Leitura/Expedição validada', details, created_by: uV ? uV.id : null });
+    const details = { tipo: type || null, numero_sigadaer: number || null, observacoes: observacoes || null };
+    const u = await (window.getUser ? window.getUser() : null);
+    await sb.from('history').insert({
+      process_id: processId,
+      action: 'Sinalização Leitura/Expedição validada',
+      details,
+      created_by: u ? u.id : null
+    });
   },
-  async rejeitarSinalizacao(nup, type, number, observacoes) {
-    let processId = null;
-    if (nup) {
+  async rejeitarSinalizacao(processId, nup, type, number, observacoes) {
+    if (!processId && nup) {
       const { data: procRows, error: pErr } = await sb.from('processes').select('id').eq('nup', nup).limit(1);
       if (!pErr && Array.isArray(procRows) && procRows[0]?.id) processId = procRows[0].id;
-    }%`;
-        const { data: procRows2 } = await sb.from('processes').select('id,nup').ilike('nup', pat).limit(1);
-        if (Array.isArray(procRows2) && procRows2[0]?.id) processId = procRows2[0].id;
-      }
     }
     if (!processId) return;
-    const details = {
-      tipo: type || null,
-      numero_sigadaer: number || null,
-      observacoes: observacoes || null
-    };
-    const uR = await (window.getUser ? window.getUser() : null);
-    await sb.from('history').insert({ process_id: processId, action: 'Sinalização Leitura/Expedição rejeitada', details, created_by: uR ? uR.id : null });
+    const details = { tipo: type || null, numero_sigadaer: number || null, observacoes: observacoes || null };
+    const u = await (window.getUser ? window.getUser() : null);
+    await sb.from('history').insert({
+      process_id: processId,
+      action: 'Sinalização Leitura/Expedição rejeitada',
+      details,
+      created_by: u ? u.id : null
+    });
   }
 };
