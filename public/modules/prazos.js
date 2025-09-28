@@ -1,4 +1,4 @@
-// public/modules/prazos.js — homolog10 + ajustes de Sinalizar/Validação e histórico
+// public/modules/prazos.js — homolog10 + Sinalizar/Validação (Leitura/Expedição) + histórico
 window.Modules = window.Modules || {};
 window.Modules.prazos = (() => {
   const HIGHLIGHT_COLOR = '#fff3b0';
@@ -89,7 +89,6 @@ window.Modules.prazos = (() => {
     if (tr) tr.style.backgroundColor = HIGHLIGHT_COLOR;
     highlightCardTitle(box);
   }
-
   async function resolveProcessIdByNup(nup) {
     if (!nup) return null;
     const { data, error } = await sb.from('processes').select('id').eq('nup', nup).limit(1);
@@ -124,12 +123,12 @@ window.Modules.prazos = (() => {
     const btnValidacao = dlg.querySelector('#prazoValidacao');
     const btnFechar = dlg.querySelector('#prazoFechar');
 
-    // Exibir Sinalizar/Validação SOMENTE no card Leitura/Expedição
-    const enableActions = originId === 'prazoMonit';
+    // Sinalizar/Validação SOMENTE no card Leitura/Expedição
+    const enableActions = originId === CARD_MONITOR_ID;
     btnSinalizar.style.display = enableActions ? '' : 'none';
     btnValidacao.style.display = enableActions ? '' : 'none';
 
-    // Ver na lista
+    // Ver na lista de processos
     btnVer.onclick = () => {
       try { sessionStorage.setItem('procPreSelect', nup); } catch {}
       window.location.href = 'processos.html';
@@ -138,7 +137,7 @@ window.Modules.prazos = (() => {
     // Sinalizar (apenas quando permitido)
     btnSinalizar.onclick = enableActions ? () => {
       const sdlg = ensurePrazoSignalDialog();
-      sdlg.dataset.originId = originId || 'prazoMonit';
+      sdlg.dataset.originId = originId || CARD_MONITOR_ID;
       sdlg.dataset.rowKey = rowKey || '';
       sdlg.dataset.nup = nup || '';
 
@@ -156,19 +155,28 @@ window.Modules.prazos = (() => {
       const obs = sdlg.querySelector('#prazoSignalObs');
       const send = sdlg.querySelector('#prazoSignalSend');
       const closeBtn = sdlg.querySelector('#prazoSignalClose');
-      if (dt) dt.value = ''; if (obs) obs.value = ''; if (send) send.disabled = true;
+      if (dt) dt.value = '';
+      if (obs) obs.value = '';
+      if (send) send.disabled = true;
+
       const validate = () => { send.disabled = !dt?.value; };
       dt?.addEventListener('input', validate);
+      dt?.addEventListener('change', validate);
 
       closeBtn.onclick = () => { if (typeof sdlg.close === 'function') sdlg.close(); };
 
       send.onclick = async () => {
         if (!dt?.value) return;
+
+        // 1) resolve process_id por NUP (igualdade exata)
+        let processId = null;
         try {
           const rk = sdlg.dataset.rowKey || '';
           const [nupKey, numberKey2, typeKey2] = rk.split('|');
           const nupToUse = nupKey || sdlg.dataset.nup || nup;
-          const processId = await resolveProcessIdByNup(nupToUse);
+          processId = await resolveProcessIdByNup(nupToUse);
+
+          // 2) insere no histórico
           if (processId) {
             const details = {
               tipo: typeKey2 || typeKey || null,
@@ -186,11 +194,14 @@ window.Modules.prazos = (() => {
           } else {
             console.error('[Prazo] process_id não encontrado para NUP', nupToUse);
           }
-        } catch (e) { console.error('[Prazo] Histórico (analista) exceção:', e); }
+        } catch (e) {
+          console.error('[Prazo] Histórico (analista) exceção:', e);
+        }
 
+        // 3) UI
         if (typeof sdlg.close === 'function') sdlg.close();
         if (typeof prazoClickDialog?.close === 'function') prazoClickDialog.close();
-        highlightRowByKey(sdlg.dataset.originId || 'prazoMonit', sdlg.dataset.rowKey || '');
+        highlightRowByKey(sdlg.dataset.originId || CARD_MONITOR_ID, sdlg.dataset.rowKey || '');
       };
 
       if (typeof sdlg.showModal === 'function') sdlg.showModal();
@@ -227,7 +238,11 @@ window.Modules.prazos = (() => {
       if (btnApprove) btnApprove.onclick = async () => {
         try {
           const u = await (window.getUser ? window.getUser() : null);
-          const details = { tipo: vdlg.dataset.type || null, numero_sigadaer: vdlg.dataset.number || null, observacoes: obsEl?.value || null };
+          const details = {
+            tipo: vdlg.dataset.type || null,
+            numero_sigadaer: vdlg.dataset.number || null,
+            observacoes: obsEl?.value || null
+          };
           const { error: hErr } = await sb.from('history').insert({
             process_id: processId,
             action: 'Sinalização Leitura/Expedição validada',
@@ -235,14 +250,20 @@ window.Modules.prazos = (() => {
             created_by: u ? u.id : null
           });
           if (hErr) console.error('[Prazo] insert history (validar) erro:', hErr);
-        } catch (e) { console.error('[Prazo] Validação (Admin) exceção:', e); }
+        } catch (e) {
+          console.error('[Prazo] Validação (Admin) exceção:', e);
+        }
         doClose(); if (typeof prazoClickDialog?.close === 'function') prazoClickDialog.close();
       };
 
       if (btnReject) btnReject.onclick = async () => {
         try {
           const u = await (window.getUser ? window.getUser() : null);
-          const details = { tipo: vdlg.dataset.type || null, numero_sigadaer: vdlg.dataset.number || null, observacoes: obsEl?.value || null };
+          const details = {
+            tipo: vdlg.dataset.type || null,
+            numero_sigadaer: vdlg.dataset.number || null,
+            observacoes: obsEl?.value || null
+          };
           const { error: hErr } = await sb.from('history').insert({
             process_id: processId,
             action: 'Sinalização Leitura/Expedição rejeitada',
@@ -250,7 +271,9 @@ window.Modules.prazos = (() => {
             created_by: u ? u.id : null
           });
           if (hErr) console.error('[Prazo] insert history (rejeitar) erro:', hErr);
-        } catch (e) { console.error('[Prazo] Rejeição (Admin) exceção:', e); }
+        } catch (e) {
+          console.error('[Prazo] Rejeição (Admin) exceção:', e);
+        }
         doClose(); if (typeof prazoClickDialog?.close === 'function') prazoClickDialog.close();
       };
 
