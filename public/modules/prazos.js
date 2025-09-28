@@ -480,7 +480,7 @@ window.Modules.prazos = (() => {
 
       closeBtn.onclick = () => { if (typeof sdlg.close === 'function') sdlg.close(); };
 
-      send.onclick = () => {
+      send.onclick = async () => {
         if (!dt?.value) return;
         // === Registro no histórico (Analista) ===
         try {
@@ -493,11 +493,7 @@ window.Modules.prazos = (() => {
               .select('id')
               .eq('nup', nupKey)
               .limit(1);
-            if ((!procRows || !procRows[0]) && nupNorm) {
-              // tentativa 2: ilike por trecho numérico
-              const pat = `%${nupNorm.slice(-10)}%`;
-              const { data: procRows2 } = await sb.from('processes').select('id,nup')if (Array.isArray(procRows2) && procRows2[0]?.id) processId = procRows2[0].id;
-            }
+
             if (!pErr && Array.isArray(procRows) && procRows[0]?.id) {
               processId = procRows[0].id;
             }
