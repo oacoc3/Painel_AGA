@@ -24,17 +24,24 @@ window.Modules.processos = (() => {
   const PROC_PAGE_SIZE = 50; // ajuste se necessário
 
 
-  // Normaliza entrada de NUP para o formato do banco: XXXXXX/XXXX-00
-  // Aceita NUP colado com/sem prefixo de 5 dígitos, com ou sem pontuação.
-  function normalizeNupToBankFormat(input) {
-    const digits = String(input || '').replace(/\D/g, '');
-    if (!digits) return '';
-    if (digits.length < 10) return input || '';
-    const core = digits.slice(-10);
-    const part1 = core.slice(0, 6);
-    const part2 = core.slice(6, 10);
-    return `${part1}/${part2}-00`;
+  // Normaliza entrada de NUP para o formato do banco: XXXXXX/XXXX-XX
+function normalizeNupToBankFormat(input) {
+  const digits = String(input || '').replace(/\D/g, '');
+  if (!digits) return '';
+  // espelha a normalização do banco (public.normalize_nup):
+  // - remove prefixo de 5 dígitos, se houver
+  let d = digits;
+  if (d.length > 5) d = d.slice(5);
+  // - quando houver 12 dígitos (6/4/2), formata preservando os 2 finais
+  if (d.length >= 12) {
+    const p1 = d.slice(0, 6);
+    const p2 = d.slice(6, 10);
+    const p3 = d.slice(10, 12);
+    return `${p1}/${p2}-${p3}`;
   }
+  // caso contrário, devolve como o usuário digitou (sem forçar "-00")
+  return input || '';
+   }
 
   function renderProcPagination({ page, pagesTotal, count }) {
     const box = el('procLista');
