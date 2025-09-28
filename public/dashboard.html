@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <base href="/" />
-  <title>Painel DO-AGA</title>
+  <title>Dashboard - Painel DO-AGA</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
   <!-- App config -->
   <script src="./config.js" defer></script>
-  <!-- Supabase library (Biblioteca cliente do Supabase) -->
+  <!-- Supabase library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
   <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
@@ -18,118 +18,46 @@
   <script src="./utils.js" defer></script>
   <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
+  <!-- MPA router -->
   <script src="./mpa.js" defer></script>
-  <script src="./modules/statuses.js" defer></script>
+  <!-- Módulo Dashboard -->
   <script src="./modules/dashboard.js" defer></script>
 </head>
-<body data-route="dashboard">
-  <div id="app" class="vh">
-    <header class="bar">
-      <div class="brand">
-        <span class="logo">■</span>
-        <strong>Painel DO-AGA</strong>
-        <small class="build" id="buildInfo">build: carregando…</small>
+<body>
+  <header class="bar head">
+    <div class="logo">
+      <span class="brand">Painel DO-AGA</span>
+    </div>
+    <nav id="topNav" class="nav hidden">
+      <button data-route="dashboard" class="active">Início</button>
+      <button data-route="analise">Documental</button>
+      <button data-route="processos">Processos</button>
+      <button data-route="prazos">Prazos</button>
+      <button data-route="modelos">Modelos</button>
+      <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+    </nav>
+    <div id="userBox" class="user hidden">
+      <span id="userName"></span>
+      <small id="userRole"></small>
+      <button id="btnLogout" class="button">Sair</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="card-title">
+        <h1>Dashboard</h1>
       </div>
-      <nav id="topNav" class="nav hidden">
-        <button data-route="dashboard" class="active">Início</button>
-        <button data-route="processos">Processos</button>
-        <button data-route="prazos">Prazos</button>
-        <button data-route="modelos">Modelos</button>
-        <button data-route="analise">Documental</button>
-        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
-      </nav>
-      <div id="userBox" class="user hidden">
-        <span id="userName"></span>
-        <small id="userRole" class="muted"></small>
-        <button id="btnLogout" class="danger" type="button">Sair</button>
+      <div id="dashContent" class="content">
       </div>
-    </header>
+    </section>
+  </main>
 
-    <main class="main">
-      <section id="viewDashboard" class="view">
-        <div class="grid">
-          <div class="card">
-            <h2>Tempo médio por etapa</h2>
-            <div id="velocimetros" class="velocimetros"></div>
-          </div>
-          <div class="dashboard-col">
-            <div class="card chart-card">
-              <div class="card-title">
-                <h2>Novos processos</h2>
-                <div class="card-title-meta">
-                  <label class="card-select">
-                    <span class="card-select-label">Ano</span>
-                    <select id="entryYearSelect" disabled></select>
-                  </label>
-                  <div class="chart-total" aria-live="polite">
-                    <span>Total no ano</span>
-                    <strong id="entryYearTotal">—</strong>
-                  </div>
-                </div>
-              </div>
-              <div id="entryChart" class="bar-chart">
-                <p class="muted chart-placeholder">Carregando…</p>
-              </div>
-            </div>
-            <div class="card metrics-card">
-              <h2>Atividades</h2>
-              <div class="metrics-grid">
-                <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Análises</span>
-                    <span class="metric-label-line">documentais</span>
-                  </span>
-                  <strong class="metric-value" id="dashboardMetricAnadoc">—</strong>
-                </div>
-                <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Análises técnicas</span>
-                    <span class="metric-label-line">preliminares</span>
-                  </span>
-                  <strong class="metric-value" id="dashboardMetricAnatecPre">—</strong>
-                </div>
-                <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Análises</span>
-                    <span class="metric-label-line">técnicas</span>
-                  </span>
-                  <strong class="metric-value" id="dashboardMetricAnatec">—</strong>
-                </div>
-                <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Notificações</span>
-                   </span>
-                  <strong class="metric-value" id="dashboardMetricNotifications">—</strong>
-                </div>
-                 <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Processos</span>
-                    <span class="metric-label-line">JJAer</span>
-                  </span>
-                  <strong class="metric-value" id="dashboardMetricSigadaerJjaer">—</strong>
-                </div>
-                <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Processos</span>
-                    <span class="metric-label-line">AGU</span>
-                  </span>
-                  <strong class="metric-value" id="dashboardMetricSigadaerAgu">—</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
+  <footer class="bar foot">
+    
+  </footer>
 
-    <footer class="bar foot">
-      <span>Retro-UI</span>
-      <span>© DO-AGA</span>
-      <span id="footBuild"></span>
-    </footer>
-  </div>
-
-  <!-- Preenche build no cabeçalho e rodapé -->
+  <!-- Build info (não altera visual) -->
   <script defer src="./build-info-client.js"></script>
 </body>
 </html>
