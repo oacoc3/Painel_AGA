@@ -371,7 +371,7 @@ window.Modules.prazos = (() => {
 
 (function() {
   const HIGHLIGHT_COLOR = '#fff3b0';
-catch { return s || ''; }
+
   }
 
   let prazoSignalDialog = null;
