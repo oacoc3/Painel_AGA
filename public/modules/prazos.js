@@ -15,7 +15,7 @@ window.Modules.prazos = (() => {
         <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
           <button id="prazoVerLista" value="ver" type="button">Ver na lista de processos</button>
           <button id="prazoSinalizar" value="sinalizar" type="button">Sinalizar</button>
-          <button id="prazoFechar" value="close" type="button">Fechar</button>
+          <button id="prazoFechar" value="fechar" type="button">Fechar</button>
         </div>
       </form>`;
     document.body.appendChild(dlg);
@@ -23,10 +23,92 @@ window.Modules.prazos = (() => {
     return dlg;
   }
 
-  function openPrazoClickPopup(nup) {
+  // Popup específico para Sinalizar (Leitura/Expedição)
+  let prazoSignalDialog = null;
+  function ensurePrazoSignalDialog() {
+    if (prazoSignalDialog) return prazoSignalDialog;
+    const dlg = document.createElement('dialog');
+    dlg.id = 'prazoSignalDlg';
+    dlg.innerHTML = `
+      <form method="dialog" style="min-width:320px; max-width:90vw;">
+        <h3 style="margin:0 0 12px 0;">Sinalizar Leitura/Expedição</h3>
+        <div id="prazoSignalNup" style="margin:0 0 12px 0; font-weight:600;"></div>
+        <label style="display:block; margin:8px 0 4px;">Data/hora da leitura da notificação/expedição do SIGADAER <span style="color:#a00">*</span></label>
+        <input id="prazoSignalDateTime" type="datetime-local" required style="width:100%;"/>
+        <label style="display:block; margin:12px 0 4px;">Observações</label>
+        <textarea id="prazoSignalObs" rows="3" style="width:100%; resize:vertical;"></textarea>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; margin-top:12px;">
+          <button id="prazoSignalSend" type="button" disabled>Enviar</button>
+          <button id="prazoSignalClose" type="button">Fechar</button>
+        </div>
+      </form>`;
+    document.body.appendChild(dlg);
+    prazoSignalDialog = dlg;
+    return dlg;
+  }
+
+  function highlightMonitorUI(nup) {
+    // Destacar a linha do NUP no card Leitura/Expedição (id prazoMonit)
+    const box = document.getElementById('prazoMonit');
+    if (box) {
+      const trList = box.querySelectorAll('tbody tr');
+      trList.forEach(tr => {
+        try {
+          const data = JSON.parse(tr.dataset.row || '{}');
+          if (String(data?.nup) === String(nup)) {
+            tr.style.backgroundColor = '#fff3b0'; // amarelo claro
+          }
+        } catch {}
+      });
+      const cardTitle = box.closest('.card')?.querySelector('.card-title h2');
+      if (cardTitle) {
+        cardTitle.style.backgroundColor = '#fff3b0';
+        cardTitle.style.padding = '2px 4px';
+        cardTitle.style.borderRadius = '4px';
+      }
+    }
+  }
+
+  function openPrazoSignalPopup(nup) {
+    const dlg = ensurePrazoSignalDialog();
+    // Preenche NUP e limpa campos
+    const nupEl = dlg.querySelector('#prazoSignalNup');
+    if (nupEl) nupEl.textContent = `NUP: ${nup}`;
+    const dt = dlg.querySelector('#prazoSignalDateTime');
+    const obs = dlg.querySelector('#prazoSignalObs');
+    const btnSend = dlg.querySelector('#prazoSignalSend');
+    const btnClose = dlg.querySelector('#prazoSignalClose');
+
+    if (dt) dt.value = '';
+    if (obs) obs.value = '';
+    if (btnSend) btnSend.disabled = true;
+
+    function validate() {
+      btnSend.disabled = !dt?.value;
+    }
+
+    dt?.addEventListener('input', validate, { once: false });
+
+    btnClose.onclick = () => {
+      if (typeof dlg.close === 'function') dlg.close();
+    };
+
+    btnSend.onclick = () => {
+      if (!dt?.value) return; // guarda de segurança
+      // Futuro: poderá chamar RPC para persistência; por ora apenas UI
+      if (typeof dlg.close === 'function') dlg.close();
+      if (prazoClickDialog && typeof prazoClickDialog.close === 'function') prazoClickDialog.close();
+      highlightMonitorUI(nup);
+    };
+
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+    else dlg.setAttribute('open', 'open');
+  }
+
+  function openPrazoClickPopup(nup, originId) {
     const dlg = ensurePrazoClickDialog();
     const nupEl = dlg.querySelector('#prazoClickNup');
-    if (nupEl) nupEl.textContent = `NUP: ${nup}`;
+    if (nupEl) nupEl.textContent = `NUP: ${nup}`; dlg.dataset.origin = originId || ''; dlg.dataset.nup = String(nup);
     // Limpa handlers anteriores para evitar múltiplos binds
     const btnVer = dlg.querySelector('#prazoVerLista');
     const btnSinalizar = dlg.querySelector('#prazoSinalizar');
@@ -37,50 +119,27 @@ window.Modules.prazos = (() => {
       window.location.href = 'processos.html';
     };
     btnSinalizar.onclick = () => {
-      // Por enquanto, sem função (placeholder solicitado).
-      // Futuro: chamar RPC set_prazo_signal(process_id, 'LEITURA_EXPEDICAO', ...)
-      // Aqui manteremos apenas um aviso não intrusivo no console:
-      console.info('[Prazo] Botão "Sinalizar" clicado para NUP', nup);
+      const origin = dlg.dataset.origin || '';
+      if (origin === 'prazoMonit') {
+        openPrazoSignalPopup(nup);
+      } else {
+        console.info('[Prazo] Sinalizar clicado (sem ação específica) para', nup, 'em', origin);
+      }
     };
     btnFechar.onclick = () => {
       if (typeof dlg.close === 'function') dlg.close();
     };
 
     if (typeof dlg.showModal === 'function') dlg.showModal();
-    else dlg.style.display = 'block';
+    else dlg.setAttribute('open', 'open');
   }
 
-  let pareceres = [];
-  let remocao = [];
-  let obras = [];
-  let sobrestamento = [];
-  let monitor = [];
-  let doaga = [];
-  let adhel = [];
+  // --- Abaixo: lógica de carregamento/renders já existentes dos cards ---
 
   const PARECERES_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    {
-      key: 'type_label',
-      label: 'Tipo',
-      value: r => r.type_label || r.type || ''
-    },
-    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
-  ];
-
-  const REMOCAO_COLUMNS = [
-    { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
-    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
-  ];
-
-  const OBRAS_COLUMNS = [
-    { key: 'nup', label: 'NUP', value: r => r.nup },
-    {
-      key: 'due_date',
-      label: 'Prazo',
-      value: r => Utils.fmtDate(r.due_date),
+    { key: 'type', label: 'Tipo' },
+    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date),
       render: r => {
         const prazo = Utils.fmtDate(r.due_date);
         if (!r.em_atraso) return `<div>${prazo}</div>`;
@@ -90,10 +149,22 @@ window.Modules.prazos = (() => {
     { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
   ];
 
-  const SOBRESTAMENTO_COLUMNS = [
+  const REMOCAO_COLUMNS = [
     { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
-    { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
+    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date),
+      render: r => {
+        const prazo = Utils.fmtDate(r.due_date);
+        if (!r.em_atraso) return `<div>${prazo}</div>`;
+        return `<div>${prazo}</div><div class="text-danger">ADICIONAL</div>`;
+      }
+    },
+    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
+  ];
+
+  const OBRA_COLUMNS = [
+    { key: 'nup', label: 'NUP', value: r => r.nup },
+    { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
+    { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
   ];
 
   const MONITOR_COLUMNS = [
@@ -122,7 +193,9 @@ window.Modules.prazos = (() => {
         const data = JSON.parse(tr.dataset.row);
         if (!data?.nup) return;
         tr.addEventListener('click', () => {
-          openPrazoClickPopup(String(data.nup));
+          const container = tbody.closest('div[id]');
+          const originId = container ? container.id : '';
+          openPrazoClickPopup(String(data.nup), originId);
         });
       } catch {}
     });
@@ -138,44 +211,6 @@ window.Modules.prazos = (() => {
     bindRowLinks(tbody);
   }
 
-  async function loadPareceres() {
-    const [intRes, extRes] = await Promise.all([
-      sb
-        .from('v_prazo_pareceres')
-        .select('nup,type,due_date,days_remaining,deadline_days'),
-      sb
-        .from('v_prazo_pareceres_externos')
-        .select('nup,type,due_date,days_remaining,deadline_days')
-    ]);
-
-    const normalize = rows => (Array.isArray(rows) ? rows : []);
-
-    const parecerRows = normalize(intRes.data)
-      .filter(row => ['ATM', 'DT', 'CGNA'].includes(row.type))
-      .map(row => ({
-        ...row,
-        origin: 'parecer',
-        type_label: `Parecer ${row.type}`
-      }));
-
-    const sigadaerRows = normalize(extRes.data)
-      .filter(row => row.due_date || typeof row.deadline_days === 'number')
-      .map(row => ({
-        ...row,
-        origin: 'sigadaer',
-        type_label: `SIGADAER ${row.type}`,
-        days_remaining:
-          typeof row.days_remaining === 'number'
-            ? row.days_remaining
-            : Utils.daysBetween(new Date(), row.due_date)
-      }));
-
-    pareceres = [...parecerRows, ...sigadaerRows]
-      .filter(row => row.due_date)
-      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-    renderPareceres();
-  }
-
   function getRemocaoRows() {
     return remocao;
   }
@@ -186,6 +221,63 @@ window.Modules.prazos = (() => {
     bindRowLinks(tbody);
   }
 
+  function getObraRows() {
+    return obra;
+  }
+
+  function renderObra() {
+    const rows = getObraRows();
+    const { tbody } = Utils.renderTable('prazoObra', OBRA_COLUMNS, rows);
+    bindRowLinks(tbody);
+  }
+
+  function getMonitorRows() {
+    return monitor;
+  }
+
+  function renderMonitor() {
+    const rows = getMonitorRows();
+    const { tbody } = Utils.renderTable('prazoMonit', MONITOR_COLUMNS, rows);
+    bindRowLinks(tbody);
+  }
+
+  function getDoagaRows() {
+    return doaga;
+  }
+
+  function renderDOAGA() {
+    const rows = getDoagaRows();
+    const { tbody } = Utils.renderTable('prazoDOAGA', DOAGA_COLUMNS, rows);
+    bindRowLinks(tbody);
+  }
+
+  function getADHELRows() {
+    return adhel;
+  }
+
+  function renderADHEL() {
+    const rows = getADHELRows();
+    const { tbody } = Utils.renderTable('prazoADHEL', ADHEL_COLUMNS, rows);
+    bindRowLinks(tbody);
+  }
+
+  // ---------- Estado e carregamento dos datasets ----------
+  let pareceres = [];
+  let remocao = [];
+  let obra = [];
+  let monitor = [];
+  let doaga = [];
+  let adhel = [];
+
+  async function loadPareceres() {
+    // v_prazo_parecer: NUP, tipo, prazo, em_atraso, etc.
+    const { data } = await sb.from('v_prazo_parecer')
+      .select('nup,type,due_date,em_atraso,days_remaining');
+    const rows = (data || []);
+    pareceres = rows;
+    renderPareceres();
+  }
+
   async function loadRemocao() {
     const { data } = await sb.from('v_prazo_remocao_rebaixamento')
       .select('nup,due_date,days_remaining');
@@ -193,21 +285,18 @@ window.Modules.prazos = (() => {
     renderRemocao();
   }
 
-  function getObraRows() {
-    return obras;
-  }
-
-  function renderObra() {
-    const rows = getObraRows();
-    const { tbody } = Utils.renderTable('prazoObra', OBRAS_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
   async function loadObra() {
     const { data } = await sb.from('v_prazo_termino_obra')
-      .select('nup,due_date,days_remaining,em_atraso');
-    obras = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+      .select('nup,due_date,days_remaining');
+    obra = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
     renderObra();
+  }
+
+  async function loadSobrestamento() {
+    const { data } = await sb.from('v_prazo_sobrestamento')
+      .select('nup,due_date,days_remaining');
+    sobrestamento = (data || []);
+    renderSobrestamento();
   }
 
   function getSobrestamentoRows() {
@@ -220,22 +309,11 @@ window.Modules.prazos = (() => {
     bindRowLinks(tbody);
   }
 
-  async function loadSobrestamento() {
-    const { data } = await sb.from('v_prazo_sobrestamento')
-      .select('nup,due_date,days_remaining');
-    sobrestamento = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-    renderSobrestamento();
-  }
-
-  function getMonitorRows() {
-    return monitor;
-  }
-
-  function renderMonitor() {
-    const rows = getMonitorRows();
-    const { tbody } = Utils.renderTable('prazoMonit', MONITOR_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
+  const SOBRESTAMENTO_COLUMNS = [
+    { key: 'nup', label: 'NUP', value: r => r.nup },
+    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
+    { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
+  ];
 
   async function loadMonitor() {
     const { data } = await sb.from('v_monitorar_tramitacao')
@@ -255,40 +333,34 @@ window.Modules.prazos = (() => {
   }
 
   async function loadDOAGA() {
-    const { data } = await sb.from('v_prazo_do_aga')
+    const { data } = await sb.from('v_prazo_revogar_validade')
       .select('nup,due_date,days_remaining');
-    doaga = (data || []).sort(
-      (a, b) =>
-        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
+    doaga = data || [];
     renderDOAGA();
   }
 
-  function getAdhelRows() {
+  function getADHELRows() {
     return adhel;
   }
 
   function renderADHEL() {
-    const rows = getAdhelRows();
+    const rows = getADHELRows();
     const { tbody } = Utils.renderTable('prazoADHEL', ADHEL_COLUMNS, rows);
     bindRowLinks(tbody);
   }
 
   async function loadADHEL() {
-    const { data } = await sb.from('v_prazo_ad_hel')
+    const { data } = await sb.from('v_prazo_revogar_plano')
       .select('nup,due_date,days_remaining');
-    adhel = (data || []).sort(
-      (a, b) =>
-        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
-    );
+    adhel = data || [];
     renderADHEL();
   }
 
-  
-
-  
-
-  function init() {}
+  // API pública
+  async function init() {
+    // Carrega ao abrir a página
+    await load();
+  }
 
   async function load() {
     await Promise.all([
