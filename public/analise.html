@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <base href="/" />
-  <title>Painel DO-AGA</title>
+  <title>Documental - Painel DO-AGA</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
   <!-- App config -->
@@ -18,84 +18,47 @@
   <script src="./utils.js" defer></script>
   <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
-  <!-- jsPDF para exportar PDF (Análise Documental) -->
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
+  <!-- MPA router -->
   <script src="./mpa.js" defer></script>
   <script src="./modules/checklists/pdf.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
   <script src="./modules/analise.js" defer></script>
 </head>
-<body data-route="analise">
-  <div id="app" class="vh">
-    <header class="bar">
-      <div class="brand">
-        <span class="logo">■</span>
-        <strong>Painel DO-AGA</strong>
-        <small class="build" id="buildInfo">build: carregando…</small>
+<body>
+  <header class="bar head">
+    <div class="logo">
+      <span class="brand">Painel DO-AGA</span>
+    </div>
+    <nav id="topNav" class="nav hidden">
+      <button data-route="dashboard">Início</button>
+      <button data-route="analise" class="active">Documental</button>
+      <button data-route="processos">Processos</button>
+      <button data-route="prazos">Prazos</button>
+      <button data-route="modelos">Modelos</button>
+      <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+    </nav>
+    <div id="userBox" class="user hidden">
+      <span id="userName"></span>
+      <small id="userRole"></small>
+      <button id="btnLogout" class="button">Sair</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="card-title">
+        <h1>Análise Documental</h1>
       </div>
-      <nav id="topNav" class="nav hidden">
-        <button data-route="dashboard">Início</button>
-        <button data-route="processos">Processos</button>
-        <button data-route="prazos">Prazos</button>
-        <button data-route="modelos">Modelos</button>
-        <button data-route="analise" class="active">Documental</button>
-        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
-      </nav>
-      <div id="userBox" class="user hidden">
-        <span id="userName"></span>
-        <small id="userRole" class="muted"></small>
-        <button id="btnLogout" class="danger" type="button">Sair</button>
+      <div id="analiseContent" class="content">
       </div>
-    </header>
+    </section>
+  </main>
 
-    <main class="main">
-      <section id="viewAnalise" class="view">
-        <div class="analysis-grid">
-          <div class="analysis-col">
-            <div class="card">
-              <h2>Nova Análise Documental</h2>
-              <form id="formAD" data-ajax>
-                <label>NUP <input id="adNUP" required placeholder="000000/0000-00"></label>
-                <label>Tipo do Processo
-                  <select id="adTipo">
-                    <option>PDIR</option>
-                    <option>Inscrição</option>
-                    <option>Alteração</option>
-                    <option>Exploração</option>
-                    <option>OPEA</option>
-                  </select>
-                </label>
-                <div class="row actions">
-                  <button id="btnLimparAD" type="button">Limpar</button>
-                  <button id="btnIniciarAD" type="button">Iniciar Preenchimento de Checklist</button>
-                </div>
-                <div id="adMsg" class="msg"></div>
-              </form>
-            </div>
-              <div class="card" id="adApprovedChecklistsCard">
-              <h2>Checklists aprovadas</h2>
-              <div id="adApprovedList" class="table scrolly"></div>
-            </div>
-          </div>
-          <div class="card" id="adChecklistCard">
-            <h2>Checklist</h2>
-              <div id="ckContainer" class="scrolly"></div>
-            <div class="row actions" id="adActions">
-              <button id="btnLimparChecklist" type="button" disabled>Limpar</button>
-               <button id="adBtnFinalizarChecklist" type="button" disabled>Finalizar</button>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
+  <footer class="bar foot">
+    
+  </footer>
 
-    <footer class="bar foot">
-      <span>Retro-UI</span>
-      <span>© DO-AGA</span>
-      <span id="footBuild"></span>
-    </footer>
-  </div>
-
-  <!-- Preenche build no cabeçalho e rodapé -->
+  <!-- Build info (não altera visual) -->
   <script defer src="./build-info-client.js"></script>
 </body>
 </html>
