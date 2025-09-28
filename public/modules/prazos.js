@@ -9,24 +9,8 @@ window.Modules.prazos = (() => {
   let doaga = [];
   let adhel = [];
 
-  // Formata NUP (Número Único de Protocolo) no padrão XXXXX/XXXX-XX,
-  // desconsiderando os 5 dígitos iniciais (prefixo) caso existam.
-  function formatNup(nup) {
-    if (!nup) return '';
-    const digits = String(nup).replace(/\D/g, '');
-    if (digits.length <= 5) return '';
-    const rest = digits.slice(5);
-    const part1 = rest.slice(0, 6);
-    const part2 = rest.slice(6, 10);
-    const part3 = rest.slice(10, 12);
-    let formatted = part1;
-    if (part2) formatted += `/${part2}`;
-    if (part3) formatted += `-${part3}`;
-    return formatted;
-  }
-
-  const PARECERES_COLUMNS = [
-    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
+const PARECERES_COLUMNS = [
+    { key: 'nup', label: 'NUP', value: r => r.nup || "" },
     {
       key: 'type_label',
       label: 'Tipo',
@@ -37,13 +21,13 @@ window.Modules.prazos = (() => {
   ];
 
   const REMOCAO_COLUMNS = [
-    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
+    { key: 'nup', label: 'NUP', value: r => r.nup || "" },
     { key: 'due_date', label: 'Prazo', value: r => Utils.fmtDate(r.due_date) },
     { key: 'days_remaining', label: '', value: r => Utils.daysBetween(new Date(), r.due_date) }
   ];
 
   const OBRAS_COLUMNS = [
-    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
+    { key: 'nup', label: 'NUP', value: r => r.nup || "" },
     {
       key: 'due_date',
       label: 'Prazo',
@@ -58,68 +42,144 @@ window.Modules.prazos = (() => {
   ];
 
   const SOBRESTAMENTO_COLUMNS = [
-    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
+    { key: 'nup', label: 'NUP', value: r => r.nup || "" },
     { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
     { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
 
   const MONITOR_COLUMNS = [
-    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
+    { key: 'nup', label: 'NUP', value: r => r.nup || "" },
     { key: 'type', label: 'Tipo' },
     { key: 'number', label: 'Número', value: r => (r.number ? String(r.number).padStart(6, '0') : '') }
   ];
 
   const DOAGA_COLUMNS = [
-    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
+    { key: 'nup', label: 'NUP', value: r => r.nup || "" },
     { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : 'Sobrestado') },
     { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
 
   const ADHEL_COLUMNS = [
-    { key: 'nup', label: 'NUP', value: r => formatNup(r.nup) },
+    { key: 'nup', label: 'NUP', value: r => r.nup || "" },
     { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : '') },
     { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
   ];
 
-  function bindRowLinks(tbody) {
-    if (!tbody) return;
-    tbody.querySelectorAll('tr').forEach(tr => {
-      if (!tr.dataset.row) return;
-      try {
-        const data = JSON.parse(tr.dataset.row);
-        if (!data?.nup) return;
-        tr.addEventListener('click', () => {
-          sessionStorage.setItem('procPreSelect', data.nup);
-          window.location.href = 'processos.html';
-        });
-      } catch {}
+  function normalize(rows) {
+    return (rows || []).map(r => ({
+      ...r,
+      days_remaining:
+        typeof r.days_remaining === 'number'
+          ? r.days_remaining
+          : (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : null)
+    }));
+  }
+
+  function renderTable(el, columns, rows, opts = {}) {
+    const root = document.querySelector(el);
+    if (!root) return;
+    root.innerHTML = '';
+
+    const table = document.createElement('div');
+    table.className = 'tbl';
+
+    rows.forEach(r => {
+      const line = document.createElement('div');
+      line.className = 'tr';
+      columns.forEach(col => {
+        const cell = document.createElement('div');
+        cell.className = 'td';
+        let value = (typeof col.value === 'function') ? col.value(r) : r[col.key];
+        if (col.render) {
+          cell.innerHTML = col.render(r);
+        } else {
+          cell.textContent = (value == null ? '' : value);
+        }
+        if (col.label === '') cell.classList.add('td-right');
+        line.appendChild(cell);
+      });
+      table.appendChild(line);
+    });
+
+    root.appendChild(table);
+
+    if (opts.limit && rows.length > opts.limit) {
+      const more = document.createElement('div');
+      more.className = 'muted';
+      more.textContent = `+${rows.length - opts.limit} itens`;
+      root.appendChild(more);
+    }
+  }
+
+  function bindPdfButtons() {
+    const pdfButtons = document.querySelectorAll('[data-pdf]');
+    pdfButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-pdf');
+        switch (target) {
+          case 'pareceres': exportPdfPareceres(); break;
+          case 'obras': exportPdfObras(); break;
+          case 'sobrestamento': exportPdfSobrestamento(); break;
+          case 'doaga': exportPdfDOAGA(); break;
+          case 'revogar': exportPdfRevogarPlano(); break;
+          default: break;
+        }
+      });
     });
   }
 
-  function getPareceresRows() {
-    return pareceres;
+  function renderPareceres() {
+    const limit = 8;
+    renderTable('#pareceres .tbl-wrap', PARECERES_COLUMNS, pareceres.slice(0, limit), { limit });
   }
 
-  function renderPareceres() {
-    const rows = getPareceresRows();
-    const { tbody } = Utils.renderTable('prazoParec', PARECERES_COLUMNS, rows);
-    bindRowLinks(tbody);
+  function renderRemocao() {
+    const limit = 8;
+    renderTable('#remocao .tbl-wrap', REMOCAO_COLUMNS, remocao.slice(0, limit), { limit });
+  }
+
+  function renderObras() {
+    const limit = 8;
+    renderTable('#obras .tbl-wrap', OBRAS_COLUMNS, obras.slice(0, limit), { limit });
+  }
+
+  function renderSobrestamento() {
+    const limit = 8;
+    renderTable('#sobrestamento .tbl-wrap', SOBRESTAMENTO_COLUMNS, sobrestamento.slice(0, limit), { limit });
+  }
+
+  function renderMonitor() {
+    const limit = 8;
+    renderTable('#monitor .tbl-wrap', MONITOR_COLUMNS, monitor.slice(0, limit), { limit });
+  }
+
+  function renderDOAGA() {
+    const limit = 10;
+    renderTable('#doaga .tbl-wrap', DOAGA_COLUMNS, doaga.slice(0, limit), { limit });
+  }
+
+  function renderADHEL() {
+    const limit = 6;
+    renderTable('#adhel .tbl-wrap', ADHEL_COLUMNS, adhel.slice(0, limit), { limit });
   }
 
   async function loadPareceres() {
-    const [intRes, extRes] = await Promise.all([
-      sb
-        .from('v_prazo_pareceres')
-        .select('nup,type,due_date,days_remaining,deadline_days'),
-      sb
-        .from('v_prazo_pareceres_externos')
-        .select('nup,type,due_date,days_remaining,deadline_days')
-    ]);
+    const sb = window.supabaseClient;
 
-    const normalize = rows => (Array.isArray(rows) ? rows : []);
+    // Pareceres (v_prazo_pareceres)
+    const res = await sb.from('v_prazo_pareceres')
+      .select('nup,type,due_date,days_remaining')
+      .order('due_date', { ascending: true });
 
-    const parecerRows = normalize(intRes.data)
-      .filter(row => ['ATM', 'DT', 'CGNA'].includes(row.type))
+    // SIGADAER (v_prazo_sigadaer_ext)
+    const extRes = await sb.from('v_prazo_sigadaer_ext')
+      .select('nup,type,due_date,deadline_days,days_remaining');
+
+    const normalizeType = t => (t || '').toUpperCase().trim();
+    const preferidos = ['OPR_AD', 'PREF']; // tipos preferenciais para box "Pareceres/Info"
+
+    const parecerRows = normalize(res.data)
+      .filter(row => preferidos.includes(normalizeType(row.type)))
       .map(row => ({
         ...row,
         origin: 'parecer',
@@ -139,209 +199,69 @@ window.Modules.prazos = (() => {
       }));
 
     pareceres = [...parecerRows, ...sigadaerRows]
-      .filter(row => row.due_date)
-      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+      .filter(r => r.type_label && r.nup)
+      .sort((a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31'));
+
     renderPareceres();
   }
 
-  function getRemocaoRows() {
-    return remocao;
-  }
-
-  function renderRemocao() {
-    const rows = getRemocaoRows();
-    const { tbody } = Utils.renderTable('prazoRemocao', REMOCAO_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
   async function loadRemocao() {
+    const sb = window.supabaseClient;
     const { data } = await sb.from('v_prazo_remocao_rebaixamento')
-      .select('nup,due_date,days_remaining');
-    remocao = (data || []).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+      .select('nup,due_date,days_remaining')
+      .order('due_date', { ascending: true });
+
+    remocao = normalize(data).sort(
+      (a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
+    );
     renderRemocao();
   }
 
-  function getObraRows() {
-    return obras;
-  }
-
-  function renderObra() {
-    const rows = getObraRows();
-    const { tbody } = Utils.renderTable('prazoObra', OBRAS_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
   async function loadObra() {
+    const sb = window.supabaseClient;
     const { data } = await sb.from('v_prazo_termino_obra')
-      .select('nup,due_date,days_remaining,em_atraso');
-    obras = data || [];
-    renderObra();
-  }
+      .select('nup,due_date,days_remaining,em_atraso')
+      .order('due_date', { ascending: true });
 
-  function getSobrestamentoRows() {
-    return sobrestamento;
-  }
-
-  function renderSobrestamento() {
-    const rows = getSobrestamentoRows();
-    const { tbody } = Utils.renderTable('prazoSobrestamento', SOBRESTAMENTO_COLUMNS, rows);
-    bindRowLinks(tbody);
+    obras = normalize(data).sort(
+      (a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
+    );
+    renderObras();
   }
 
   async function loadSobrestamento() {
+    const sb = window.supabaseClient;
     const { data } = await sb.from('v_prazo_sobrestamento')
-      .select('nup,due_date,days_remaining');
-    sobrestamento = (data || []).sort(
-      (a, b) =>
-        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
+      .select('nup,due_date,days_remaining')
+      .order('due_date', { ascending: true });
+
+    sobrestamento = normalize(data).sort(
+      (a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
     );
     renderSobrestamento();
   }
 
-  function getMonitorRows() {
-    return monitor;
-  }
-
-  function renderMonitor() {
-    const rows = getMonitorRows();
-    const { tbody } = Utils.renderTable('prazoMonit', MONITOR_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
   async function loadMonitor() {
-    const { data } = await sb.from('v_monitorar_tramitacao')
-      .select('nup,type,number');
-    monitor = data || [];
+    const sb = window.supabaseClient;
+    const { data } = await sb.from('v_prazo_monitor')
+      .select('nup,type,number')
+      .order('type', { ascending: true })
+      .order('number', { ascending: true });
+
+    monitor = (data || []).sort((a, b) => String(a.type).localeCompare(String(b.type)));
     renderMonitor();
   }
 
-  function getDoagaRows() {
-    return doaga;
-  }
-
-  function renderDOAGA() {
-    const rows = getDoagaRows();
-    const { tbody } = Utils.renderTable('prazoDOAGA', DOAGA_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
   async function loadDOAGA() {
-    const { data } = await sb.from('v_prazo_do_aga')
-      .select('nup,due_date,days_remaining');
-    doaga = (data || []).sort(
-      (a, b) =>
-        new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
+    const sb = window.supabaseClient;
+    const { data } = await sb.from('v_prazo_doaga')
+      .select('nup,due_date,days_remaining')
+      .order('due_date', { ascending: true });
+
+    doaga = normalize(data).sort(
+      (a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31')
     );
     renderDOAGA();
-  }
-
-  function getAdhelRows() {
-    return adhel;
-  }
-
-  function renderADHEL() {
-    const rows = getAdhelRows();
-    const { tbody } = Utils.renderTable('prazoADHEL', ADHEL_COLUMNS, rows);
-    bindRowLinks(tbody);
-  }
-
-  const PDF_SECTIONS = {
-    pareceres: { title: 'Pareceres/Info', columns: PARECERES_COLUMNS, getRows: getPareceresRows },
-    remocao: { title: 'Remoção/Rebaixamento', columns: REMOCAO_COLUMNS, getRows: getRemocaoRows },
-    obras: { title: 'Término de Obra', columns: OBRAS_COLUMNS, getRows: getObraRows },
-    sobrestamento: { title: 'Sobrestamento', columns: SOBRESTAMENTO_COLUMNS, getRows: getSobrestamentoRows },
-    monitor: { title: 'Leitura/Expedição', columns: MONITOR_COLUMNS, getRows: getMonitorRows },
-    doaga: { title: 'Prazo DO-AGA', columns: DOAGA_COLUMNS, getRows: getDoagaRows },
-    adhel: { title: 'Revogar plano', columns: ADHEL_COLUMNS, getRows: getAdhelRows }
-  };
-
-  function exportPrazoPDF(section) {
-    const config = PDF_SECTIONS[section];
-    if (!config) return;
-    if (!window.jspdf?.jsPDF) {
-      alert('Biblioteca de PDF indisponível.');
-      return;
-    }
-
-    const data = typeof config.getRows === 'function' ? config.getRows() : [];
-    const rows = Array.isArray(data) ? data : [];
-    const doc = new window.jspdf.jsPDF();
-    const margin = 15;
-    const lineHeight = 6;
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const contentWidth = pageWidth - margin * 2;
-    const maxY = pageHeight - margin;
-    let y = margin;
-
-    const ensureSpace = (extra = lineHeight) => {
-      if (y + extra > maxY) {
-        doc.addPage();
-        y = margin;
-      }
-    };
-
-    const addParagraph = (text, opts = {}) => {
-      if (text == null || text === '') return;
-      const parts = doc.splitTextToSize(String(text), contentWidth);
-      parts.forEach(line => {
-        ensureSpace();
-        doc.text(line, margin, y, opts);
-        y += lineHeight;
-      });
-    };
-
-    const addGap = (amount = lineHeight) => {
-      ensureSpace(amount);
-      y += amount;
-    };
-
-    doc.setFont(undefined, 'bold');
-    doc.setFontSize(14);
-    addParagraph(config.title, { align: 'left' });
-    addGap(lineHeight / 2);
-
-    doc.setFont(undefined, 'normal');
-    doc.setFontSize(10);
-    addParagraph(`Gerado em: ${Utils.fmtDateTime(new Date())}`);
-    addGap(lineHeight / 2);
-
-    if (!rows.length) {
-      addParagraph('Nenhum registro disponível.');
-    } else {
-      rows.forEach(row => {
-        const text = config.columns
-          .map(col => {
-            const label = col.label || '';
-            let value = '';
-            if (typeof col.pdfValue === 'function') value = col.pdfValue(row);
-            else if (typeof col.value === 'function') value = col.value(row);
-            else if (col.key) value = row[col.key];
-            if (value instanceof Date) value = Utils.fmtDateTime(value);
-            if (value == null) value = '';
-            value = String(value);
-            if (label) return `${label}: ${value}`;
-            return value;
-          })
-          .filter(Boolean)
-          .join('  |  ');
-        addParagraph(text);
-        addGap(lineHeight / 2);
-      });
-    }
-
-    const url = doc.output('bloburl');
-    const win = window.open(url, '_blank');
-    if (win) win.opener = null;
-  }
-
-  function bindPdfButtons() {
-    document.querySelectorAll('[data-pdf]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const section = btn.getAttribute('data-pdf');
-        exportPrazoPDF(section);
-      });
-    });
   }
 
   async function loadADHEL() {
@@ -356,6 +276,58 @@ window.Modules.prazos = (() => {
 
   function init() {
     bindPdfButtons();
+  }
+
+  // --- Exportações PDF (mantidas, exibem NUP exatamente como no banco) ---
+  function exportPdfPareceres() { exportSection('Pareceres/Info', PARECERES_COLUMNS, pareceres); }
+  function exportPdfObras()      { exportSection('Término de Obra', OBRAS_COLUMNS, obras); }
+  function exportPdfSobrestamento() { exportSection('Sobrestamento', SOBRESTAMENTO_COLUMNS, sobrestamento); }
+  function exportPdfDOAGA()      { exportSection('Prazo DO-AGA', DOAGA_COLUMNS, doaga); }
+  function exportPdfRevogarPlano() {
+    const cols = [
+      { key: 'nup', label: 'NUP', value: r => r.nup || "" },
+      { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? Utils.fmtDate(r.due_date) : '') },
+      { key: 'days_remaining', label: '', value: r => (r.due_date ? Utils.daysBetween(new Date(), r.due_date) : '') }
+    ];
+    const rows = (doaga || []).slice(0, 10);
+    exportSection('Revogar plano', cols, rows);
+  }
+
+  function exportSection(title, columns, rows) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const lineHeight = 16;
+    const margin = 40;
+
+    let cursorY = margin;
+
+    function addText(text, x = margin, y = cursorY) {
+      doc.text(String(text ?? ''), x, y);
+      cursorY += lineHeight;
+    }
+    function addGap(px) { cursorY += px; }
+
+    doc.setFont('helvetica', 'bold');
+    addText(title);
+    doc.setFont('helvetica', 'normal');
+    addGap(8);
+
+    rows.forEach(r => {
+      const line = columns
+        .map(col => {
+          const label = col.label;
+          const value = (typeof col.value === 'function') ? col.value(r) : r[col.key];
+          if (value == null || value === '') return '';
+          return label ? `${label}: ${value}` : String(value);
+        })
+        .filter(Boolean)
+        .join('  |  ');
+      addText(line);
+    });
+
+    const url = doc.output('bloburl');
+    const win = window.open(url, '_blank');
+    if (win) win.opener = null;
   }
 
   async function load() {
