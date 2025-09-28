@@ -498,11 +498,14 @@
   }
 
   async function init() {
+    // Máscara do NUP (formato do banco)
+    Utils.bindNUPBankMask('procNUP');
+
     renderFooterVersion();
     bindNav();
     const ok = await ensureAuthAndUI();
     if (!ok) return;
-    ['procNUP','opNUP','ntNUP','sgNUP','adNUP'].forEach(Utils.bindNUPMask);
+    ['opNUP','ntNUP','sgNUP','adNUP'].forEach(Utils.bindNUPMask);
     bootModules();
 
     // Listener de autenticação para registrar login/logout e manter UI atualizada
