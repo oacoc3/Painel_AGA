@@ -30,12 +30,15 @@
         <small class="build" id="buildInfo">build: carregando…</small>
       </div>
       <nav id="topNav" class="nav hidden">
-        <button data-route="dashboard" class="active">Início</button>
-        <button data-route="processos">Processos</button>
-        <button data-route="prazos">Prazos</button>
-        <button data-route="modelos">Modelos</button>
-        <button data-route="analise">Documental</button>
-        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+        <label for="moduleSelect" class="sr-only">Módulo</label>
+        <select id="moduleSelect" name="moduleSelect">
+          <option value="dashboard">Início</option>
+          <option value="processos">Processos</option>
+          <option value="prazos">Prazos</option>
+          <option value="modelos">Modelos</option>
+          <option value="analise">Documental</option>
+          <option value="admin" id="optAdmin">Administração</option>
+        </select>
       </nav>
       <div id="userBox" class="user hidden">
         <span id="userName"></span>
@@ -50,11 +53,7 @@
           <h1>Login</h1>
           <!-- AJAX: evitamos navegação por submit tradicional -->
           <form id="loginForm" data-ajax>
-            <label>E-mail <input id="loginEmail" type="email" required></label>
-            <button id="btnDoLogin" type="submit">Enviar link de acesso</button>
-          </form>
-          <div id="loginMsg" class="msg"></div>
-        </div>
+...
       </section>
     </main>
 
