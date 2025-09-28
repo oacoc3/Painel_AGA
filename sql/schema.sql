@@ -1,43 +1,34 @@
 -- ============================================================
--- Migração AGA - Normalização de NUP, Extensões, Fuso, Políticas e Pareceres
--- É seguro reaplicar (idempotente).
+-- Migração AGA (revisada) - NUP, Extensões, Fuso, Políticas, Pareceres
+-- Idempotente e segura para reexecução.
 -- ============================================================
 
 DO $mig$
 BEGIN
   ----------------------------------------------------------------
-  -- 1) Extensões requeridas
+  -- 1) Extensões necessárias (no schema "extensions")
   ----------------------------------------------------------------
-  -- schema 'extensions' (usado pelo Supabase para extensões)
   EXECUTE 'CREATE SCHEMA IF NOT EXISTS extensions';
 
-  -- pgcrypto -> gen_random_uuid()
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto'
-  ) THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto') THEN
     EXECUTE 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions';
   END IF;
 
-  -- moddatetime -> extensions.moddatetime(...)
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_extension WHERE extname = 'moddatetime'
-  ) THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'moddatetime') THEN
     EXECUTE 'CREATE EXTENSION IF NOT EXISTS moddatetime WITH SCHEMA extensions';
   END IF;
 
   ----------------------------------------------------------------
-  -- 2) Fuso horário padrão
+  -- 2) Fuso horário do banco
   ----------------------------------------------------------------
-  -- Define timezone para America/Recife no banco
-  -- Obs.: requer nova conexão para surtir efeito em sessões.
   EXECUTE 'ALTER DATABASE ' || current_database() || ' SET TIMEZONE TO ''America/Recife''';
 
   ----------------------------------------------------------------
-  -- 3) Função para normalizar NUP
+  -- 3) Função de normalização de NUP
   --    Regras:
-  --      - Pega apenas dígitos
-  --      - Se houver 5 dígitos de prefixo, descarta-os
-  --      - Formata como XXXXXX/XXXX-XX
+  --      - mantém apenas dígitos
+  --      - se tiver 5 dígitos de prefixo, descarta
+  --      - formata como XXXXXX/XXXX-XX (6/4-2)
   ----------------------------------------------------------------
   EXECUTE $sql$
     CREATE OR REPLACE FUNCTION public.normalize_nup(n text)
@@ -46,29 +37,27 @@ BEGIN
     STABLE
     AS $$
     DECLARE
-      d text := regexp_replace(coalesce(n,''), '\D', '', 'g'); -- somente dígitos
-      core text;
+      d text := regexp_replace(coalesce(n,''), '\D', '', 'g');
     BEGIN
-      -- remove os 5 dígitos de prefixo, se existirem
       IF length(d) > 5 THEN
         d := substr(d, 6);
       END IF;
 
-      -- Se houver ao menos 12 dígitos, formata 6/4-2
       IF length(d) >= 12 THEN
         RETURN substr(d,1,6) || '/' || substr(d,7,4) || '-' || substr(d,11,2);
       END IF;
 
-      -- Caso não dê para formatar, retorna como veio (evita nulls)
       RETURN n;
     END;
     $$;
   $sql$;
 
   ----------------------------------------------------------------
-  -- 4) Ajuste da constraint de formato do NUP e trigger de normalização
+  -- 4) Constraint de NUP
+  --    - Remover a antiga (qualquer definição)
+  --    - Normalizar os DADOS EXISTENTES primeiro
+  --    - Adicionar a nova como NOT VALID e, em seguida, VALIDATE
   ----------------------------------------------------------------
-  -- Remove constraint antiga (tinha 5 dígitos + ponto antes)
   IF EXISTS (
     SELECT 1
     FROM   information_schema.table_constraints
@@ -79,14 +68,39 @@ BEGIN
     EXECUTE 'ALTER TABLE public.processes DROP CONSTRAINT nup_format';
   END IF;
 
-  -- Recria constraint no novo formato XXXXXX/XXXX-XX
+  -- Normaliza os registros já existentes antes de criar a nova constraint
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='processes' AND column_name='nup') THEN
+    EXECUTE $sql$
+      UPDATE public.processes
+         SET nup = public.normalize_nup(nup)
+       WHERE nup IS NOT NULL
+         AND nup <> public.normalize_nup(nup)
+    $sql$;
+  END IF;
+
+  -- Cria a nova constraint como NOT VALID (para não falhar agora)
   EXECUTE $sql$
     ALTER TABLE public.processes
     ADD CONSTRAINT nup_format
     CHECK (nup ~ '^[0-9]{6}/[0-9]{4}-[0-9]{2}$')
+    NOT VALID
   $sql$;
 
-  -- Trigger para normalizar antes de inserir/atualizar
+  -- Valida a constraint (só valida se ainda estiver "not valid")
+  PERFORM 1
+  FROM pg_constraint c
+  JOIN pg_class t ON t.oid=c.conrelid
+  JOIN pg_namespace n ON n.oid=t.relnamespace
+  WHERE c.conname='nup_format' AND n.nspname='public' AND t.relname='processes';
+
+  -- A validação lança erro se existirem linhas inválidas.
+  -- Como já normalizamos, deve passar; se não, corrija manualmente os outliers e reexecute este bloco.
+  EXECUTE 'ALTER TABLE public.processes VALIDATE CONSTRAINT nup_format';
+
+  ----------------------------------------------------------------
+  -- 5) Trigger para manter o formato em novos INSERT/UPDATE
+  ----------------------------------------------------------------
   EXECUTE $sql$
     CREATE OR REPLACE FUNCTION public.trg_processes_normalize_nup()
     RETURNS trigger
@@ -99,11 +113,7 @@ BEGIN
     $$;
   $sql$;
 
-  -- Gatilho (se já existir com mesmo nome, recriamos limpamente)
-  IF EXISTS (
-    SELECT 1 FROM pg_trigger
-    WHERE  tgname = 'trg_processes_normalize_nup'
-  ) THEN
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_processes_normalize_nup') THEN
     EXECUTE 'DROP TRIGGER trg_processes_normalize_nup ON public.processes';
   END IF;
 
@@ -114,17 +124,9 @@ BEGIN
     EXECUTE FUNCTION public.trg_processes_normalize_nup()
   $sql$;
 
-  -- Corrige DADOS EXISTENTES (com ou sem prefixo + ponto)
-  EXECUTE $sql$
-    UPDATE public.processes
-       SET nup = public.normalize_nup(nup)
-     WHERE nup IS NOT NULL
-  $sql$;
-
   ----------------------------------------------------------------
-  -- 5) Políticas de perfis: impedir auto-atualização
+  -- 6) Políticas: remover “profiles self update name”
   ----------------------------------------------------------------
-  -- Remove a política de auto-update do próprio perfil
   IF EXISTS (
     SELECT 1 FROM pg_policies
     WHERE  schemaname = 'public'
@@ -133,30 +135,26 @@ BEGIN
   ) THEN
     EXECUTE 'DROP POLICY "profiles self update name" ON public.profiles';
   END IF;
-
-  -- (Mantém as políticas de admin já existentes no seu schema)
+  -- (mantém políticas de Administrador já presentes)
 
   ----------------------------------------------------------------
-  -- 6) Pareceres internos: remover bloqueio por status
+  -- 7) Pareceres internos: liberar (sem exigir ANATEC-PRE/ANATEC)
   ----------------------------------------------------------------
-  -- A função original vetava inserir parecer quando o processo não estivesse
-  -- em ANATEC-PRE/ANATEC. Agora, apenas permite sempre.
   EXECUTE $sql$
     CREATE OR REPLACE FUNCTION public.check_opinion_allowed()
     RETURNS trigger
     LANGUAGE plpgsql
     AS $$
     BEGIN
-      -- Libera: sem checagem de status do processo
+      -- Libera inserções/atualizações de pareceres internos, sem checagem de status do processo
       RETURN NEW;
     END;
     $$;
   $sql$;
 
   ----------------------------------------------------------------
-  -- 7) Views com timezone -> atualizar para America/Recife
+  -- 8) Views: usar timezone 'America/Recife'
   ----------------------------------------------------------------
-  -- Observação: usamos CREATE OR REPLACE VIEW para não perder dependências.
   -- v_prazo_ad_hel
   IF EXISTS (SELECT 1 FROM pg_views WHERE schemaname='public' AND viewname='v_prazo_ad_hel') THEN
     EXECUTE $sql$
@@ -335,9 +333,6 @@ BEGIN
       ) base
     $sql$;
   END IF;
-
-  -- v_prazo_do_aga (não tinha timezone explícito; mantemos a mesma lógica)
-  -- (Sem alteração necessária, mas se desejar garantir consistência, pode recriar igual ao schema original.)
 
 END
 $mig$;
