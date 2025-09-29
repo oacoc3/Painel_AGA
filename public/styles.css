@@ -383,21 +383,6 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .right { text-align: right; }
 
 .badge { display: inline-block; padding: 2px 6px; border: 1px solid var(--line); border-radius: 999px; background: #fff; }
-.badge-validar {
-  background: #0f7a43;
-  border-color: #0f7a43;
-  color: #fff;
-  font-weight: 600;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.validar-flag {
-  margin-top: 4px;
-}
-.validar-flag .badge-validar {
-  display: inline-block;
-}
 .ok    { color: #0a0; }
 .warn  { color: #a60; }
 .err   { color: #900; }
