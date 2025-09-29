@@ -334,5 +334,86 @@ BEGIN
     $sql$;
   END IF;
 
+  ----------------------------------------------------------------
+  -- 9) Tabela para sinalizações de prazos (cards do módulo Prazos)
+  ----------------------------------------------------------------
+  EXECUTE $sql$
+    CREATE TABLE IF NOT EXISTS public.deadline_signals (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      process_id uuid NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
+      nup text NOT NULL,
+      card_key text NOT NULL,
+      card_label text NOT NULL,
+      details jsonb,
+      flagged_by uuid,
+      flagged_at timestamptz DEFAULT timezone('America/Recife', now()),
+      rejected_by uuid,
+      rejected_at timestamptz,
+      rejection_note text
+    );
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.deadline_signals
+      ADD COLUMN IF NOT EXISTS details jsonb;
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.deadline_signals
+      ADD COLUMN IF NOT EXISTS flagged_by uuid;
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.deadline_signals
+      ADD COLUMN IF NOT EXISTS flagged_at timestamptz;
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.deadline_signals
+      ADD COLUMN IF NOT EXISTS rejected_by uuid;
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.deadline_signals
+      ADD COLUMN IF NOT EXISTS rejected_at timestamptz;
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.deadline_signals
+      ADD COLUMN IF NOT EXISTS rejection_note text;
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.deadline_signals
+      ADD COLUMN IF NOT EXISTS card_label text;
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.deadline_signals
+      ALTER COLUMN flagged_at SET DEFAULT timezone('America/Recife', now());
+  $sql$;
+
+  EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS deadline_signals_process_card ON public.deadline_signals(process_id, card_key)';
+
+  EXECUTE 'ALTER TABLE public.deadline_signals ENABLE ROW LEVEL SECURITY';
+
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'deadline_signals'
+      AND policyname = 'deadline_signals_authenticated'
+  ) THEN
+    EXECUTE 'DROP POLICY deadline_signals_authenticated ON public.deadline_signals';
+  END IF;
+
+  EXECUTE $sql$
+    CREATE POLICY deadline_signals_authenticated
+      ON public.deadline_signals
+      FOR ALL
+      USING (auth.uid() IS NOT NULL)
+      WITH CHECK (auth.uid() IS NOT NULL);
+  $sql$;
+
 END
 $mig$;
+
