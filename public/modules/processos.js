@@ -111,7 +111,7 @@ function normalizeNupToBankFormat(input) {
   }
 
   const ValidationFlags = window.Modules.validationFlags || null;
-  const CARD_TYPES = ValidationFlags?.CARD_TYPES || {
+  const CARD_TYPES = ValidationFlags?.CARD_TYPES || { }
   const PROCESS_STATUSES = window.Modules.statuses.PROCESS_STATUSES;
   const STATUS_OPTIONS = PROCESS_STATUSES.map(s => `<option>${s}</option>`).join('');
   const NOTIFICATION_TYPES = ['FAV', 'FAV-TERM', 'FAV-AD_HEL', 'TERM-ATRA', 'DESF-INI', 'DESF-NAO_INI', 'DESF_JJAER', 'DESF-REM_REB', 'NCD', 'NCT', 'REVOG', 'ARQ-EXTR', 'ARQ-PRAZ'];
