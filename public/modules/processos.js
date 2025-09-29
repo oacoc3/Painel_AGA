@@ -19,6 +19,8 @@ window.Modules.processos = (() => {
   let editingNtId = null;
   let editingSgId = null;
   let popupProcId = null;
+  let validationState = new Map();
+  let preferredCardType = null;
   // Paginação da lista de processos (HTML-first + Supabase range)
   let PROC_PAGE = 1;
   const PROC_PAGE_SIZE = 50; // ajuste se necessário
@@ -70,6 +72,46 @@ function normalizeNupToBankFormat(input) {
     pager.querySelector('#procLastPage')?.addEventListener('click', () => loadProcessList({ page: pagesTotal }));
   }
 
+  function getProcessValidationMap(procId) {
+    if (!ValidationFlags) return new Map();
+    return validationState.get(procId) || new Map();
+  }
+
+  function getActiveValidations(procId) {
+    if (!ValidationFlags) return [];
+    return ValidationFlags.getActiveCards(validationState, procId) || [];
+  }
+
+  function hasActiveValidation(procId) {
+    return getActiveValidations(procId).length > 0;
+  }
+
+  function summarizeActiveValidations(procId) {
+    const actives = getActiveValidations(procId);
+    if (!actives.length) return '';
+    return actives
+      .map(entry => {
+        const meta = CARD_TYPES[entry.card_type];
+        return meta ? meta.label : entry.card_type;
+      })
+      .join(', ');
+  }
+
+  function finalizeDetails(details = {}) {
+    const result = {};
+    Object.entries(details).forEach(([key, value]) => {
+      if (key === 'card_type') {
+        result[key] = value;
+        return;
+      }
+      if (value === null || value === undefined || value === '') return;
+      result[key] = value;
+    });
+    return result;
+  }
+
+  const ValidationFlags = window.Modules.validationFlags || null;
+  const CARD_TYPES = ValidationFlags?.CARD_TYPES || {
   const PROCESS_STATUSES = window.Modules.statuses.PROCESS_STATUSES;
   const STATUS_OPTIONS = PROCESS_STATUSES.map(s => `<option>${s}</option>`).join('');
   const NOTIFICATION_TYPES = ['FAV', 'FAV-TERM', 'FAV-AD_HEL', 'TERM-ATRA', 'DESF-INI', 'DESF-NAO_INI', 'DESF_JJAER', 'DESF-REM_REB', 'NCD', 'NCT', 'REVOG', 'ARQ-EXTR', 'ARQ-PRAZ'];
@@ -675,6 +717,17 @@ function normalizeNupToBankFormat(input) {
       const rows = Array.isArray(data) ? [...data] : [];
       const ids = rows.map(r => r.id);
 
+      if (ValidationFlags && ids.length) {
+        try {
+          validationState = await ValidationFlags.fetchForProcesses(ids);
+        } catch (err) {
+          console.warn('Falha ao obter sinalizações de validação', err);
+          validationState = new Map();
+        }
+      } else {
+        validationState = new Map();
+      }
+
       // Busca presença nas tabelas relacionadas apenas para os IDs da página atual
       const [op, nt, sg, ob, ck] = await Promise.all([
         sb.from('internal_opinions').select('process_id').in('process_id', ids),
@@ -728,9 +781,12 @@ function normalizeNupToBankFormat(input) {
         const sgBtn = `<button type="button" class="docIcon sgBtn ${hasSg ? 'on' : 'off'}">S</button>`;
         const obsBtn = `<button type="button" class="docIcon obsIcon obsBtn ${hasOb ? 'on' : 'off'}">OBS</button>`;
         const displayType = normalizeProcessTypeLabel(r.type);
+        const validarBadge = hasActiveValidation(r.id)
+          ? '<div class="validar-flag"><span class="badge badge-validar">VALIDAR</span></div>'
+          : '';
         tr.innerHTML = `
           <td class="align-center"><div class="historyWrap"><button type="button" class="historyBtn" aria-label="Histórico">👁️</button>${ckBtn}</div></td>
-          <td>${r.nup || ''}</td>
+          <td>${r.nup || ''}${validarBadge}</td>
           <td>${displayType || ''}</td>
           <td>${entradaCell}</td>
           <td>${stCell}</td>
@@ -784,7 +840,7 @@ function normalizeNupToBankFormat(input) {
           if (!guardProcessWrite('procMsg')) return;
           return showObraEditPopup(row.id, row.obra_termino_date, row.obra_concluida);
         }
-        selectProcess(row);
+        showProcessActionPopup(row);
       });
     } catch (err) {
       box.innerHTML = '<div class="msg error">Falha ao carregar a lista. <button type="button" id="procRetryBtn">Tentar novamente</button></div>';
@@ -792,6 +848,292 @@ function normalizeNupToBankFormat(input) {
       window.SafetyGuards?.askReload?.('Falha ao carregar a lista. Recarregar a página?');
       console.error(err);
     }
+  }
+
+    function showProcessActionPopup(row) {
+    if (!row) return;
+    const dlg = document.createElement('dialog');
+    dlg.className = 'proc-popup';
+    const activeSummary = summarizeActiveValidations(row.id);
+    const hasActive = !!activeSummary;
+    const isAdmin = (window.AccessGuards?.getRole?.() === 'Administrador');
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <h3>${row.nup || ''}</h3>
+        <p class="muted">${activeSummary ? `Sinalizações pendentes: ${activeSummary}` : 'Selecione uma ação.'}</p>
+        <menu>
+          <button type="button" data-action="view">Ver na lista de processos</button>
+          <button type="button" data-action="flag">Sinalizar</button>
+          <button type="button" data-action="reject" ${(!isAdmin || !hasActive) ? 'disabled' : ''}>Rejeitar sinalização</button>
+          <button type="button" data-action="close">Fechar</button>
+        </menu>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.showModal();
+    const form = dlg.querySelector('form');
+    form?.querySelector('[data-action="view"]')?.addEventListener('click', () => {
+      dlg.close();
+      selectProcess(row);
+    });
+    form?.querySelector('[data-action="flag"]')?.addEventListener('click', () => {
+      dlg.close();
+      showSignalizationPopup(row);
+    });
+    if (isAdmin) {
+      const rejectBtn = form?.querySelector('[data-action="reject"]');
+      rejectBtn?.addEventListener('click', () => {
+        if (rejectBtn.disabled) return;
+        dlg.close();
+        showRejectionPopup(row);
+      });
+    }
+    form?.querySelector('[data-action="close"]')?.addEventListener('click', () => dlg.close());
+  }
+
+  function buildSignalizationFields(container, meta, defaults = {}) {
+    if (!container) return;
+    container.innerHTML = '';
+    if (!meta) {
+      const msg = document.createElement('p');
+      msg.className = 'msg error';
+      msg.textContent = 'Tipo de card não configurado.';
+      container.appendChild(msg);
+      return;
+    }
+    meta.fields.forEach(field => {
+      const wrap = document.createElement('label');
+      wrap.textContent = field.label;
+      let input;
+      if (field.type === 'textarea') {
+        input = document.createElement('textarea');
+        input.rows = 3;
+      } else {
+        input = document.createElement('input');
+        input.type = field.type;
+      }
+      input.dataset.field = field.name;
+      input.id = `sigField_${field.name}`;
+      if (field.placeholder) input.placeholder = field.placeholder;
+      if (field.required) input.required = true;
+      if (defaults[field.name] != null) {
+        input.value = defaults[field.name];
+      } else if (field.name === 'tipo') {
+        input.value = meta.label;
+      }
+      wrap.appendChild(input);
+      container.appendChild(wrap);
+    });
+  }
+
+  function collectSignalizationValues(form, meta) {
+    const values = {};
+    if (!meta) return values;
+    meta.fields.forEach(field => {
+      const elField = form.querySelector(`[data-field="${field.name}"]`);
+      if (!elField) return;
+      let value = elField.value;
+      if (typeof value === 'string') value = value.trim();
+      if (field.required && !value) {
+        throw new Error(`Preencha o campo "${field.label}".`);
+      }
+      values[field.name] = value || '';
+    });
+    return values;
+  }
+
+  async function submitSignalization(row, cardType, meta, values) {
+    if (!row || !cardType || !meta) return;
+    const details = { card_type: cardType };
+    const hasTipoField = Array.isArray(meta.fields) && meta.fields.some(f => f.name === 'tipo');
+    const tipoValue = hasTipoField ? (values.tipo || meta.label) : meta.label;
+    if (tipoValue) details['Tipo da notificação ou do SIGADAER'] = tipoValue;
+    if (values.numero) details['Número do SIGADAER'] = values.numero;
+    if (values.observacao) details['Observação'] = values.observacao;
+    if (values.timestamp) {
+      const dt = new Date(values.timestamp);
+      if (Number.isNaN(dt.getTime())) throw new Error('Informe uma data e hora válidas.');
+      details['Data/Hora'] = dt.toISOString();
+    }
+    if (values.date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(values.date)) throw new Error('Informe uma data válida.');
+      details['Data'] = values.date;
+    }
+    const payload = {
+      process_id: row.id,
+      action: `Sinalização ${meta.historyLabel}`,
+      details: finalizeDetails(details)
+    };
+    const { error } = await sb.from('history').insert(payload);
+    if (error) throw error;
+    preferredCardType = cardType;
+    U.setMsg('procMsg', 'Sinalização registrada no histórico.');
+    await loadProcessList({ page: PROC_PAGE });
+  }
+
+  function showSignalizationPopup(row) {
+    if (!row) return;
+    if (!ValidationFlags) {
+      alert('Recurso de sinalização indisponível.');
+      return;
+    }
+    if (!guardProcessWrite('procMsg')) return;
+    const options = Object.values(CARD_TYPES)
+      .map(card => `<option value="${card.key}">${card.label}</option>`)
+      .join('');
+    if (!options) {
+      alert('Nenhum tipo de card configurado.');
+      return;
+    }
+    const dlg = document.createElement('dialog');
+    dlg.className = 'proc-popup';
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup signal-popup">
+        <h3>Sinalizar processo ${row.nup || ''}</h3>
+        <label>Card
+          <select id="sigCard">${options}</select>
+        </label>
+        <div id="sigFields"></div>
+        <menu>
+          <button type="button" data-action="cancel">Fechar</button>
+          <button type="submit" data-action="submit">Enviar</button>
+        </menu>
+        <div class="msg" id="sigMsg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    const form = dlg.querySelector('form');
+    const select = form?.querySelector('#sigCard');
+    const fieldsBox = form?.querySelector('#sigFields');
+    const defaultType = (preferredCardType && CARD_TYPES[preferredCardType])
+      ? preferredCardType
+      : Object.keys(CARD_TYPES)[0];
+    if (select && defaultType) select.value = defaultType;
+    const renderFields = () => {
+      const cardType = select?.value;
+      const meta = cardType ? CARD_TYPES[cardType] : null;
+      buildSignalizationFields(fieldsBox, meta);
+    };
+    select?.addEventListener('change', renderFields);
+    renderFields();
+    form?.querySelector('[data-action="cancel"]')?.addEventListener('click', () => dlg.close());
+    form?.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      try {
+        const cardType = select?.value;
+        const meta = cardType ? CARD_TYPES[cardType] : null;
+        if (!cardType || !meta) throw new Error('Selecione o card a ser sinalizado.');
+        const values = collectSignalizationValues(form, meta);
+        U.setMsg('sigMsg', '');
+        await submitSignalization(row, cardType, meta, values);
+        dlg.close();
+      } catch (err) {
+        U.setMsg('sigMsg', err.message || String(err), true);
+      }
+    });
+    dlg.showModal();
+  }
+
+  async function submitRejection(row, cardType, note) {
+    if (!row || !cardType) return;
+    const meta = CARD_TYPES[cardType];
+    if (!meta) throw new Error('Tipo de card inválido.');
+    const currentMap = getProcessValidationMap(row.id);
+    const currentEntry = currentMap.get(cardType);
+    const entryDetails = currentEntry?.details || {};
+    const details = {
+      card_type: cardType,
+      'Observação da rejeição': note
+    };
+    if (entryDetails['Tipo da notificação ou do SIGADAER']) {
+      details['Tipo da notificação ou do SIGADAER'] = entryDetails['Tipo da notificação ou do SIGADAER'];
+    }
+    if (entryDetails['Número do SIGADAER']) {
+      details['Número do SIGADAER'] = entryDetails['Número do SIGADAER'];
+    }
+    if (entryDetails['Observação']) {
+      details['Observação'] = entryDetails['Observação'];
+    }
+    if (entryDetails['Data/Hora']) {
+      details['Data/Hora'] = entryDetails['Data/Hora'];
+    }
+    if (entryDetails['Data']) {
+      details['Data'] = entryDetails['Data'];
+    }
+    const payload = {
+      process_id: row.id,
+      action: `Sinalização ${meta.historyLabel} rejeitada`,
+      details: finalizeDetails(details)
+    };
+    const { error } = await sb.from('history').insert(payload);
+    if (error) throw error;
+    preferredCardType = cardType;
+    U.setMsg('procMsg', 'Sinalização rejeitada.');
+    await loadProcessList({ page: PROC_PAGE });
+  }
+
+  function showRejectionPopup(row) {
+    if (!row) return;
+    if ((window.AccessGuards?.getRole?.() || '') !== 'Administrador') {
+      alert('Função disponível apenas para Administrador.');
+      return;
+    }
+    if (!ValidationFlags) {
+      alert('Recurso de sinalização indisponível.');
+      return;
+    }
+    const actives = getActiveValidations(row.id);
+    if (!actives.length) {
+      alert('Não há sinalizações pendentes para este processo.');
+      return;
+    }
+    if (!guardProcessWrite('procMsg')) return;
+    const options = actives
+      .map(entry => {
+        const meta = CARD_TYPES[entry.card_type];
+        const label = meta ? meta.label : entry.card_type;
+        return `<option value="${entry.card_type}">${label}</option>`;
+      })
+      .join('');
+    const dlg = document.createElement('dialog');
+    dlg.className = 'proc-popup';
+    dlg.innerHTML = `
+      <form method="dialog" class="proc-popup">
+        <h3>Rejeitar sinalização</h3>
+        <p class="muted">Processo ${row.nup || ''}</p>
+        <label>Card
+          <select id="rejCard">${options}</select>
+        </label>
+        <label>Observação
+          <textarea id="rejObs" rows="4" required></textarea>
+        </label>
+        <menu>
+          <button type="button" data-action="cancel">Fechar</button>
+          <button type="submit" data-action="submit">Rejeitar</button>
+        </menu>
+        <div class="msg" id="rejMsg"></div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => dlg.remove());
+    const form = dlg.querySelector('form');
+    form?.querySelector('[data-action="cancel"]')?.addEventListener('click', () => dlg.close());
+    form?.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      try {
+        const select = form.querySelector('#rejCard');
+        const obs = form.querySelector('#rejObs');
+        const cardType = select?.value;
+        const note = (obs?.value || '').trim();
+        if (!cardType) throw new Error('Selecione o card.');
+        if (!note) throw new Error('Informe a observação.');
+        U.setMsg('rejMsg', '');
+        await submitRejection(row, cardType, note);
+        dlg.close();
+      } catch (err) {
+        U.setMsg('rejMsg', err.message || String(err), true);
+      }
+    });
+    dlg.showModal();
   }
 
   async function loadObsList(procId, targetId = 'obsLista') {
@@ -1209,6 +1551,7 @@ function normalizeNupToBankFormat(input) {
       const obj = typeof det === 'string' ? JSON.parse(det) : det;
       return Object.entries(obj)
         .map(([k, v]) => {
+          if (k === 'card_type') return null;
           if (v == null) return null;
           const key = k.replace(/_/g, ' ');
           let val = v;
@@ -1811,10 +2154,21 @@ function normalizeNupToBankFormat(input) {
     await loadProcessList();
 
     // suporte à pré-seleção de NUP (ex.: navegar a partir de outra view)
-    const pre = sessionStorage.getItem('procPreSelect');
-    if (pre && el('procNUP')) {
+    const preRaw = sessionStorage.getItem('procPreSelect');
+    if (preRaw && el('procNUP')) {
       sessionStorage.removeItem('procPreSelect');
-      el('procNUP').value = pre;
+      let parsed;
+      try {
+        parsed = JSON.parse(preRaw);
+      } catch (_) {
+        parsed = null;
+      }
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.nup) el('procNUP').value = parsed.nup;
+        if (parsed.cardType && CARD_TYPES[parsed.cardType]) preferredCardType = parsed.cardType;
+      } else {
+        el('procNUP').value = preRaw;
+      }
       await buscarProcesso();
     }
   }
