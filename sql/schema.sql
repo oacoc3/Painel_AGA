@@ -602,6 +602,3 @@ BEGIN
 
 END
 $mig$;
-
-
-
