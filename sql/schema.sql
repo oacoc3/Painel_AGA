@@ -340,7 +340,10 @@ BEGIN
   EXECUTE $sql$
     CREATE TABLE IF NOT EXISTS public.deadline_flags (
       id bigserial PRIMARY KEY,
-      process_id uuid NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
+      -- IMPORTANTE: mantenha o tipo de process_id compatível com public.processes(id).
+      -- Se processes.id for BIGINT (bigserial), use BIGINT aqui.
+      -- Se for UUID no seu esquema, troque para UUID e mantenha a FK abaixo.
+      process_id bigint NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
       card text NOT NULL,
       item_key text NOT NULL,
       nup text NOT NULL,
@@ -454,6 +457,123 @@ BEGIN
             WHERE p.id = auth.uid() AND p.role = 'Administrador'
           )
         )
+    $pol$;
+  END IF;
+
+  ----------------------------------------------------------------
+  -- 10) HISTORY: tabela + índices + RLS + policies (idempotente)
+  --      Necessário para o registro do histórico após "Confirmar".
+  ----------------------------------------------------------------
+  -- Criar tabela se não existir (tipos compatíveis com o front)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='history'
+  ) THEN
+    EXECUTE $sql$
+      CREATE TABLE public.history (
+        id          bigserial PRIMARY KEY,
+        -- Ajuste o tipo de process_id para bater com public.processes(id)
+        process_id  bigint NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
+        action      text   NOT NULL,
+        details     jsonb  NULL,
+        user_id     uuid   NOT NULL,
+        user_name   text   NULL,
+        created_at  timestamptz NOT NULL DEFAULT timezone('America/Recife', now())
+      )
+    $sql$;
+  END IF;
+
+  -- Garantias de colunas (caso a tabela já exista diferente)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='history' AND column_name='details'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.history ADD COLUMN details jsonb';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='history' AND column_name='user_id'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.history ADD COLUMN user_id uuid';
+  END IF;
+
+  BEGIN
+    EXECUTE 'ALTER TABLE public.history ALTER COLUMN user_id SET NOT NULL';
+  EXCEPTION WHEN others THEN
+    -- Se existirem linhas antigas nulas, mantém sem NOT NULL para não quebrar
+    NULL;
+  END;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='history' AND column_name='user_name'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.history ADD COLUMN user_name text';
+  END IF;
+
+  -- Índices úteis
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname='public' AND tablename='history' AND indexname='idx_history_process_id'
+  ) THEN
+    EXECUTE 'CREATE INDEX idx_history_process_id ON public.history(process_id)';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname='public' AND tablename='history' AND indexname='idx_history_created_at'
+  ) THEN
+    EXECUTE 'CREATE INDEX idx_history_created_at ON public.history(created_at DESC)';
+  END IF;
+
+  -- RLS
+  EXECUTE 'ALTER TABLE public.history ENABLE ROW LEVEL SECURITY';
+
+  -- SELECT: qualquer usuário autenticado pode consultar histórico
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='history' AND policyname='history_select_authenticated'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "history_select_authenticated"
+      ON public.history
+      FOR SELECT
+      TO authenticated
+      USING (true)
+    $pol$;
+  END IF;
+
+  -- INSERT: somente se user_id = auth.uid()  (compatível com o front)
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='history' AND policyname='history_insert_own'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "history_insert_own"
+      ON public.history
+      FOR INSERT
+      TO authenticated
+      WITH CHECK (user_id = auth.uid())
+    $pol$;
+  END IF;
+
+  -- (Opcional) DELETE: permitir apenas Administrador
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='history' AND policyname='history_delete_admin'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "history_delete_admin"
+      ON public.history
+      FOR DELETE
+      TO authenticated
+      USING (
+        EXISTS (
+          SELECT 1 FROM public.profiles p
+          WHERE p.id = auth.uid() AND p.role = 'Administrador'
+        )
+      )
     $pol$;
   END IF;
 
