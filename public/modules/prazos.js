@@ -336,7 +336,7 @@ window.Modules.prazos = (() => {
           <button type="button" data-action="view">Ver na lista de processos</button>
           ${supportsFlag ? `<button type="button" data-action="flag">${flag ? 'Atualizar sinalização' : 'Sinalizar'}</button>` : ''}
           ${canReject ? '<button type="button" class="danger" data-action="reject">Rejeitar sinalização</button>' : ''}
-          <button value="cancel">Fechar</button>
+          <button value="cancel" formnovalidate>Fechar</button>
         </menu>
       </form>
     `;
@@ -402,7 +402,7 @@ window.Modules.prazos = (() => {
           <textarea id="flagObs" placeholder="Opcional"></textarea>
         </label>
         <menu>
-          <button value="cancel">Fechar</button>
+          <button value="cancel" formnovalidate>Fechar</button>
           <button id="flagConfirm" value="default">${flag ? 'Atualizar' : 'Confirmar'}</button>
         </menu>
       </form>
@@ -459,7 +459,7 @@ window.Modules.prazos = (() => {
           <textarea id="rejectObs" required></textarea>
         </label>
         <menu>
-          <button value="cancel">Fechar</button>
+          <button value="cancel" formnovalidate>Fechar</button>
           <button id="rejectConfirm" value="default">Confirmar</button>
         </menu>
       </form>
