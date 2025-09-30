@@ -526,6 +526,7 @@ window.Modules.prazos = (() => {
       process_id: processId,
       action,
       details,
+      user_id: user.id,
       user_name: (user.user_metadata && user.user_metadata.name) || user.email || user.id
     };
     const { error } = await sb.from('history').insert(payload);
