@@ -338,11 +338,11 @@ BEGIN
   -- 9) Sinalizações dos cards de prazos (destacar itens VALIDADOS)
   ----------------------------------------------------------------
   EXECUTE $sql$
-    CREATE TABLE IF NOT EXISTS public.deadline_flags (␊
-      id bigserial PRIMARY KEY,␊
-      -- IMPORTANTE: mantenha o tipo de process_id compatível com public.processes(id).␊
-      -- Se processes.id for BIGINT (bigserial), use BIGINT aqui.␊
-      -- Se for UUID no seu esquema, troque para UUID e mantenha a FK abaixo.␊
+    CREATE TABLE IF NOT EXISTS public.deadline_flags (
+      id bigserial PRIMARY KEY,
+      -- IMPORTANTE: mantenha o tipo de process_id compatível com public.processes(id).
+      -- Se processes.id for BIGINT (bigserial), use BIGINT aqui.
+      -- Se for UUID no seu esquema, troque para UUID e mantenha a FK abaixo.
       process_id uuid NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
       card text NOT NULL,
       item_key text NOT NULL,
@@ -579,4 +579,5 @@ BEGIN
 
 END
 $mig$;
+
 
