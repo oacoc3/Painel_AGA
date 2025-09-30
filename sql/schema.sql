@@ -10,18 +10,20 @@ BEGIN
   ----------------------------------------------------------------
   EXECUTE 'CREATE SCHEMA IF NOT EXISTS extensions';
 
-  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = ''pgcrypto'') THEN
-    EXECUTE ''CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions'';
+  PERFORM 1 FROM pg_extension WHERE extname = 'pgcrypto';
+  IF NOT FOUND THEN
+    EXECUTE 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions';
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = ''moddatetime'') THEN
-    EXECUTE ''CREATE EXTENSION IF NOT EXISTS moddatetime WITH SCHEMA extensions'';
+  PERFORM 1 FROM pg_extension WHERE extname = 'moddatetime';
+  IF NOT FOUND THEN
+    EXECUTE 'CREATE EXTENSION IF NOT EXISTS moddatetime WITH SCHEMA extensions';
   END IF;
 
   ----------------------------------------------------------------
   -- 2) Fuso horário do banco
   ----------------------------------------------------------------
-  EXECUTE ''ALTER DATABASE '' || current_database() || '' SET TIMEZONE TO ''''America/Recife''''';
+  EXECUTE 'ALTER DATABASE ' || current_database() || ' SET TIMEZONE TO ''America/Recife''';
 
   ----------------------------------------------------------------
   -- 3) Função de normalização de NUP
@@ -87,15 +89,13 @@ BEGIN
     NOT VALID
   $sql$;
 
-  -- Valida a constraint (só valida se ainda estiver "not valid")
+  -- Valida a constraint (lança erro se existirem linhas inválidas)
   PERFORM 1
   FROM pg_constraint c
   JOIN pg_class t ON t.oid=c.conrelid
   JOIN pg_namespace n ON n.oid=t.relnamespace
   WHERE c.conname='nup_format' AND n.nspname='public' AND t.relname='processes';
 
-  -- A validação lança erro se existirem linhas inválidas.
-  -- Como já normalizamos, deve passar; se não, corrija manualmente os outliers e reexecute este bloco.
   EXECUTE 'ALTER TABLE public.processes VALIDATE CONSTRAINT nup_format';
 
   ----------------------------------------------------------------
