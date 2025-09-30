@@ -10,11 +10,13 @@ BEGIN
   ----------------------------------------------------------------
   EXECUTE 'CREATE SCHEMA IF NOT EXISTS extensions';
 
-  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto') THEN
+  PERFORM 1 FROM pg_extension WHERE extname = 'pgcrypto';
+  IF NOT FOUND THEN
     EXECUTE 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions';
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'moddatetime') THEN
+  PERFORM 1 FROM pg_extension WHERE extname = 'moddatetime';
+  IF NOT FOUND THEN
     EXECUTE 'CREATE EXTENSION IF NOT EXISTS moddatetime WITH SCHEMA extensions';
   END IF;
 
@@ -87,15 +89,13 @@ BEGIN
     NOT VALID
   $sql$;
 
-  -- Valida a constraint (só valida se ainda estiver "not valid")
+  -- Valida a constraint (lança erro se existirem linhas inválidas)
   PERFORM 1
   FROM pg_constraint c
   JOIN pg_class t ON t.oid=c.conrelid
   JOIN pg_namespace n ON n.oid=t.relnamespace
   WHERE c.conname='nup_format' AND n.nspname='public' AND t.relname='processes';
 
-  -- A validação lança erro se existirem linhas inválidas.
-  -- Como já normalizamos, deve passar; se não, corrija manualmente os outliers e reexecute este bloco.
   EXECUTE 'ALTER TABLE public.processes VALIDATE CONSTRAINT nup_format';
 
   ----------------------------------------------------------------
@@ -332,6 +332,249 @@ BEGIN
         WHERE p.obra_concluida = false
       ) base
     $sql$;
+  END IF;
+
+  ----------------------------------------------------------------
+  -- 9) Sinalizações dos cards de prazos (destacar itens VALIDADOS)
+  ----------------------------------------------------------------
+  EXECUTE $sql$
+    CREATE TABLE IF NOT EXISTS public.deadline_flags (
+      id bigserial PRIMARY KEY,
+      -- IMPORTANTE: mantenha o tipo de process_id compatível com public.processes(id).
+      -- Se processes.id for BIGINT (bigserial), use BIGINT aqui.
+      -- Se for UUID no seu esquema, troque para UUID e mantenha a FK abaixo.
+      process_id bigint NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
+      card text NOT NULL,
+      item_key text NOT NULL,
+      nup text NOT NULL,
+      details jsonb DEFAULT '{}'::jsonb,
+      created_by uuid DEFAULT auth.uid(),
+      created_by_name text,
+      created_at timestamptz NOT NULL DEFAULT timezone('America/Recife', now()),
+      updated_at timestamptz NOT NULL DEFAULT timezone('America/Recife', now())
+    )
+  $sql$;
+
+  EXECUTE $sql$
+    CREATE UNIQUE INDEX IF NOT EXISTS deadline_flags_card_item_key_idx
+      ON public.deadline_flags (card, item_key)
+  $sql$;
+
+  EXECUTE $sql$
+    CREATE INDEX IF NOT EXISTS deadline_flags_process_id_idx
+      ON public.deadline_flags (process_id)
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.deadline_flags
+      ALTER COLUMN created_by SET DEFAULT auth.uid()
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.deadline_flags
+      ALTER COLUMN created_at SET DEFAULT timezone('America/Recife', now())
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.deadline_flags
+      ALTER COLUMN updated_at SET DEFAULT timezone('America/Recife', now())
+  $sql$;
+
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_deadline_flags_set_updated_at') THEN
+    EXECUTE 'DROP TRIGGER trg_deadline_flags_set_updated_at ON public.deadline_flags';
+  END IF;
+
+  EXECUTE $sql$
+    CREATE TRIGGER trg_deadline_flags_set_updated_at
+      BEFORE UPDATE ON public.deadline_flags
+      FOR EACH ROW
+      EXECUTE FUNCTION extensions.moddatetime(updated_at)
+  $sql$;
+
+  EXECUTE 'ALTER TABLE public.deadline_flags ENABLE ROW LEVEL SECURITY';
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE  schemaname = 'public'
+      AND  tablename  = 'deadline_flags'
+      AND  policyname = 'deadline_flags_select_authenticated'
+  ) THEN
+    EXECUTE 'CREATE POLICY "deadline_flags_select_authenticated" ON public.deadline_flags FOR SELECT TO authenticated USING (true)';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE  schemaname = 'public'
+      AND  tablename  = 'deadline_flags'
+      AND  policyname = 'deadline_flags_insert_authenticated'
+  ) THEN
+    EXECUTE 'CREATE POLICY "deadline_flags_insert_authenticated" ON public.deadline_flags FOR INSERT TO authenticated WITH CHECK (true)';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE  schemaname = 'public'
+      AND  tablename  = 'deadline_flags'
+      AND  policyname = 'deadline_flags_update_owner'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "deadline_flags_update_owner"
+        ON public.deadline_flags
+        FOR UPDATE
+        TO authenticated
+        USING (
+          created_by = auth.uid()
+          OR EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.id = auth.uid() AND p.role = 'Administrador'
+          )
+        )
+        WITH CHECK (
+          created_by = auth.uid()
+          OR EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.id = auth.uid() AND p.role = 'Administrador'
+          )
+        )
+    $pol$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE  schemaname = 'public'
+      AND  tablename  = 'deadline_flags'
+      AND  policyname = 'deadline_flags_delete_admin'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "deadline_flags_delete_admin"
+        ON public.deadline_flags
+        FOR DELETE
+        TO authenticated
+        USING (
+          created_by = auth.uid()
+          OR EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.id = auth.uid() AND p.role = 'Administrador'
+          )
+        )
+    $pol$;
+  END IF;
+
+  ----------------------------------------------------------------
+  -- 10) HISTORY: tabela + índices + RLS + policies (idempotente)
+  --      Necessário para o registro do histórico após "Confirmar".
+  ----------------------------------------------------------------
+  -- Criar tabela se não existir (tipos compatíveis com o front)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='history'
+  ) THEN
+    EXECUTE $sql$
+      CREATE TABLE public.history (
+        id          bigserial PRIMARY KEY,
+        -- Ajuste o tipo de process_id para bater com public.processes(id)
+        process_id  bigint NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
+        action      text   NOT NULL,
+        details     jsonb  NULL,
+        user_id     uuid   NOT NULL,
+        user_name   text   NULL,
+        created_at  timestamptz NOT NULL DEFAULT timezone('America/Recife', now())
+      )
+    $sql$;
+  END IF;
+
+  -- Garantias de colunas (caso a tabela já exista diferente)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='history' AND column_name='details'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.history ADD COLUMN details jsonb';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='history' AND column_name='user_id'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.history ADD COLUMN user_id uuid';
+  END IF;
+
+  BEGIN
+    EXECUTE 'ALTER TABLE public.history ALTER COLUMN user_id SET NOT NULL';
+  EXCEPTION WHEN others THEN
+    -- Se existirem linhas antigas nulas, mantém sem NOT NULL para não quebrar
+    NULL;
+  END;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='history' AND column_name='user_name'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.history ADD COLUMN user_name text';
+  END IF;
+
+  -- Índices úteis
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname='public' AND tablename='history' AND indexname='idx_history_process_id'
+  ) THEN
+    EXECUTE 'CREATE INDEX idx_history_process_id ON public.history(process_id)';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname='public' AND tablename='history' AND indexname='idx_history_created_at'
+  ) THEN
+    EXECUTE 'CREATE INDEX idx_history_created_at ON public.history(created_at DESC)';
+  END IF;
+
+  -- RLS
+  EXECUTE 'ALTER TABLE public.history ENABLE ROW LEVEL SECURITY';
+
+  -- SELECT: qualquer usuário autenticado pode consultar histórico
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='history' AND policyname='history_select_authenticated'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "history_select_authenticated"
+      ON public.history
+      FOR SELECT
+      TO authenticated
+      USING (true)
+    $pol$;
+  END IF;
+
+  -- INSERT: somente se user_id = auth.uid()  (compatível com o front)
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='history' AND policyname='history_insert_own'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "history_insert_own"
+      ON public.history
+      FOR INSERT
+      TO authenticated
+      WITH CHECK (user_id = auth.uid())
+    $pol$;
+  END IF;
+
+  -- (Opcional) DELETE: permitir apenas Administrador
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='history' AND policyname='history_delete_admin'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "history_delete_admin"
+      ON public.history
+      FOR DELETE
+      TO authenticated
+      USING (
+        EXISTS (
+          SELECT 1 FROM public.profiles p
+          WHERE p.id = auth.uid() AND p.role = 'Administrador'
+        )
+      )
+    $pol$;
   END IF;
 
 END

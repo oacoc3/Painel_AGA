@@ -383,9 +383,111 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .right { text-align: right; }
 
 .badge { display: inline-block; padding: 2px 6px; border: 1px solid var(--line); border-radius: 999px; background: #fff; }
+/* ====== Início das adições do patch ====== */
+.badge-validar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #0c8f5c;
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: none;
+}
+.badge-validar::before {
+  content: '✔';
+  font-size: 0.7rem;
+}
 .ok    { color: #0a0; }
 .warn  { color: #a60; }
 .err   { color: #900; }
+
+.prazo-popup {
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  max-width: min(520px, 90vw);
+}
+
+.prazo-popup form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+  min-width: 320px;
+}
+
+.prazo-popup h3 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.prazo-popup .flag-info {
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.prazo-popup .flag-info strong {
+  font-size: 1.05rem;
+}
+
+.prazo-popup menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.prazo-popup label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.prazo-popup input[type="text"],
+.prazo-popup input[type="date"],
+.prazo-popup input[type="datetime-local"],
+.prazo-popup textarea {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.prazo-popup textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.prazo-popup .flag-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(12, 143, 92, 0.08);
+  border: 1px solid rgba(12, 143, 92, 0.25);
+  font-size: 0.85rem;
+}
+
+.prazo-popup .flag-status time {
+  font-family: var(--mono);
+  color: var(--ink-soft);
+}
+/* ====== Fim das adições do patch ====== */
 
 footer { padding: 8px 12px; background: #faf9f7; }
 

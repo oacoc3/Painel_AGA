@@ -11,7 +11,7 @@
   <script src="./config.js" defer></script>
   <!-- Supabase library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
-<!-- Inicialização do cliente Supabase -->
+  <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
   <!-- Sessão pronta antes de inicializar a página -->
   <script src="./auth-ready.js" defer></script>
@@ -49,68 +49,61 @@
         <div class="prazo-grid">
 
           <div class="prazo-col">
-            <div class="card">
+            <div class="card" data-card="pareceres">
               <div class="card-title">
                 <h2>Pareceres/Info</h2>
-                <div class="card-title-meta">
-</div>
+                <div class="card-title-meta" id="cardMetaPareceres"></div>
               </div>
               <div id="prazoParec" class="table scrolly"></div>
             </div>
-            <div class="card">
+            <div class="card" data-card="remocao">
               <div class="card-title">
                 <h2>Remoção/Rebaixamento</h2>
-                <div class="card-title-meta">
-</div>
+                <div class="card-title-meta" id="cardMetaRemocao"></div>
               </div>
               <div id="prazoRemocao" class="table scrolly"></div>
             </div>
           </div>
 
           <div class="prazo-col">
-            <div class="card">
+            <div class="card" data-card="obras">
               <div class="card-title">
                 <h2>Término de Obra</h2>
-                <div class="card-title-meta">
-</div>
+                <div class="card-title-meta" id="cardMetaObras"></div>
               </div>
               <div id="prazoObra" class="table scrolly"></div>
             </div>
-            <div class="card">
+            <div class="card" data-card="monitor">
               <div class="card-title">
                  <h2>Leitura/Expedição</h2>
-                <div class="card-title-meta">
-</div>
+                 <div class="card-title-meta" id="cardMetaMonitor"></div>
               </div>
               <div id="prazoMonit" class="table scrolly"></div>
             </div>
           </div>
 
           <div class="prazo-col">
-            <div class="card">
+            <div class="card" data-card="sobrestamento">
               <div class="card-title">
                 <h2>Sobrestamento</h2>
-                <div class="card-title-meta">
-</div>
+                <div class="card-title-meta" id="cardMetaSobrestamento"></div>
               </div>
               <div id="prazoSobrestamento" class="table scrolly"></div>
             </div>
-            <div class="card">
+            <div class="card" data-card="adhel">
               <div class="card-title">
                  <h2>Revogar plano</h2>
-                <div class="card-title-meta">
-</div>
+                 <div class="card-title-meta" id="cardMetaAdhel"></div>
               </div>
               <div id="prazoADHEL" class="table scrolly"></div>
             </div>
           </div>
 
           <div class="prazo-col">
-            <div class="card">
+            <div class="card" data-card="doaga">
               <div class="card-title">
                 <h2>Prazo DO-AGA</h2>
-                <div class="card-title-meta">
-</div>
+                <div class="card-title-meta" id="cardMetaDoaga"></div>
               </div>
               <div id="prazoDOAGA" class="table scrolly"></div>
             </div>
