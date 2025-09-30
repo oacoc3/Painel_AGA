@@ -10,6 +10,7 @@ window.Modules.dashboard = (() => {
     'SOB-DOC',
     'SOB-TEC',
     'DECEA',
+    'AGD-RESP',
     'AGD-LEIT',
     'ICA-EXTR'
   ]);
