@@ -335,85 +335,128 @@ BEGIN
   END IF;
 
   ----------------------------------------------------------------
-  -- 9) Tabela para sinalizações de prazos (cards do módulo Prazos)
+  -- 9) Sinalizações dos cards de prazos (destacar itens VALIDADOS)
+  --     (Substitui a antiga proposta de deadline_signals)
   ----------------------------------------------------------------
   EXECUTE $sql$
-    CREATE TABLE IF NOT EXISTS public.deadline_signals (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      process_id uuid NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
+    CREATE TABLE IF NOT EXISTS public.deadline_flags (
+      id bigserial PRIMARY KEY,
+      process_id bigint NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
+      card text NOT NULL,
+      item_key text NOT NULL,
       nup text NOT NULL,
-      card_key text NOT NULL,
-      card_label text NOT NULL,
-      details jsonb,
-      flagged_by uuid,
-      flagged_at timestamptz DEFAULT timezone('America/Recife', now()),
-      rejected_by uuid,
-      rejected_at timestamptz,
-      rejection_note text
-    );
+      details jsonb DEFAULT '{}'::jsonb,
+      created_by uuid DEFAULT auth.uid(),
+      created_by_name text,
+      created_at timestamptz NOT NULL DEFAULT timezone('America/Recife', now()),
+      updated_at timestamptz NOT NULL DEFAULT timezone('America/Recife', now())
+    )
   $sql$;
 
   EXECUTE $sql$
-    ALTER TABLE public.deadline_signals
-      ADD COLUMN IF NOT EXISTS details jsonb;
+    CREATE UNIQUE INDEX IF NOT EXISTS deadline_flags_card_item_key_idx
+      ON public.deadline_flags (card, item_key)
   $sql$;
 
   EXECUTE $sql$
-    ALTER TABLE public.deadline_signals
-      ADD COLUMN IF NOT EXISTS flagged_by uuid;
+    CREATE INDEX IF NOT EXISTS deadline_flags_process_id_idx
+      ON public.deadline_flags (process_id)
   $sql$;
 
   EXECUTE $sql$
-    ALTER TABLE public.deadline_signals
-      ADD COLUMN IF NOT EXISTS flagged_at timestamptz;
+    ALTER TABLE public.deadline_flags
+      ALTER COLUMN created_by SET DEFAULT auth.uid()
   $sql$;
 
   EXECUTE $sql$
-    ALTER TABLE public.deadline_signals
-      ADD COLUMN IF NOT EXISTS rejected_by uuid;
+    ALTER TABLE public.deadline_flags
+      ALTER COLUMN created_at SET DEFAULT timezone('America/Recife', now())
   $sql$;
 
   EXECUTE $sql$
-    ALTER TABLE public.deadline_signals
-      ADD COLUMN IF NOT EXISTS rejected_at timestamptz;
+    ALTER TABLE public.deadline_flags
+      ALTER COLUMN updated_at SET DEFAULT timezone('America/Recife', now())
   $sql$;
 
-  EXECUTE $sql$
-    ALTER TABLE public.deadline_signals
-      ADD COLUMN IF NOT EXISTS rejection_note text;
-  $sql$;
-
-  EXECUTE $sql$
-    ALTER TABLE public.deadline_signals
-      ADD COLUMN IF NOT EXISTS card_label text;
-  $sql$;
-
-  EXECUTE $sql$
-    ALTER TABLE public.deadline_signals
-      ALTER COLUMN flagged_at SET DEFAULT timezone('America/Recife', now());
-  $sql$;
-
-  EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS deadline_signals_process_card ON public.deadline_signals(process_id, card_key)';
-
-  EXECUTE 'ALTER TABLE public.deadline_signals ENABLE ROW LEVEL SECURITY';
-
-  IF EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'deadline_signals'
-      AND policyname = 'deadline_signals_authenticated'
-  ) THEN
-    EXECUTE 'DROP POLICY deadline_signals_authenticated ON public.deadline_signals';
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_deadline_flags_set_updated_at') THEN
+    EXECUTE 'DROP TRIGGER trg_deadline_flags_set_updated_at ON public.deadline_flags';
   END IF;
 
   EXECUTE $sql$
-    CREATE POLICY deadline_signals_authenticated
-      ON public.deadline_signals
-      FOR ALL
-      USING (auth.uid() IS NOT NULL)
-      WITH CHECK (auth.uid() IS NOT NULL);
+    CREATE TRIGGER trg_deadline_flags_set_updated_at
+      BEFORE UPDATE ON public.deadline_flags
+      FOR EACH ROW
+      EXECUTE FUNCTION extensions.moddatetime(updated_at)
   $sql$;
+
+  EXECUTE 'ALTER TABLE public.deadline_flags ENABLE ROW LEVEL SECURITY';
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE  schemaname = 'public'
+      AND  tablename  = 'deadline_flags'
+      AND  policyname = 'deadline_flags_select_authenticated'
+  ) THEN
+    EXECUTE 'CREATE POLICY "deadline_flags_select_authenticated" ON public.deadline_flags FOR SELECT TO authenticated USING (true)';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE  schemaname = 'public'
+      AND  tablename  = 'deadline_flags'
+      AND  policyname = 'deadline_flags_insert_authenticated'
+  ) THEN
+    EXECUTE 'CREATE POLICY "deadline_flags_insert_authenticated" ON public.deadline_flags FOR INSERT TO authenticated WITH CHECK (true)';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE  schemaname = 'public'
+      AND  tablename  = 'deadline_flags'
+      AND  policyname = 'deadline_flags_update_owner'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "deadline_flags_update_owner"
+        ON public.deadline_flags
+        FOR UPDATE
+        TO authenticated
+        USING (
+          created_by = auth.uid()
+          OR EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.id = auth.uid() AND p.role = 'Administrador'
+          )
+        )
+        WITH CHECK (
+          created_by = auth.uid()
+          OR EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.id = auth.uid() AND p.role = 'Administrador'
+          )
+        )
+    $pol$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE  schemaname = 'public'
+      AND  tablename  = 'deadline_flags'
+      AND  policyname = 'deadline_flags_delete_admin'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "deadline_flags_delete_admin"
+        ON public.deadline_flags
+        FOR DELETE
+        TO authenticated
+        USING (
+          created_by = auth.uid()
+          OR EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.id = auth.uid() AND p.role = 'Administrador'
+          )
+        )
+    $pol$;
+  END IF;
 
 END
 $mig$;
-
