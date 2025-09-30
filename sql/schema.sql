@@ -579,5 +579,3 @@ BEGIN
 
 END
 $mig$;
-
-
