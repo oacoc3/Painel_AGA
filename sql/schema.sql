@@ -10,18 +10,18 @@ BEGIN
   ----------------------------------------------------------------
   EXECUTE 'CREATE SCHEMA IF NOT EXISTS extensions';
 
-  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto') THEN
-    EXECUTE 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions';
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = ''pgcrypto'') THEN
+    EXECUTE ''CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions'';
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'moddatetime') THEN
-    EXECUTE 'CREATE EXTENSION IF NOT EXISTS moddatetime WITH SCHEMA extensions';
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = ''moddatetime'') THEN
+    EXECUTE ''CREATE EXTENSION IF NOT EXISTS moddatetime WITH SCHEMA extensions'';
   END IF;
 
   ----------------------------------------------------------------
   -- 2) Fuso horário do banco
   ----------------------------------------------------------------
-  EXECUTE 'ALTER DATABASE ' || current_database() || ' SET TIMEZONE TO ''America/Recife''';
+  EXECUTE ''ALTER DATABASE '' || current_database() || '' SET TIMEZONE TO ''''America/Recife''''';
 
   ----------------------------------------------------------------
   -- 3) Função de normalização de NUP
@@ -336,12 +336,11 @@ BEGIN
 
   ----------------------------------------------------------------
   -- 9) Sinalizações dos cards de prazos (destacar itens VALIDADOS)
-  --     (Substitui a antiga proposta de deadline_signals)
   ----------------------------------------------------------------
   EXECUTE $sql$
     CREATE TABLE IF NOT EXISTS public.deadline_flags (
       id bigserial PRIMARY KEY,
-      process_id bigint NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
+      process_id uuid NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
       card text NOT NULL,
       item_key text NOT NULL,
       nup text NOT NULL,
