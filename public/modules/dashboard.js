@@ -46,44 +46,6 @@ window.Modules.dashboard = (() => {
   let cachedSigadaer = [];
   let cachedOpinions = [];
 
-  // === Adições do patch ===
-  const BRAZILIAN_DATE_TIME_RE = /^(\d{2})\/(\d{2})\/(\d{2,4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/;
-
-  function parseDateTime(value) {
-    if (!value) return null;
-    if (value instanceof Date) {
-      return Number.isNaN(+value) ? null : value;
-    }
-
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      // Tenta parse direto (ISO, RFC, etc.)
-      const direct = new Date(trimmed);
-      if (!Number.isNaN(+direct)) return direct;
-
-      // Tenta padrão brasileiro DD/MM/YYYY [HH:mm[:ss]]
-      const match = trimmed.match(BRAZILIAN_DATE_TIME_RE);
-      if (match) {
-        const day = Number(match[1]);
-        const month = Number(match[2]) - 1;
-        let year = Number(match[3]);
-        if (match[3].length === 2) year += 2000;
-        const hour = Number(match[4] || '0');
-        const minute = Number(match[5] || '0');
-        const second = Number(match[6] || '0');
-
-        const parsed = new Date(year, month, day, hour, minute, second);
-        if (!Number.isNaN(+parsed)) return parsed;
-      }
-    }
-
-    // Última tentativa
-    const fallback = new Date(value);
-    if (!Number.isNaN(+fallback)) return fallback;
-    return null;
-  }
-  // === Fim das adições ===
-
   function init() {
     const yearSelect = el('entryYearSelect');
     yearSelect?.addEventListener('change', () => {
@@ -243,11 +205,11 @@ window.Modules.dashboard = (() => {
             if (prev && prev.start === cur.start && prev.status === cur.status) continue;
           }
 
-          const startDate = parseDateTime(cur.start);
-          if (!startDate) continue;
+          const startDate = new Date(cur.start);
+          if (Number.isNaN(+startDate)) continue;
           const next = list[i + 1];
-          const endDate = next && next.start ? parseDateTime(next.start) : now;
-          if (!endDate) continue;
+          const endDate = next && next.start ? new Date(next.start) : now;
+          if (Number.isNaN(+endDate)) continue;
 
           const startYear = startDate.getFullYear();
           const endYear = endDate.getFullYear();
@@ -317,8 +279,8 @@ window.Modules.dashboard = (() => {
           if (prev && prev.start === cur.start && prev.status === cur.status) continue;
         }
 
-        const startDate = parseDateTime(cur.start);
-        if (!startDate || startDate.getFullYear() !== year) continue;
+        const startDate = new Date(cur.start);
+        if (Number.isNaN(+startDate) || startDate.getFullYear() !== year) continue;
 
         if (cur.status === 'ANADOC') counters.anadoc += 1;
         if (cur.status === 'ANATEC-PRE') counters.anatecPre += 1;
@@ -326,22 +288,15 @@ window.Modules.dashboard = (() => {
       }
     });
 
+    // === AJUSTE: Notificações contam apenas por requested_at (data efetiva do pedido) ===
     (cachedNotifications || []).forEach(notification => {
       if (!notification) return;
-      const { requested_at: requestedAt, read_at: readAt } = notification;
+      const { requested_at: requestedAt } = notification;
+      if (!requestedAt) return;
 
-      if (requestedAt) {
-        const requestedDate = new Date(requestedAt);
-        if (!Number.isNaN(+requestedDate) && requestedDate.getFullYear() === year) {
-          counters.notifications += 1;
-        }
-      }
-
-      if (readAt) {
-        const readDate = new Date(readAt);
-        if (!Number.isNaN(+readDate) && readDate.getFullYear() === year) {
-          counters.notifications += 1;
-        }
+      const requestedDate = new Date(requestedAt);
+      if (!Number.isNaN(+requestedDate) && requestedDate.getFullYear() === year) {
+        counters.notifications += 1;
       }
     });
 
@@ -389,8 +344,8 @@ window.Modules.dashboard = (() => {
 
     const registerDate = dateValue => {
       if (!dateValue) return;
-      const dt = parseDateTime(dateValue);
-      if (!dt) return;
+      const dt = dateValue instanceof Date ? dateValue : new Date(dateValue);
+      if (!dt || Number.isNaN(+dt)) return;
       if (dt.getFullYear() !== year) return;
       const hour = dt.getHours();
       if (!Number.isInteger(hour) || hour < 0 || hour > 23) return;
@@ -539,15 +494,7 @@ window.Modules.dashboard = (() => {
         const already = list.some(entry => entry.status === proc.status && entry.start === proc.status_since);
         if (!already) list.push({ status: proc.status, start: proc.status_since });
       }
-      // Substituição do sort pelo parseDateTime
-      list.sort((a, b) => {
-        const da = parseDateTime(a.start);
-        const db = parseDateTime(b.start);
-        if (!da && !db) return 0;
-        if (!da) return 1;
-        if (!db) return -1;
-        return da - db;
-      });
+      list.sort((a, b) => new Date(a.start) - new Date(b.start));
     });
 
     cachedStatusHistory = byProc;
