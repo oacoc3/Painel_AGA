@@ -600,5 +600,31 @@ BEGIN
     $pol$;
   END IF;
 
+  ----------------------------------------------------------------
+  -- SIGADAER: garantir colunas de município/UF (para integração com IBGE)
+  ----------------------------------------------------------------
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'sigadaer'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'sigadaer'
+        AND column_name = 'municipality_name'
+    ) THEN
+      EXECUTE 'ALTER TABLE public.sigadaer ADD COLUMN municipality_name text';
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'sigadaer'
+        AND column_name = 'municipality_uf'
+    ) THEN
+      EXECUTE 'ALTER TABLE public.sigadaer ADD COLUMN municipality_uf text';
+    END IF;
+  END IF;
+
 END
 $mig$;
