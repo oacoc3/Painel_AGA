@@ -36,7 +36,6 @@ window.Modules.dashboard = (() => {
   };
   const MONTH_LABELS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
   const YEARLY_COUNTER_FORMATTER = new Intl.NumberFormat('pt-BR');
-  const PERCENTAGE_FORMATTER = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 
   const OPINION_TYPES_SET = new Set(['ATM', 'DT', 'CGNA']);
 
@@ -114,7 +113,7 @@ window.Modules.dashboard = (() => {
         if (Number.isFinite(y)) yearSet.add(y);
       }
     }
-    // status history (usa start)
+    // status history (usa start/status_since)
     for (const list of Object.values(cachedStatusHistory)) {
       for (const item of list) {
         const y = new Date(item.start).getFullYear();
@@ -218,7 +217,7 @@ window.Modules.dashboard = (() => {
       return;
     }
 
-    // conta quantos processos estiveram em cada status no ano (pelo início do trecho)
+    // conta quantos processos iniciaram cada status no ano (pelo início do trecho)
     const countMap = {};
     Object.values(cachedStatusHistory).forEach(list => {
       for (let i = 0; i < list.length; i++) {
@@ -231,7 +230,7 @@ window.Modules.dashboard = (() => {
       }
     });
 
-    // médias por status (dias corridos)
+    // médias por status (dias corridos) — baseadas no início efetivo (status_since)
     const agg = {};
     const now = new Date();
     for (const list of Object.values(cachedStatusHistory)) {
@@ -246,7 +245,7 @@ window.Modules.dashboard = (() => {
         if (Number.isNaN(+endDate)) continue;
 
         const startYear = startDate.getFullYear();
-        // Novo critério: conta se o início é no ano selecionado e corta o fim no limite do ano
+        // Novo critério: entra se o início é no ano; corta no fim do ano
         if (startYear !== year) continue;
         const yearEnd = new Date(year + 1, 0, 1); // 01/jan do ano seguinte
         const limitedEnd = endDate > yearEnd ? yearEnd : endDate;
@@ -270,11 +269,9 @@ window.Modules.dashboard = (() => {
         label,
         count: countMap[s] || 0,
         avg: agg[s] ? (agg[s].sum / agg[s].n) : null,
-        ariaLabel: `Velocidade média de ${label}`
       };
     });
 
-    // max para largura proporcional (sem alterar visual)
     const maxAvg = Math.max(...items.map(it => (typeof it.avg === 'number' ? it.avg : 0)), 0) || 0;
     container.innerHTML = '';
     if (!items.some(it => typeof it.avg === 'number')) {
@@ -300,7 +297,6 @@ window.Modules.dashboard = (() => {
       } else {
         value.textContent = '— dias';
       }
-      value.setAttribute('aria-label', it.ariaLabel);
 
       const bar = document.createElement('div');
       bar.className = 'speed-bar';
@@ -379,9 +375,7 @@ window.Modules.dashboard = (() => {
       const v = document.createElement('div');
       v.className = 'value';
       v.textContent = YEARLY_COUNTER_FORMATTER.format(value || 0);
-      card.appendChild(h);
-      card.appendChild(v);
-      return card;
+      return card.appendChild(h), card.appendChild(v), card;
     }
 
     wrap.appendChild(statCard('Notificações solicitadas', counters.notifications_requested));
@@ -426,32 +420,13 @@ window.Modules.dashboard = (() => {
       counts[hour] += 1;
     };
 
-    // Base de datas para engajamento por hora:
-    // - first_entry_date
-    // - requested_at / read_at (notificações)
-    // - requested_at / expedit_at (sigadaer)
-    // - requested_at de pareceres internos
-    // - início de cada status (status_since) do histórico
-    for (const p of cachedProcesses) {
-      registerDate(p?.first_entry_date);
-    }
-    for (const n of cachedNotifications) {
-      registerDate(n?.requested_at);
-      registerDate(n?.read_at);
-    }
-    for (const s of cachedSigadaer) {
-      registerDate(s?.requested_at);
-      registerDate(s?.expedit_at);
-    }
-    for (const o of cachedOpinions) {
-      if (!o?.type || !OPINION_TYPES_SET.has(o.type)) continue;
-      registerDate(o?.requested_at);
-    }
-    for (const list of Object.values(cachedStatusHistory)) {
-      for (const it of list) registerDate(it?.start);
-    }
+    // Datas consideradas (todas com base em quando ocorreram de fato)
+    for (const p of cachedProcesses) registerDate(p?.first_entry_date);
+    for (const n of cachedNotifications) { registerDate(n?.requested_at); registerDate(n?.read_at); }
+    for (const s of cachedSigadaer) { registerDate(s?.requested_at); registerDate(s?.expedit_at); }
+    for (const o of cachedOpinions) { if (OPINION_TYPES_SET.has(o?.type)) registerDate(o?.requested_at); }
+    for (const list of Object.values(cachedStatusHistory)) for (const it of list) registerDate(it?.start);
 
-    // Render simples (sem mudar visual)
     container.innerHTML = '';
     const total = sumBy(counts, v => v);
     if (!total) {
@@ -480,7 +455,17 @@ window.Modules.dashboard = (() => {
   }
 
   async function load() {
-    const sb = window.supabaseClient;
+    // Tenta obter o cliente; se ainda não existir, espera eventos e sai sem erro
+    const sb = window.supabaseClient || window.supabase;
+    if (!sb) {
+      const once = (ev, fn) => document.addEventListener(ev, fn, { once: true });
+      const relaunch = () => window.Modules?.dashboard?.load && window.Modules.dashboard.load();
+      once('auth-ready', relaunch);
+      once('supabase-ready', relaunch);
+      console.warn('[dashboard] Supabase client ainda não disponível; aguardando evento auth-ready/supabase-ready.');
+      return;
+    }
+
     const prevYear = el('entryYearSelect')?.value ? Number(el('entryYearSelect').value) : undefined;
 
     const { data: procs } = await sb
@@ -507,7 +492,7 @@ window.Modules.dashboard = (() => {
       .select('type, requested_at');
     cachedOpinions = opinions || [];
 
-    // Velocidade média — montar histórico de status por processo (usando 'history')
+    // Histórico de status: usar 'details.status_since' quando disponível
     const ids = (procs || []).map(p => p.id);
     const byProc = {};
     if (ids.length) {
@@ -521,14 +506,14 @@ window.Modules.dashboard = (() => {
         const pid = h.process_id;
         const det = h.details || {};
         const status = det.status;
-        const start = det.status_since || h.created_at; // usa data efetiva quando houver
+        const start = det.status_since || h.created_at; // data efetiva de início
         if (!pid || !status || !start) continue;
         byProc[pid] = byProc[pid] || [];
         byProc[pid].push({ status, start });
       }
     }
 
-    // garante o status atual como último ponto (se ainda não presente)
+    // Garante o status atual como último ponto (se ainda não presente)
     (procs || []).forEach(proc => {
       const list = byProc[proc.id] = byProc[proc.id] || [];
       if (proc?.status && proc?.status_since) {
