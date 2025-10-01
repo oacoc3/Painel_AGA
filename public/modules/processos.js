@@ -1630,7 +1630,10 @@ function normalizeNupToBankFormat(input) {
     if (prazoDias !== null) payload.deadline_days = prazoDias;
     try {
       const u = await getUser();
-      if (!u) return U.setMsg('sgCadMsg', 'Sessão expirada.', true);
+      if (!u) {
+        U.setMsg('sgCadMsg', 'Sessão expirada.', true);
+        return;
+      }
       const { error } = await sb.from('sigadaer').insert({ ...payload, created_by: u.id });
       if (error) throw error;
       try {
