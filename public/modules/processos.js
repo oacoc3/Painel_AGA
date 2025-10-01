@@ -86,30 +86,6 @@ function normalizeNupToBankFormat(input) {
     ['COMGAP', 90]
   ]);
 
-  // Lista de municípios (carregada do IBGE em tempo de execução)
-  async function loadMunicipiosSelect(selectEl) {
-    if (!selectEl) return;
-    selectEl.innerHTML = '<option value="">Carregando municípios…</option>';
-    try {
-      const resp = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/municipios?orderBy=nome');
-      if (!resp.ok) throw new Error('Falha ao consultar IBGE');
-      const arr = await resp.json();
-      // arr[i].nome, arr[i].microrregiao.mesorregiao.UF.sigla
-      const options = arr.map(m => {
-        const uf = (((m||{}).microrregiao||{}).mesorregiao||{}).UF?.sigla || '';
-        const nome = m.nome || '';
-        const value = `${nome}|${uf}`;
-        return `<option value="${value}">${nome} - ${uf}</option>`;
-      }).join('');
-      selectEl.innerHTML = '<option value="">Selecione…</option>' + options;
-    } catch (e) {
-      console.error('IBGE municípios erro:', e);
-      selectEl.innerHTML = '<option value="">Não foi possível carregar os municípios</option>';
-      selectEl.disabled = true;
-    }
-  }
-
-
   const CLIPBOARD_ICON = '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="m10 16 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
   const el = (id) => document.getElementById(id);
@@ -1429,10 +1405,6 @@ function normalizeNupToBankFormat(input) {
         <label>Prazo (dias)
           <input type="number" id="sgPrazo" min="0" step="1" placeholder="30">
         </label>
-
-        <label>Município (UF)
-          <select id="sgMunicipio"></select>
-        </label>
         <label>Solicitada em <input type="datetime-local" id="sgSolic"></label>
         <menu>
           <button id="btnSalvarSg" type="button">Salvar</button>
@@ -1441,9 +1413,6 @@ function normalizeNupToBankFormat(input) {
         <div id="sgCadMsg" class="msg"></div>
       </form>`;
     document.body.appendChild(dlg);
-    // Carregar municípios no dropdown (IBGE)
-    loadMunicipiosSelect(dlg.querySelector('#sgMunicipio'));
-
     dlg.addEventListener('close', () => dlg.remove());
     const tipoSelect = dlg.querySelector('#sgTipo');
     const prazoInput = dlg.querySelector('#sgPrazo');
@@ -1480,23 +1449,13 @@ function normalizeNupToBankFormat(input) {
     const prazoTexto = dlg.querySelector('#sgPrazo')?.value || '';
     const prazoDiasValor = prazoTexto ? parseInt(prazoTexto, 10) : NaN;
     const prazoDias = Number.isNaN(prazoDiasValor) || prazoDiasValor <= 0 ? null : prazoDiasValor;
-    
-    const municipioSel = dlg.querySelector('#sgMunicipio')?.value || '';
-    let municipio = null, uf = null;
-    if (municipioSel && municipioSel.includes('|')) {
-      const parts = municipioSel.split('|');
-      municipio = parts[0] || null;
-      uf = parts[1] || null;
-    }
-const payload = {
+    const payload = {
       process_id: procId,
       type: tipo,
       requested_at: solicitadaEm ? new Date(solicitadaEm).toISOString() : new Date().toISOString(),
       status: 'SOLICITADO',
-      numbers: numeros,
-    
-      municipality: municipio,
-      uf: uf};
+      numbers: numeros
+    };
     if (prazoDias !== null) payload.deadline_days = prazoDias;
     try {
       const u = await getUser();
