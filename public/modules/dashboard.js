@@ -288,22 +288,15 @@ window.Modules.dashboard = (() => {
       }
     });
 
+    // === AJUSTE: Notificações contam apenas por requested_at (data efetiva do pedido) ===
     (cachedNotifications || []).forEach(notification => {
       if (!notification) return;
-      const { requested_at: requestedAt, read_at: readAt } = notification;
+      const { requested_at: requestedAt } = notification;
+      if (!requestedAt) return;
 
-      if (requestedAt) {
-        const requestedDate = new Date(requestedAt);
-        if (!Number.isNaN(+requestedDate) && requestedDate.getFullYear() === year) {
-          counters.notifications += 1;
-        }
-      }
-
-      if (readAt) {
-        const readDate = new Date(readAt);
-        if (!Number.isNaN(+readDate) && readDate.getFullYear() === year) {
-          counters.notifications += 1;
-        }
+      const requestedDate = new Date(requestedAt);
+      if (!Number.isNaN(+requestedDate) && requestedDate.getFullYear() === year) {
+        counters.notifications += 1;
       }
     });
 
