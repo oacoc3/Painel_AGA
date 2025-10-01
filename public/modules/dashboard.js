@@ -46,6 +46,10 @@ window.Modules.dashboard = (() => {
   let cachedSigadaer = [];
   let cachedOpinions = [];
 
+  function el(id) {
+    return document.getElementById(id);
+  }
+
   function init() {
     const yearSelect = el('entryYearSelect');
     yearSelect?.addEventListener('change', () => {
@@ -314,7 +318,7 @@ window.Modules.dashboard = (() => {
       const normalizedType = typeof type === 'string' ? type.toUpperCase() : '';
       if (normalizedType === 'JJAER') counters.sigadaerJjaer += 1;
       if (normalizedType === 'AGU') counters.sigadaerAgu += 1;
-      if (normalizedType === 'PREF') counters.sigadaerPref += 1; // <-- incluído
+      if (normalizedType === 'PREF') counters.sigadaerPref += 1; // incluído
     });
 
     Object.entries(metricEls).forEach(([key, node]) => {
@@ -398,20 +402,26 @@ window.Modules.dashboard = (() => {
     bars.className = 'bar-chart-bars';
     bars.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
 
+    // >>> Patch aplicado: destaque de "fora do expediente" (antes de 08h ou a partir de 16h)
+    let offHoursCount = 0;
+
     counts.forEach((value, hour) => {
       const percent = (value / total) * 100;
       const item = document.createElement('div');
       item.className = 'bar-chart-item';
 
-      const valueNode = document.createElement('span');
-      valueNode.className = 'bar-chart-value';
-      valueNode.textContent = `${PERCENTAGE_FORMATTER.format(percent)}%`;
+      const isOffHours = hour < 8 || hour >= 16;
+      if (isOffHours) {
+        item.classList.add('off-hours');
+        offHoursCount += value;
+      }
 
       const wrapper = document.createElement('div');
       wrapper.className = 'bar-chart-bar-wrapper';
 
       const bar = document.createElement('div');
       bar.className = 'bar-chart-bar';
+      if (isOffHours) bar.classList.add('off-hours');
       let heightPercent = maxPercent ? (percent / maxPercent) * 100 : 0;
       if (percent > 0 && heightPercent < 8) heightPercent = 8;
       bar.style.height = `${heightPercent}%`;
@@ -423,13 +433,31 @@ window.Modules.dashboard = (() => {
       label.className = 'bar-chart-label';
       label.textContent = `${String(hour).padStart(2, '0')}h`;
 
-      item.appendChild(valueNode);
+      // Removido: nó de valor percentual no topo (conforme patch)
       item.appendChild(wrapper);
       item.appendChild(label);
       bars.appendChild(item);
     });
 
     container.appendChild(bars);
+
+    // Resumo "Fora do expediente"
+    const offHoursPercent = (offHoursCount / total) * 100;
+    const summary = document.createElement('div');
+    summary.className = 'hourly-engagement-summary';
+
+    const summaryLabel = document.createElement('span');
+    summaryLabel.className = 'hourly-engagement-summary-label';
+    summaryLabel.textContent = 'Fora do expediente';
+
+    const summaryValue = document.createElement('strong');
+    summaryValue.className = 'hourly-engagement-summary-value';
+    summaryValue.textContent = `${PERCENTAGE_FORMATTER.format(offHoursPercent)}%`;
+
+    summary.appendChild(summaryLabel);
+    summary.appendChild(summaryValue);
+    container.appendChild(summary);
+    // <<< Patch aplicado
   }
 
   async function load() {
@@ -506,6 +534,8 @@ window.Modules.dashboard = (() => {
     renderOverview();
     renderYearlyActivity();
     renderHourlyEngagement();
+
+    if (yearSelect) yearSelect.disabled = false;
   }
 
   return { init, load };
