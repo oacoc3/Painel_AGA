@@ -1493,7 +1493,7 @@ const payload = {
       type: tipo,
       requested_at: solicitadaEm ? new Date(solicitadaEm).toISOString() : new Date().toISOString(),
       status: 'SOLICITADO',
-      numbers: numeros
+      numbers: numeros,
     
       municipality: municipio,
       uf: uf};
