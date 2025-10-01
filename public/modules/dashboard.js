@@ -375,7 +375,9 @@ window.Modules.dashboard = (() => {
       const v = document.createElement('div');
       v.className = 'value';
       v.textContent = YEARLY_COUNTER_FORMATTER.format(value || 0);
-      return card.appendChild(h), card.appendChild(v), card;
+      card.appendChild(h);
+      card.appendChild(v);
+      return card;
     }
 
     wrap.appendChild(statCard('Notificações solicitadas', counters.notifications_requested));
@@ -455,14 +457,14 @@ window.Modules.dashboard = (() => {
   }
 
   async function load() {
-    // Tenta obter o cliente; se ainda não existir, espera eventos e sai sem erro
-    const sb = window.supabaseClient || window.supabase;
+    // Usa apenas a instância do cliente criada em supabaseClient.js
+    const sb = window.supabaseClient;
     if (!sb) {
       const once = (ev, fn) => document.addEventListener(ev, fn, { once: true });
       const relaunch = () => window.Modules?.dashboard?.load && window.Modules.dashboard.load();
       once('auth-ready', relaunch);
       once('supabase-ready', relaunch);
-      console.warn('[dashboard] Supabase client ainda não disponível; aguardando evento auth-ready/supabase-ready.');
+      console.warn('[dashboard] Supabase client ainda não disponível; aguardando auth-ready/supabase-ready.');
       return;
     }
 
