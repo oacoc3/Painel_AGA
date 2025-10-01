@@ -3,46 +3,40 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Base na raiz para resolver caminhos de assets -->
   <base href="/" />
   <title>Painel DO-AGA</title>
-
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
-  <!-- CSS específico do módulo Processos (apenas layout do módulo) -->
-  <link rel="stylesheet" href="./styles.processos.css" />
-
   <!-- App config -->
   <script src="./config.js" defer></script>
-  <!-- Supabase library -->
+  <!-- Supabase library (Biblioteca cliente do Supabase) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
   <!-- Inicialização do cliente Supabase -->
   <script src="./supabaseClient.js" defer></script>
   <!-- Sessão pronta antes de inicializar a página -->
   <script src="./auth-ready.js" defer></script>
   <script src="./utils.js" defer></script>
+  <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
-  <script src="./mpa.js" defer></script>
-   <script src="./modules/checklists/pdf.js" defer></script>
+  <!-- Tabelas estáticas -->
   <script src="./modules/statuses.js" defer></script>
-  <script src="./modules/processos.js" defer></script>
+  <!-- Módulo do Dashboard -->
+  <script src="./modules/dashboard.js" defer></script>
 </head>
-<body data-route="processos">
+<body data-route="dashboard">
   <div id="app" class="vh">
     <header class="bar">
       <div class="brand">
         <span class="logo">■</span>
         <strong>Painel DO-AGA</strong>
-        <small class="build" id="buildInfo">build…</small>
+        <small class="build" id="buildInfo">build: carregando…</small>
       </div>
       <nav id="topNav" class="nav hidden">
-        <button data-route="dashboard">Início</button>
-        <button data-route="processos" class="active">Processos</button>
+        <button data-route="dashboard" class="active">Início</button>
+        <button data-route="processos">Processos</button>
         <button data-route="prazos">Prazos</button>
-        <button data-route="modelos">Modelos</button>
-        <button data-route="analise">Documental</button>
-        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
+        <button data-route="analise">Análise</button>
+        <button id="btnAdmin" data-route="admin">Admin</button>
       </nav>
       <div id="userBox" class="user hidden">
         <span id="userName"></span>
@@ -52,29 +46,97 @@
     </header>
 
     <main class="main">
-      <section id="viewProcessos" class="view">
-        <div class="split processos">
-          <!-- COLUNA ESQUERDA: Formulário de processo -->
+      <section id="viewDashboard" class="view">
+        <div class="grid">
           <div class="card">
-            <h2>Busca</h2>
-
-            <form id="formProc" data-ajax>
-              <div class="row">
-                <label class="grow">NUP <input id="procNUP" required placeholder="000000/0000-00"></label>
-              </div>
-              <div class="row">
-                <button id="btnBuscarProc" type="button">Buscar</button>
-                <button id="btnLimparProc" type="button">Limpar</button>
-              </div>
-
-              <div id="procMsg" class="msg"></div>
-            </form>
+            <h2>Tempo médio por etapa</h2>
+            <div id="velocimetros" class="velocimetros"></div>
           </div>
+          <div class="dashboard-col">
+            <div class="card chart-card">
+              <div class="card-title">
+                <h2>Novos processos</h2>
+                <div class="card-title-meta">
+                  <label for="entryYearSelect" class="muted">Ano</label>
+                  <select id="entryYearSelect">
+                    <option value="">—</option>
+                    <option>2022</option>
+                    <option>2023</option>
+                    <option selected>2024</option>
+                    <option>2025</option>
+                  </select>
+                  <div class="muted">
+                    <span>Total no ano:&nbsp;</span>
+                    <strong id="entryYearTotal">—</strong>
+                  </div>
+                </div>
+              </div>
+              <div id="chartEntriesByMonth" class="bar-chart">
+                <p class="muted chart-placeholder">Carregando…</p>
+              </div>
+            </div>
 
-          <!-- COLUNA DO MEIO: Lista de processos -->
-          <div class="card">
-            <h2>Processos</h2>
-            <div id="procLista" class="table scrolly"></div>
+            <div class="card metrics-card">
+              <h2>Atividades</h2>
+              <div class="metrics-grid">
+                <div class="metric">
+                  <span class="metric-label">
+                    <span class="metric-label-line">Análises</span>
+                    <span class="metric-label-line">documentais</span>
+                  </span>
+                  <strong class="metric-value" id="metricAnadoc">—</strong>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">
+                    <span class="metric-label-line">Análises técnicas</span>
+                    <span class="metric-label-line">preliminares</span>
+                  </span>
+                  <strong class="metric-value" id="metricAnatecPre">—</strong>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">
+                    <span class="metric-label-line">Análises</span>
+                    <span class="metric-label-line">técnicas</span>
+                  </span>
+                  <strong class="metric-value" id="metricAnatec">—</strong>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">
+                    <span class="metric-label-line">Notificações</span>
+                    <span class="metric-label-line">confeccionadas</span>
+                  </span>
+                  <strong class="metric-value" id="metricNotif">—</strong>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">
+                    <span class="metric-label-line">Processos</span>
+                    <span class="metric-label-line">JJAer</span>
+                  </span>
+                  <strong class="metric-value" id="dashboardMetricSigadaerJjaer">—</strong>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">
+                    <span class="metric-label-line">Processos</span>
+                    <span class="metric-label-line">AGU</span>
+                  </span>
+                  <strong class="metric-value" id="dashboardMetricSigadaerAgu">—</strong>
+                  <!-- Elemento oculto para consolidado de SIGADAER (requerido pelo JS), sem alterar o visual -->
+                  <span id="metricSig" style="display:none">—</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card chart-card">
+              <div class="card-title">
+                <h2>Engajamento por hora</h2>
+                <div class="card-title-meta">
+                  <span class="muted">Distribuição percentual de eventos</span>
+                </div>
+              </div>
+              <div id="hourlyEngagement" class="bar-chart hourly-engagement-chart">
+                <p class="muted chart-placeholder">Carregando…</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -87,6 +149,7 @@
     </footer>
   </div>
 
+  <!-- Preenche build no cabeçalho e rodapé -->
   <script defer src="./build-info-client.js"></script>
 </body>
 </html>
