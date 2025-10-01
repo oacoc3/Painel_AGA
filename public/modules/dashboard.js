@@ -36,11 +36,15 @@ window.Modules.dashboard = (() => {
   };
   const MONTH_LABELS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
   const YEARLY_COUNTER_FORMATTER = new Intl.NumberFormat('pt-BR');
+  const PERCENTAGE_FORMATTER = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+
+  const OPINION_TYPES_SET = new Set(['ATM', 'DT', 'CGNA']);
 
   let cachedProcesses = [];
   let cachedStatusHistory = {};
   let cachedNotifications = [];
   let cachedSigadaer = [];
+  let cachedOpinions = [];
 
   function init() {
     const yearSelect = el('entryYearSelect');
@@ -48,6 +52,7 @@ window.Modules.dashboard = (() => {
       renderEntryChart();
       renderOverview();
       renderYearlyActivity();
+      renderHourlyEngagement();
     });
   }
 
@@ -321,14 +326,125 @@ window.Modules.dashboard = (() => {
     });
   }
 
+  function renderHourlyEngagementEmpty(message = 'Nenhum dado para exibir.') {
+    const container = el('hourlyEngagementChart');
+    if (!container) return;
+    container.innerHTML = '';
+    const msg = document.createElement('p');
+    msg.className = 'muted chart-placeholder';
+    msg.textContent = message;
+    container.appendChild(msg);
+  }
+
+  function renderHourlyEngagement() {
+    const container = el('hourlyEngagementChart');
+    if (!container) return;
+
+    const select = el('entryYearSelect');
+    const year = select && select.value ? Number(select.value) : NaN;
+    if (!Number.isFinite(year)) {
+      renderHourlyEngagementEmpty('Nenhum dado para exibir.');
+      return;
+    }
+
+    const counts = new Array(24).fill(0);
+
+    const registerDate = dateValue => {
+      if (!dateValue) return;
+      const dt = dateValue instanceof Date ? dateValue : new Date(dateValue);
+      if (!dt || Number.isNaN(+dt)) return;
+      if (dt.getFullYear() !== year) return;
+      const hour = dt.getHours();
+      if (!Number.isInteger(hour) || hour < 0 || hour > 23) return;
+      counts[hour] += 1;
+    };
+
+    Object.values(cachedStatusHistory || {}).forEach(list => {
+      if (!Array.isArray(list)) return;
+      for (let i = 0; i < list.length; i++) {
+        const cur = list[i];
+        if (!cur || !cur.start || !cur.status) continue;
+        if (i > 0) {
+          const prev = list[i - 1];
+          if (prev && prev.start === cur.start && prev.status === cur.status) continue;
+        }
+        registerDate(cur.start);
+      }
+    });
+
+    (cachedSigadaer || []).forEach(item => {
+      if (!item) return;
+      if (item.requested_at) registerDate(item.requested_at);
+      if (item.status === 'EXPEDIDO' && item.expedit_at) registerDate(item.expedit_at);
+    });
+
+    (cachedOpinions || []).forEach(opinion => {
+      if (!opinion) return;
+      const type = typeof opinion.type === 'string' ? opinion.type.toUpperCase() : '';
+      if (!OPINION_TYPES_SET.has(type)) return;
+      if (opinion.requested_at) registerDate(opinion.requested_at);
+    });
+
+    const total = counts.reduce((sum, value) => sum + value, 0);
+    if (!total) {
+      renderHourlyEngagementEmpty('Nenhum evento registrado para o ano selecionado.');
+      return;
+    }
+
+    const maxPercent = counts.reduce((max, value) => {
+      const pct = (value / total) * 100;
+      return pct > max ? pct : max;
+    }, 0);
+
+    container.innerHTML = '';
+    const bars = document.createElement('div');
+    bars.className = 'bar-chart-bars';
+    bars.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
+
+    counts.forEach((value, hour) => {
+      const percent = (value / total) * 100;
+      const item = document.createElement('div');
+      item.className = 'bar-chart-item';
+
+      const valueNode = document.createElement('span');
+      valueNode.className = 'bar-chart-value';
+      valueNode.textContent = `${PERCENTAGE_FORMATTER.format(percent)}%`;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'bar-chart-bar-wrapper';
+
+      const bar = document.createElement('div');
+      bar.className = 'bar-chart-bar';
+      let heightPercent = maxPercent ? (percent / maxPercent) * 100 : 0;
+      if (percent > 0 && heightPercent < 8) heightPercent = 8;
+      bar.style.height = `${heightPercent}%`;
+      bar.title = `${String(hour).padStart(2, '0')}h: ${value} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
+
+      wrapper.appendChild(bar);
+
+      const label = document.createElement('span');
+      label.className = 'bar-chart-label';
+      label.textContent = `${String(hour).padStart(2, '0')}h`;
+
+      item.appendChild(valueNode);
+      item.appendChild(wrapper);
+      item.appendChild(label);
+      bars.appendChild(item);
+    });
+
+    container.appendChild(bars);
+  }
+
   async function load() {
     renderEntryChartEmpty('Carregando…');
+    renderHourlyEngagementEmpty('Carregando…');
     const yearSelect = el('entryYearSelect');
     if (yearSelect) yearSelect.disabled = true;
 
     cachedStatusHistory = {};
     cachedNotifications = [];
     cachedSigadaer = [];
+    cachedOpinions = [];
 
     const { data: procs } = await sb
       .from('processes')
@@ -346,8 +462,13 @@ window.Modules.dashboard = (() => {
 
     const { data: sigadaer } = await sb
       .from('sigadaer')
-      .select('type, status, expedit_at');
+      .select('type, status, requested_at, expedit_at');
     cachedSigadaer = sigadaer || [];
+
+    const { data: opinions } = await sb
+      .from('internal_opinions')
+      .select('type, requested_at');
+    cachedOpinions = opinions || [];
 
     // Velocidade média — montar histórico de status por processo (usando 'history')
     const ids = (procs || []).map(p => p.id);
@@ -387,6 +508,7 @@ window.Modules.dashboard = (() => {
 
     renderOverview();
     renderYearlyActivity();
+    renderHourlyEngagement();
   }
 
   return { init, load };
