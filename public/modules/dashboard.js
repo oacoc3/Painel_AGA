@@ -46,6 +46,94 @@ window.Modules.dashboard = (() => {
   let cachedSigadaer = [];
   let cachedOpinions = [];
 
+  // =========================
+  // Helpers de datas do patch
+  // =========================
+  function parseDateValue(value) {
+    if (!value) return null;
+    if (value instanceof Date) {
+      return Number.isNaN(+value) ? null : value;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      const dt = new Date(value);
+      return Number.isNaN(+dt) ? null : dt;
+    }
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const dateOnly = Utils.dateOnly(trimmed);
+      return dateOnly && !Number.isNaN(+dateOnly) ? dateOnly : null;
+    }
+    const dt = new Date(trimmed);
+    return Number.isNaN(+dt) ? null : dt;
+  }
+
+  function normalizeDateInput(value) {
+    const dt = parseDateValue(value);
+    return dt ? dt.toISOString() : null;
+  }
+
+  function getDateKeyWeight(key) {
+    const lower = String(key || '').toLowerCase();
+    if (!lower || lower.includes('due')) return 0;
+    if (lower.includes('created_at') || lower.includes('updated_at')) return 0;
+    if (lower.includes('status') && lower.includes('since')) return 100;
+    if (lower.includes('status') && (lower.includes('desde') || lower.includes('início') || lower.includes('inicio'))) return 95;
+    if (lower.includes('start') && !lower.includes('started_by')) return 90;
+    if (lower.includes('evento') || lower.includes('event')) return 80;
+    if (lower.includes('data_hora')) return 75;
+    if (lower.includes('data') && (
+      lower.includes('receb') ||
+      lower.includes('termin') ||
+      lower.includes('leitur') ||
+      lower.includes('inser') ||
+      lower.includes('exped') ||
+      lower.includes('public')
+    )) return 70;
+    if (lower.endsWith('_at')) return 60;
+    if (lower.includes('data')) return 50;
+    if (lower.includes('date')) return 40;
+    return 0;
+  }
+
+  function extractEventDate(details) {
+    if (!details || typeof details !== 'object') return null;
+    const queue = [details];
+    const seen = new Set();
+    let best = null;
+
+    while (queue.length) {
+      const current = queue.shift();
+      if (!current || typeof current !== 'object') continue;
+      if (seen.has(current)) continue;
+      seen.add(current);
+
+      const entries = Array.isArray(current)
+        ? current.map((value, index) => [String(index), value])
+        : Object.entries(current);
+
+      entries.forEach(([key, value]) => {
+        if (value && typeof value === 'object') {
+          queue.push(value);
+        }
+        const weight = getDateKeyWeight(key);
+        if (!weight) return;
+
+        const parsed = parseDateValue(value);
+        if (!parsed) return;
+
+        if (!best || weight > best.weight || (weight === best.weight && parsed < best.date)) {
+          best = { date: parsed, weight };
+        }
+      });
+    }
+
+    return best ? best.date : null;
+  }
+
+  // =========================
+
   function init() {
     const yearSelect = el('entryYearSelect');
     yearSelect?.addEventListener('change', () => {
@@ -195,6 +283,8 @@ window.Modules.dashboard = (() => {
     const agg = {};
     const now = new Date();
     if (hasYear) {
+      const yearStart = new Date(year, 0, 1);
+      const yearEnd = new Date(year + 1, 0, 1);
       Object.values(cachedStatusHistory || {}).forEach(list => {
         if (!Array.isArray(list)) return;
         for (let i = 0; i < list.length; i++) {
@@ -207,15 +297,16 @@ window.Modules.dashboard = (() => {
 
           const startDate = new Date(cur.start);
           if (Number.isNaN(+startDate)) continue;
+          if (startDate < yearStart || startDate >= yearEnd) continue;
+
           const next = list[i + 1];
           const endDate = next && next.start ? new Date(next.start) : now;
           if (Number.isNaN(+endDate)) continue;
 
-          const startYear = startDate.getFullYear();
-          const endYear = endDate.getFullYear();
-          if (startYear !== year || endYear !== year) continue;
+          const boundedEnd = endDate > yearEnd ? yearEnd : endDate;
+          if (boundedEnd <= startDate) continue;
 
-          const days = Utils.daysBetween(startDate, endDate);
+          const days = Utils.daysBetween(startDate, boundedEnd);
           if (typeof days !== 'number' || Number.isNaN(days)) continue;
 
           agg[cur.status] = agg[cur.status] || { sum: 0, n: 0 };
@@ -487,7 +578,9 @@ window.Modules.dashboard = (() => {
           try { det = JSON.parse(det); } catch (_) { det = {}; }
         }
         const status = det?.status;
-        let start = det?.status_since || det?.start || item.created_at;
+        const eventDate = extractEventDate(det);
+        let start = normalizeDateInput(eventDate || det?.status_since || det?.start || item.created_at);
+        if (!start) start = normalizeDateInput(item.created_at);
         if (!status || !start) return;
         const list = byProc[item.process_id] || (byProc[item.process_id] = []);
         list.push({ status, start });
@@ -498,8 +591,9 @@ window.Modules.dashboard = (() => {
       if (!proc || !proc.id) return;
       const list = byProc[proc.id] || (byProc[proc.id] = []);
       if (proc.status && proc.status_since) {
-        const already = list.some(entry => entry.status === proc.status && entry.start === proc.status_since);
-        if (!already) list.push({ status: proc.status, start: proc.status_since });
+        const normalized = normalizeDateInput(proc.status_since);
+        const already = list.some(entry => entry.status === proc.status && entry.start === normalized);
+        if (!already && normalized) list.push({ status: proc.status, start: normalized });
       }
       list.sort((a, b) => new Date(a.start) - new Date(b.start));
     });
