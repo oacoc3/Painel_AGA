@@ -1000,7 +1000,7 @@ function normalizeNupToBankFormat(input) {
     try {
       const { data, error } = await sb
         .from('sigadaer')
-        .select('id,numbers,type,requested_at,status,expedit_at,received_at,deadline_days')
+        .select('id,numbers,type,municipality,requested_at,status,expedit_at,received_at,deadline_days')
         .eq('process_id', procId)
         .order('requested_at', { ascending: false });
       if (error) throw error;
@@ -1011,6 +1011,7 @@ function normalizeNupToBankFormat(input) {
           label: 'Números',
           value: r => Array.isArray(r.numbers) ? r.numbers.map(n => String(n).padStart(6, '0')).join('; ') : ''
         },
+        { key: 'municipality', label: 'Município' },
         { key: 'type', label: 'Tipo' },
         { key: 'deadline_days', label: 'Prazo (dias)' },
         { key: 'requested_at', label: 'Solicitada em', value: r => U.fmtDateTime(r.requested_at) },
@@ -1402,6 +1403,9 @@ function normalizeNupToBankFormat(input) {
         <label>Números (separe com espaços, vírgulas ou ponto e vírgula)
           <input type="text" id="sgNumeros" placeholder="123456; 654321">
         </label>
+        <label>Município
+          <input type="text" id="sgMunicipio" placeholder="Informe o município">
+        </label>
         <label>Prazo (dias)
           <input type="number" id="sgPrazo" min="0" step="1" placeholder="30">
         </label>
@@ -1445,6 +1449,7 @@ function normalizeNupToBankFormat(input) {
     const numerosTexto = dlg.querySelector('#sgNumeros')?.value || '';
     const numeros = Array.from(new Set(parseSigNumbers(numerosTexto)));
     if (!numeros.length) return U.setMsg('sgCadMsg', 'Informe ao menos um número SIGADAER válido.', true);
+    const municipio = dlg.querySelector('#sgMunicipio')?.value?.trim() ||
     const solicitadaEm = dlg.querySelector('#sgSolic')?.value || '';
     const prazoTexto = dlg.querySelector('#sgPrazo')?.value || '';
     const prazoDiasValor = prazoTexto ? parseInt(prazoTexto, 10) : NaN;
@@ -1456,6 +1461,7 @@ function normalizeNupToBankFormat(input) {
       status: 'SOLICITADO',
       numbers: numeros
     };
+     if (municipio) payload.municipality = municipio;
     if (prazoDias !== null) payload.deadline_days = prazoDias;
     try {
       const u = await getUser();
