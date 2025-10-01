@@ -46,6 +46,9 @@ window.Modules.dashboard = (() => {
   let cachedSigadaer = [];
   let cachedOpinions = [];
 
+  // =========================
+  // Helpers de datas do patch
+  // =========================
   function parseDateValue(value) {
     if (!value) return null;
     if (value instanceof Date) {
@@ -72,7 +75,7 @@ window.Modules.dashboard = (() => {
   }
 
   function getDateKeyWeight(key) {
-    const lower = key.toLowerCase();
+    const lower = String(key || '').toLowerCase();
     if (!lower || lower.includes('due')) return 0;
     if (lower.includes('created_at') || lower.includes('updated_at')) return 0;
     if (lower.includes('status') && lower.includes('since')) return 100;
@@ -114,7 +117,7 @@ window.Modules.dashboard = (() => {
         if (value && typeof value === 'object') {
           queue.push(value);
         }
-        const weight = getDateKeyWeight(String(key || ''));
+        const weight = getDateKeyWeight(key);
         if (!weight) return;
 
         const parsed = parseDateValue(value);
@@ -128,6 +131,8 @@ window.Modules.dashboard = (() => {
 
     return best ? best.date : null;
   }
+
+  // =========================
 
   function init() {
     const yearSelect = el('entryYearSelect');
@@ -278,6 +283,8 @@ window.Modules.dashboard = (() => {
     const agg = {};
     const now = new Date();
     if (hasYear) {
+      const yearStart = new Date(year, 0, 1);
+      const yearEnd = new Date(year + 1, 0, 1);
       Object.values(cachedStatusHistory || {}).forEach(list => {
         if (!Array.isArray(list)) return;
         for (let i = 0; i < list.length; i++) {
@@ -290,15 +297,16 @@ window.Modules.dashboard = (() => {
 
           const startDate = new Date(cur.start);
           if (Number.isNaN(+startDate)) continue;
+          if (startDate < yearStart || startDate >= yearEnd) continue;
+
           const next = list[i + 1];
           const endDate = next && next.start ? new Date(next.start) : now;
           if (Number.isNaN(+endDate)) continue;
 
-          const startYear = startDate.getFullYear();
-          const endYear = endDate.getFullYear();
-          if (startYear !== year || endYear !== year) continue;
+          const boundedEnd = endDate > yearEnd ? yearEnd : endDate;
+          if (boundedEnd <= startDate) continue;
 
-          const days = Utils.daysBetween(startDate, endDate);
+          const days = Utils.daysBetween(startDate, boundedEnd);
           if (typeof days !== 'number' || Number.isNaN(days)) continue;
 
           agg[cur.status] = agg[cur.status] || { sum: 0, n: 0 };
