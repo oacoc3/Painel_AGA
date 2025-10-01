@@ -25,23 +25,23 @@ window.Modules.processos = (() => {
 
 
   // Normaliza entrada de NUP para o formato do banco: XXXXXX/XXXX-XX
-function normalizeNupToBankFormat(input) {
-  const digits = String(input || '').replace(/\D/g, '');
-  if (!digits) return '';
-  // espelha a normalização do banco (public.normalize_nup):
-  // - remove prefixo de 5 dígitos, se houver
-  let d = digits;
-  if (d.length > 5) d = d.slice(5);
-  // - quando houver 12 dígitos (6/4/2), formata preservando os 2 finais
-  if (d.length >= 12) {
-    const p1 = d.slice(0, 6);
-    const p2 = d.slice(6, 10);
-    const p3 = d.slice(10, 12);
-    return `${p1}/${p2}-${p3}`;
+  function normalizeNupToBankFormat(input) {
+    const digits = String(input || '').replace(/\D/g, '');
+    if (!digits) return '';
+    // espelha a normalização do banco (public.normalize_nup):
+    // - remove prefixo de 5 dígitos, se houver
+    let d = digits;
+    if (d.length > 5) d = d.slice(5);
+    // - quando houver 12 dígitos (6/4/2), formata preservando os 2 finais
+    if (d.length >= 12) {
+      const p1 = d.slice(0, 6);
+      const p2 = d.slice(6, 10);
+      const p3 = d.slice(10, 12);
+      return `${p1}/${p2}-${p3}`;
+    }
+    // caso contrário, devolve como o usuário digitou (sem forçar "-00")
+    return input || '';
   }
-  // caso contrário, devolve como o usuário digitou (sem forçar "-00")
-  return input || '';
-   }
 
   function renderProcPagination({ page, pagesTotal, count }) {
     const box = el('procLista');
@@ -481,7 +481,7 @@ function normalizeNupToBankFormat(input) {
         <label>Novo status
           <select id="stNovo">${STATUS_OPTIONS}</select>
         </label>
-        <label>Desde <input type="datetime-local" id="stDesde"></label>
+        <label>Desde <input type="datetime-local" id="stDesde" required></label>
         <menu>
           <button value="cancel">Cancelar</button>
           <button id="stSalvar" value="default">Salvar</button>
@@ -495,9 +495,16 @@ function normalizeNupToBankFormat(input) {
     dlg.addEventListener('close', () => dlg.remove());
     dlg.querySelector('#stSalvar')?.addEventListener('click', async (ev) => {
       ev.preventDefault();
+      const dtValue = dt?.value || '';
+      if (!dtValue) {
+        alert('Informe a data/hora do novo status.');
+        dt?.focus();
+        dt?.reportValidity?.();
+        return;
+      }
       const payload = {
         status: sel?.value || 'ANATEC-PRE',
-        status_since: dt?.value ? new Date(dt.value).toISOString() : null
+        status_since: new Date(dtValue).toISOString()
       };
       try {
         const { error } = await sb.from('processes').update(payload).eq('id', id);
@@ -1302,7 +1309,7 @@ function normalizeNupToBankFormat(input) {
         <label>Tipo
           <select id="opTipo"><option>ATM</option><option>DT</option><option>CGNA</option></select>
         </label>
-        <label>Solicitada em <input type="datetime-local" id="opSolic"></label>
+        <label>Solicitada em <input type="datetime-local" id="opSolic" required></label>
         <menu>
           <button id="btnSalvarOp" type="button">Salvar</button>
           <button type="button" id="btnCancelarOp">Cancelar</button>
@@ -1319,10 +1326,19 @@ function normalizeNupToBankFormat(input) {
   async function cadOpiniao(dlg, procId = currentProcId) {
     if (!procId) return U.setMsg('opMsg', 'Selecione um processo.', true);
     if (!guardProcessWriteSilent('opMsg')) return;
+    const type = dlg.querySelector('#opTipo')?.value || 'ATM';
+    const requestedInput = dlg.querySelector('#opSolic');
+    const requestedValue = requestedInput?.value || '';
+    if (!requestedValue) {
+      U.setMsg('opMsg', 'Informe a data/hora da solicitação.', true);
+      requestedInput?.focus();
+      requestedInput?.reportValidity?.();
+      return;
+    }
     const payload = {
       process_id: procId,
-      type: dlg.querySelector('#opTipo')?.value || 'ATM',
-      requested_at: dlg.querySelector('#opSolic')?.value ? new Date(dlg.querySelector('#opSolic').value).toISOString() : new Date().toISOString(),
+      type,
+      requested_at: new Date(requestedValue).toISOString(),
       status: 'SOLICITADO'
     };
     try {
@@ -1347,7 +1363,7 @@ function normalizeNupToBankFormat(input) {
         <label>Tipo
           <select id="ntTipo">${NOTIFICATION_OPTIONS}</select>
         </label>
-        <label>Solicitada em <input type="datetime-local" id="ntSolic"></label>
+        <label>Solicitada em <input type="datetime-local" id="ntSolic" required></label>
         <menu>
           <button id="btnSalvarNt" type="button">Salvar</button>
           <button type="button" id="btnCancelarNt">Cancelar</button>
@@ -1369,11 +1385,18 @@ function normalizeNupToBankFormat(input) {
     if (!guardProcessWriteSilent('ntCadMsg')) return;
     const tipo = dlg.querySelector('#ntTipo')?.value || '';
     if (!tipo) return U.setMsg('ntCadMsg', 'Selecione o tipo de notificação.', true);
-    const solicitadaEm = dlg.querySelector('#ntSolic')?.value || '';
+    const solicitadaInput = dlg.querySelector('#ntSolic');
+    const solicitadaEm = solicitadaInput?.value || '';
+    if (!solicitadaEm) {
+      U.setMsg('ntCadMsg', 'Informe a data/hora da solicitação.', true);
+      solicitadaInput?.focus();
+      solicitadaInput?.reportValidity?.();
+      return;
+    }
     const payload = {
       process_id: procId,
       type: tipo,
-      requested_at: solicitadaEm ? new Date(solicitadaEm).toISOString() : new Date().toISOString(),
+      requested_at: new Date(solicitadaEm).toISOString(),
       status: 'SOLICITADA'
     };
     try {
@@ -1405,7 +1428,7 @@ function normalizeNupToBankFormat(input) {
         <label>Prazo (dias)
           <input type="number" id="sgPrazo" min="0" step="1" placeholder="30">
         </label>
-        <label>Solicitada em <input type="datetime-local" id="sgSolic"></label>
+        <label>Solicitada em <input type="datetime-local" id="sgSolic" required></label>
         <menu>
           <button id="btnSalvarSg" type="button">Salvar</button>
           <button type="button" id="btnCancelarSg">Cancelar</button>
@@ -1445,14 +1468,21 @@ function normalizeNupToBankFormat(input) {
     const numerosTexto = dlg.querySelector('#sgNumeros')?.value || '';
     const numeros = Array.from(new Set(parseSigNumbers(numerosTexto)));
     if (!numeros.length) return U.setMsg('sgCadMsg', 'Informe ao menos um número SIGADAER válido.', true);
-    const solicitadaEm = dlg.querySelector('#sgSolic')?.value || '';
+    const solicitadaInput = dlg.querySelector('#sgSolic');
+    const solicitadaEm = solicitadaInput?.value || '';
+    if (!solicitadaEm) {
+      U.setMsg('sgCadMsg', 'Informe a data/hora da solicitação.', true);
+      solicitadaInput?.focus();
+      solicitadaInput?.reportValidity?.();
+      return;
+    }
     const prazoTexto = dlg.querySelector('#sgPrazo')?.value || '';
     const prazoDiasValor = prazoTexto ? parseInt(prazoTexto, 10) : NaN;
     const prazoDias = Number.isNaN(prazoDiasValor) || prazoDiasValor <= 0 ? null : prazoDiasValor;
     const payload = {
       process_id: procId,
       type: tipo,
-      requested_at: solicitadaEm ? new Date(solicitadaEm).toISOString() : new Date().toISOString(),
+      requested_at: new Date(solicitadaEm).toISOString(),
       status: 'SOLICITADO',
       numbers: numeros
     };
