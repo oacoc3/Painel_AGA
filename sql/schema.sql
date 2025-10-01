@@ -600,5 +600,29 @@ BEGIN
     $pol$;
   END IF;
 
+
+  ----------------------------------------------------------------
+  -- 9) SIGADAER — campos de município e UF (idempotente)
+  ----------------------------------------------------------------
+  -- As colunas são opcionais e não interferem nas views existentes.
+  -- Se a tabela não existir no ambiente, nenhum erro é gerado devido ao IF EXISTS.
+  EXECUTE '
+    ALTER TABLE IF EXISTS public.sigadaer
+    ADD COLUMN IF NOT EXISTS municipality text
+  ';
+  EXECUTE '
+    ALTER TABLE IF EXISTS public.sigadaer
+    ADD COLUMN IF NOT EXISTS uf char(2)
+  ';
+  -- Constraint opcional para garantir UF com 2 letras
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'sigadaer_uf_len_ck'
+  ) THEN
+    EXECUTE '
+      ALTER TABLE public.sigadaer
+      ADD CONSTRAINT sigadaer_uf_len_ck
+      CHECK (uf IS NULL OR char_length(uf) = 2)
+    ';
+  END IF;
 END
 $mig$;
