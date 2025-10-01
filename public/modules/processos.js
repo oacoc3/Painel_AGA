@@ -1143,7 +1143,7 @@ function normalizeNupToBankFormat(input) {
     try {
       const { data, error } = await sb
         .from('sigadaer')
-         .select('id,numbers,type,requested_at,status,expedit_at,received_at,deadline_days,municipality_name,municipality_uf')
+        .select('id,numbers,type,requested_at,status,expedit_at,received_at,deadline_days,municipality_name,municipality_uf,municipality_ibge_id')
         .eq('process_id', procId)
         .order('requested_at', { ascending: false });
       if (error) throw error;
