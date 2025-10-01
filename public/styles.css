@@ -273,6 +273,12 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .bar-chart-bar-wrapper { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; padding: 0 4px; border-radius: 4px; background: linear-gradient(180deg, rgba(75, 111, 145, 0.12), rgba(75, 111, 145, 0.03)); }
 .bar-chart-bar { width: 100%; border-radius: 4px 4px 0 0; background: var(--brand); transition: height 0.3s ease; }
 .bar-chart-label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--ink-soft); letter-spacing: 0.04em; }
+
+.hourly-engagement-chart { min-height: 220px; }
+.hourly-engagement-chart .bar-chart-bars { grid-template-columns: repeat(24, minmax(0, 1fr)); min-height: 180px; gap: 6px; }
+.hourly-engagement-chart .bar-chart-item { gap: 4px; }
+.hourly-engagement-chart .bar-chart-value { font-size: 11px; }
+.hourly-engagement-chart .bar-chart-label { font-size: 10px; letter-spacing: 0; }
 .chart-placeholder { margin: 0; font-size: 12px; text-align: center; }
 .tabs { display: flex; flex-direction: column; gap: 8px; }
 .tab-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
