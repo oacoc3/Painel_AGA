@@ -86,11 +86,6 @@ function normalizeNupToBankFormat(input) {
     ['COMGAP', 90]
   ]);
 
-  const IBGE_MUNICIPALITIES_URL = 'https://servicodados.ibge.gov.br/api/v1/localidades/municipios';
-  let SIG_MUNICIPALITIES = null;
-  let SIG_MUNICIPALITIES_PROMISE = null;
-  const SIG_MUNICIPALITIES_MAP = new Map();
-
   const CLIPBOARD_ICON = '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="m10 16 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
   const el = (id) => document.getElementById(id);
@@ -104,144 +99,6 @@ function normalizeNupToBankFormat(input) {
       ? value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
       : ''
   );
-
-  function formatSigMunicipality(source) {
-    if (!source) return '';
-    const name = source.municipality_name || source.name || source.municipio || '';
-    const uf = source.municipality_uf || source.uf || source.uf_sigla || '';
-    if (!name && !uf) return '';
-    return uf ? `${name}/${uf}` : name;
-  }
-
-  async function ensureMunicipalitiesLoaded() {
-    if (Array.isArray(SIG_MUNICIPALITIES) && SIG_MUNICIPALITIES.length) {
-      return SIG_MUNICIPALITIES;
-    }
-    if (SIG_MUNICIPALITIES_PROMISE) return SIG_MUNICIPALITIES_PROMISE;
-    SIG_MUNICIPALITIES_PROMISE = fetch(IBGE_MUNICIPALITIES_URL)
-      .then((resp) => {
-        if (!resp.ok) {
-          throw new Error('Falha ao carregar municípios do IBGE.');
-        }
-        return resp.json();
-      })
-      .then((data) => {
-        const list = Array.isArray(data) ? data : [];
-        const mapped = list
-          .map((item) => {
-            const uf = item?.microrregiao?.mesorregiao?.UF;
-            const ufSigla = uf?.sigla || '';
-            const ufNome = uf?.nome || '';
-            return {
-              id: item?.id,
-              name: item?.nome || '',
-              uf: ufSigla,
-              uf_name: ufNome
-            };
-          })
-          .filter(entry => entry.id && entry.name);
-        mapped.sort((a, b) => {
-          const ufCmp = (a.uf || '').localeCompare(b.uf || '', 'pt-BR');
-          if (ufCmp !== 0) return ufCmp;
-          return (a.name || '').localeCompare(b.name || '', 'pt-BR');
-        });
-        SIG_MUNICIPALITIES_MAP.clear();
-        mapped.forEach((entry) => {
-          SIG_MUNICIPALITIES_MAP.set(String(entry.id), entry);
-        });
-        SIG_MUNICIPALITIES = mapped;
-        return SIG_MUNICIPALITIES;
-      })
-      .catch((err) => {
-        SIG_MUNICIPALITIES = [];
-        throw err;
-      })
-      .finally(() => {
-        SIG_MUNICIPALITIES_PROMISE = null;
-      });
-    return SIG_MUNICIPALITIES_PROMISE;
-  }
-
-  function getSigMunicipalityById(id) {
-    if (!id) return null;
-    const key = String(id);
-    if (SIG_MUNICIPALITIES_MAP.has(key)) return SIG_MUNICIPALITIES_MAP.get(key);
-    if (Array.isArray(SIG_MUNICIPALITIES)) {
-      const found = SIG_MUNICIPALITIES.find(entry => String(entry.id) === key);
-      if (found) {
-        SIG_MUNICIPALITIES_MAP.set(key, found);
-        return found;
-      }
-    }
-    return null;
-  }
-
-  async function populateMunicipalitySelect(selectEl, msgEl, selectedId) {
-    if (!selectEl) return;
-    selectEl.innerHTML = '<option value="">Carregando municípios…</option>';
-    selectEl.disabled = true;
-    try {
-      const municipios = await ensureMunicipalitiesLoaded();
-      if (!Array.isArray(municipios) || municipios.length === 0) {
-        throw new Error('Lista de municípios vazia.');
-      }
-      const frag = document.createDocumentFragment();
-      const placeholder = document.createElement('option');
-      placeholder.value = '';
-      placeholder.textContent = 'Selecione um município';
-      frag.appendChild(placeholder);
-      municipios.forEach((item) => {
-        const opt = document.createElement('option');
-        opt.value = String(item.id);
-        opt.textContent = item.uf ? `${item.name}/${item.uf}` : item.name;
-        opt.dataset.uf = item.uf || '';
-        opt.dataset.nome = item.name || '';
-        frag.appendChild(opt);
-      });
-      selectEl.innerHTML = '';
-      selectEl.appendChild(frag);
-      if (selectedId) selectEl.value = String(selectedId);
-      selectEl.disabled = false;
-      if (msgEl) {
-        msgEl.textContent = '';
-        msgEl.classList.remove('error');
-      }
-    } catch (err) {
-      if (msgEl) {
-        msgEl.textContent = 'Não foi possível carregar os municípios. Tente novamente.';
-        msgEl.classList.add('error');
-      }
-      selectEl.innerHTML = '<option value="">Lista de municípios indisponível</option>';
-      selectEl.disabled = true;
-      console.error('Falha ao carregar municípios do IBGE', err);
-    }
-  }
-
-  async function fetchSigadaerRecord(id) {
-    if (!id) return null;
-    const { data, error } = await sb
-      .from('sigadaer')
-      .select('id,municipality_name,municipality_uf')
-      .eq('id', id)
-      .maybeSingle();
-    if (error) throw error;
-    return data || null;
-  }
-
-  async function populateSigMunicipalityInfo(targetEl, sigadaerRowOrId) {
-    if (!targetEl) return;
-    targetEl.textContent = 'Município: carregando…';
-    try {
-      const record = (sigadaerRowOrId && typeof sigadaerRowOrId === 'object')
-        ? sigadaerRowOrId
-        : await fetchSigadaerRecord(sigadaerRowOrId);
-      const display = formatSigMunicipality(record);
-      targetEl.textContent = display ? `Município: ${display}` : 'Município: —';
-    } catch (err) {
-      targetEl.textContent = 'Município: não disponível';
-      console.error(err);
-    }
-  }
 
   function evaluateChecklistResult(source) {
     if (typeof CHECKLIST_PDF.getChecklistResult === 'function') {
@@ -1143,7 +1000,7 @@ function normalizeNupToBankFormat(input) {
     try {
       const { data, error } = await sb
         .from('sigadaer')
-        .select('id,numbers,type,requested_at,status,expedit_at,received_at,deadline_days,municipality_name,municipality_uf,municipality_ibge_id')
+        .select('id,numbers,type,requested_at,status,expedit_at,received_at,deadline_days')
         .eq('process_id', procId)
         .order('requested_at', { ascending: false });
       if (error) throw error;
@@ -1155,7 +1012,6 @@ function normalizeNupToBankFormat(input) {
           value: r => Array.isArray(r.numbers) ? r.numbers.map(n => String(n).padStart(6, '0')).join('; ') : ''
         },
         { key: 'type', label: 'Tipo' },
-        { key: 'municipality_name', label: 'Município', value: formatSigMunicipality },
         { key: 'deadline_days', label: 'Prazo (dias)' },
         { key: 'requested_at', label: 'Solicitada em', value: r => U.fmtDateTime(r.requested_at) },
         { key: 'status', label: 'Status' },
@@ -1172,7 +1028,7 @@ function normalizeNupToBankFormat(input) {
               b.textContent = 'Expedido';
               b.addEventListener('click', () => {
                 if (!guardProcessWrite('procMsg')) return;
-                 showSgExpForm(r);
+                showSgExpForm(r.id);
               });
               wrap.appendChild(b);
             } else if (r.status === 'EXPEDIDO') {
@@ -1181,7 +1037,7 @@ function normalizeNupToBankFormat(input) {
               b.textContent = 'Recebido';
               b.addEventListener('click', () => {
                 if (!guardProcessWrite('procMsg')) return;
-                  showSgRecForm(r);
+                showSgRecForm(r.id);
               });
               wrap.appendChild(b);
             }
@@ -1543,11 +1399,6 @@ function normalizeNupToBankFormat(input) {
         <label>Tipo
           <select id="sgTipo">${SIGADAER_OPTIONS}</select>
         </label>
-        <label>Município
-          <select id="sgMunicipio" disabled>
-            <option value="">Carregando municípios…</option>
-          </select>
-        </label>
         <label>Números (separe com espaços, vírgulas ou ponto e vírgula)
           <input type="text" id="sgNumeros" placeholder="123456; 654321">
         </label>
@@ -1565,8 +1416,6 @@ function normalizeNupToBankFormat(input) {
     dlg.addEventListener('close', () => dlg.remove());
     const tipoSelect = dlg.querySelector('#sgTipo');
     const prazoInput = dlg.querySelector('#sgPrazo');
-    const municipioSelect = dlg.querySelector('#sgMunicipio');
-    const msgEl = dlg.querySelector('#sgCadMsg');
     const applyDefaultPrazo = () => {
       if (!tipoSelect || !prazoInput) return;
       const defaultPrazo = SIGADAER_DEFAULT_DEADLINES.get(tipoSelect.value);
@@ -1580,7 +1429,6 @@ function normalizeNupToBankFormat(input) {
     tipoSelect?.addEventListener('change', () => {
       applyDefaultPrazo();
     });
-    populateMunicipalitySelect(municipioSelect, msgEl);
     dlg.querySelector('#btnSalvarSg')?.addEventListener('click', async ev => {
       ev.preventDefault();
       await cadSig(dlg, procId);
@@ -1597,61 +1445,23 @@ function normalizeNupToBankFormat(input) {
     const numerosTexto = dlg.querySelector('#sgNumeros')?.value || '';
     const numeros = Array.from(new Set(parseSigNumbers(numerosTexto)));
     if (!numeros.length) return U.setMsg('sgCadMsg', 'Informe ao menos um número SIGADAER válido.', true);
-    const municipioSelect = dlg.querySelector('#sgMunicipio');
-    if (!municipioSelect) return U.setMsg('sgCadMsg', 'Campo de município indisponível.', true);
-    if (municipioSelect.disabled) return U.setMsg('sgCadMsg', 'Aguarde o carregamento da lista de municípios.', true);
-    const municipioIdValue = municipioSelect.value || '';
-    if (!municipioIdValue) return U.setMsg('sgCadMsg', 'Selecione o município do SIGADAER.', true);
-    let municipioData = getSigMunicipalityById(municipioIdValue);
-    if (!municipioData) {
-      try {
-        await ensureMunicipalitiesLoaded();
-        municipioData = getSigMunicipalityById(municipioIdValue);
-      } catch (loadErr) {
-        console.error(loadErr);
-        return U.setMsg('sgCadMsg', 'Não foi possível carregar os municípios. Tente novamente.', true);
-      }
-    }
-    if (!municipioData) return U.setMsg('sgCadMsg', 'Município inválido.', true);
     const solicitadaEm = dlg.querySelector('#sgSolic')?.value || '';
     const prazoTexto = dlg.querySelector('#sgPrazo')?.value || '';
     const prazoDiasValor = prazoTexto ? parseInt(prazoTexto, 10) : NaN;
     const prazoDias = Number.isNaN(prazoDiasValor) || prazoDiasValor <= 0 ? null : prazoDiasValor;
-    const requestedAtIso = solicitadaEm ? new Date(solicitadaEm).toISOString() : new Date().toISOString();
     const payload = {
       process_id: procId,
       type: tipo,
-      requested_at: requestedAtIso,
+      requested_at: solicitadaEm ? new Date(solicitadaEm).toISOString() : new Date().toISOString(),
       status: 'SOLICITADO',
-      numbers: numeros,
-      municipality_name: municipioData.name,
-      municipality_uf: municipioData.uf
+      numbers: numeros
     };
     if (prazoDias !== null) payload.deadline_days = prazoDias;
     try {
       const u = await getUser();
-      if (!u) {
-        U.setMsg('sgCadMsg', 'Sessão expirada.', true);
-        return;
-      }
+      if (!u) return U.setMsg('sgCadMsg', 'Sessão expirada.', true);
       const { error } = await sb.from('sigadaer').insert({ ...payload, created_by: u.id });
       if (error) throw error;
-      try {
-        const historyDetails = {
-          tipo,
-          numeros,
-          municipio: municipioData.name,
-          uf: municipioData.uf,
-          requested_at: requestedAtIso
-        };
-        if (prazoDias !== null) historyDetails.prazo_dias = prazoDias;
-        await sb.from('history').insert({
-          process_id: procId,
-          action: 'SIGADAER criado',
-          details: historyDetails,
-          user_id: u.id,
-          user_name: (u.user_metadata && u.user_metadata.name) || u.email || u.id
-        });
       dlg.close();
       await loadProcessList();
       if (procId && el('sgListaPop')) await loadSIGList(procId, 'sgListaPop');
@@ -1869,14 +1679,12 @@ function normalizeNupToBankFormat(input) {
     }
   }
 
-  function showSgExpForm(sigadaerRowOrId) {
-    const row = (sigadaerRowOrId && typeof sigadaerRowOrId === 'object') ? sigadaerRowOrId : null;
-    editingSgId = row?.id || sigadaerRowOrId;
+  function showSgExpForm(id) {
+    editingSgId = id;
     if (!guardProcessWriteSilent('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
-        <p class="sgInfo" id="sgMunicipioInfo">Município: carregando…</p>
         <label>Expedida em <input type="datetime-local" id="sgExpInput"></label>
         <menu>
           <button id="btnSalvarSgExp" type="button">Salvar</button>
@@ -1886,7 +1694,6 @@ function normalizeNupToBankFormat(input) {
       </form>`;
     document.body.appendChild(dlg);
     dlg.addEventListener('close', () => { dlg.remove(); editingSgId = null; });
-    populateSigMunicipalityInfo(dlg.querySelector('#sgMunicipioInfo'), row || editingSgId);
     dlg.querySelector('#btnSalvarSgExp').addEventListener('click', async ev => {
       ev.preventDefault();
       await salvarSgExp(dlg);
@@ -1895,14 +1702,12 @@ function normalizeNupToBankFormat(input) {
     dlg.showModal();
   }
 
-  function showSgRecForm(sigadaerRowOrId) {
-    const row = (sigadaerRowOrId && typeof sigadaerRowOrId === 'object') ? sigadaerRowOrId : null;
-    editingSgId = row?.id || sigadaerRowOrId;
+  function showSgRecForm(id) {
+    editingSgId = id;
     if (!guardProcessWriteSilent('procMsg')) return;
     const dlg = document.createElement('dialog');
     dlg.innerHTML = `
       <form method="dialog" class="proc-popup">
-        <p class="sgInfo" id="sgMunicipioInfo">Município: carregando…</p>
         <label>Recebida em <input type="datetime-local" id="sgRecInput"></label>
         <menu>
           <button id="btnSalvarSgRec" type="button">Salvar</button>
@@ -1912,7 +1717,6 @@ function normalizeNupToBankFormat(input) {
       </form>`;
     document.body.appendChild(dlg);
     dlg.addEventListener('close', () => { dlg.remove(); editingSgId = null; });
-    populateSigMunicipalityInfo(dlg.querySelector('#sgMunicipioInfo'), row || editingSgId);
     dlg.querySelector('#btnSalvarSgRec').addEventListener('click', async ev => {
       ev.preventDefault();
       await salvarSgRec(dlg);
