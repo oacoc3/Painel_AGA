@@ -212,10 +212,12 @@ window.Modules.dashboard = (() => {
           if (Number.isNaN(+endDate)) continue;
 
           const startYear = startDate.getFullYear();
-          const endYear = endDate.getFullYear();
-          if (startYear !== year || endYear !== year) continue;
+          // const endYear = endDate.getFullYear(); // não usamos mais o ano de término
+          if (startYear !== year) continue; // inclui se começou no ano selecionado
 
-          const days = Utils.daysBetween(startDate, endDate);
+          const yearEnd = new Date(year + 1, 0, 1);
+          const limitedEnd = endDate > yearEnd ? yearEnd : endDate;
+          const days = Utils.daysBetween(startDate, limitedEnd);
           if (typeof days !== 'number' || Number.isNaN(days)) continue;
 
           agg[cur.status] = agg[cur.status] || { sum: 0, n: 0 };
