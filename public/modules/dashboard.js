@@ -36,6 +36,7 @@ window.Modules.dashboard = (() => {
   };
   const MONTH_LABELS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
   const YEARLY_COUNTER_FORMATTER = new Intl.NumberFormat('pt-BR');
+  const PERCENTAGE_FORMATTER = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 
   const OPINION_TYPES_SET = new Set(['ATM', 'DT', 'CGNA']);
 
@@ -53,73 +54,40 @@ window.Modules.dashboard = (() => {
       renderYearlyActivity();
       renderHourlyEngagement();
     });
-
-    const refreshBtn = el('dashboardRefresh');
-    refreshBtn?.addEventListener('click', () => load());
   }
 
-  function el(id) {
-    return document.getElementById(id);
+  function renderEntryChartEmpty(message = 'Nenhum dado para exibir.') {
+    const container = el('entryChart');
+    if (!container) return;
+    setEntryYearTotal(null);
+    container.innerHTML = '';
+    const msg = document.createElement('p');
+    msg.className = 'muted chart-placeholder';
+    msg.textContent = message;
+    container.appendChild(msg);
   }
 
-  function sumBy(arr, getter) {
-    let s = 0;
-    for (const it of arr) {
-      const v = getter(it);
-      if (typeof v === 'number' && Number.isFinite(v)) s += v;
+  function setEntryYearTotal(value) {
+    const node = el('entryYearTotal');
+    if (!node) return;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      node.textContent = YEARLY_COUNTER_FORMATTER.format(value);
+    } else {
+      node.textContent = '—';
     }
-    return s;
   }
 
-  function updateYearOptions(previous) {
+  function updateYearOptions() {
     const select = el('entryYearSelect');
     if (!select) return false;
 
+    const previous = select.value ? Number(select.value) : null;
     const yearSet = new Set();
-
-    // processos
-    for (const p of cachedProcesses) {
-      if (p?.first_entry_date) {
-        const y = new Date(p.first_entry_date).getFullYear();
-        if (Number.isFinite(y)) yearSet.add(y);
-      }
-    }
-    // notifications
-    for (const n of cachedNotifications) {
-      if (n?.requested_at) {
-        const y = new Date(n.requested_at).getFullYear();
-        if (Number.isFinite(y)) yearSet.add(y);
-      }
-      if (n?.read_at) {
-        const y = new Date(n.read_at).getFullYear();
-        if (Number.isFinite(y)) yearSet.add(y);
-      }
-    }
-    // sigadaer
-    for (const s of cachedSigadaer) {
-      if (s?.requested_at) {
-        const y = new Date(s.requested_at).getFullYear();
-        if (Number.isFinite(y)) yearSet.add(y);
-      }
-      if (s?.expedit_at) {
-        const y = new Date(s.expedit_at).getFullYear();
-        if (Number.isFinite(y)) yearSet.add(y);
-      }
-    }
-    // opinions
-    for (const o of cachedOpinions) {
-      if (o?.requested_at) {
-        const y = new Date(o.requested_at).getFullYear();
-        if (Number.isFinite(y)) yearSet.add(y);
-      }
-    }
-    // status history (usa start/status_since)
-    for (const list of Object.values(cachedStatusHistory)) {
-      for (const item of list) {
-        const y = new Date(item.start).getFullYear();
-        if (Number.isFinite(y)) yearSet.add(y);
-      }
-    }
+    (cachedProcesses || []).forEach(proc => {
+      const d = Utils.dateOnly(proc.first_entry_date);
+      if (!d || Number.isNaN(+d)) return;
+      yearSet.add(d.getFullYear());
+    });
 
     const years = Array.from(yearSet)
       .filter(y => Number.isFinite(y))
@@ -151,112 +119,110 @@ window.Modules.dashboard = (() => {
 
     const select = el('entryYearSelect');
     const year = select && select.value ? Number(select.value) : NaN;
-    if (!Number.isFinite(year)) {
+    if (!year || Number.isNaN(year)) {
       renderEntryChartEmpty('Nenhum dado para exibir.');
       return;
     }
 
-    const months = new Array(12).fill(0);
-
-    // usa first_entry_date do processo
-    for (const p of cachedProcesses) {
-      const dt = p?.first_entry_date ? new Date(p.first_entry_date) : null;
-      if (!dt || Number.isNaN(+dt) || dt.getFullYear() !== year) continue;
-      months[dt.getMonth()] += 1;
-    }
-
-    container.innerHTML = '';
-    const total = sumBy(months, v => v);
-    if (!total) {
-      renderEntryChartEmpty('Sem entradas para o ano selecionado.');
-      return;
-    }
-
-    const header = document.createElement('div');
-    header.className = 'chart-header';
-    const title = document.createElement('h3');
-    title.textContent = `Novos processos em ${year}`;
-    const counter = document.createElement('div');
-    counter.className = 'counter';
-    counter.textContent = YEARLY_COUNTER_FORMATTER.format(total);
-    header.appendChild(title);
-    header.appendChild(counter);
-
-    const bars = document.createElement('div');
-    bars.className = 'bars';
-    months.forEach((val, idx) => {
-      const bar = document.createElement('div');
-      bar.className = 'bar';
-      bar.style.height = Math.max(4, Math.round((val / total) * 100)) + 'px';
-      bar.setAttribute('aria-label', `${MONTH_LABELS[idx]}: ${val}`);
-      bars.appendChild(bar);
+    const counts = new Array(12).fill(0);
+    (cachedProcesses || []).forEach(proc => {
+      const d = Utils.dateOnly(proc.first_entry_date);
+      if (!d || Number.isNaN(+d)) return;
+      if (d.getFullYear() !== year) return;
+      counts[d.getMonth()] += 1;
     });
 
-    container.appendChild(header);
-    container.appendChild(bars);
-  }
+    const totalCount = counts.reduce((sum, value) => sum + value, 0);
+    setEntryYearTotal(totalCount);
 
-  function renderEntryChartEmpty(message) {
-    const container = el('entryChart');
-    if (!container) return;
     container.innerHTML = '';
-    const msg = document.createElement('p');
-    msg.className = 'muted chart-placeholder';
-    msg.textContent = message;
-    container.appendChild(msg);
+    const bars = document.createElement('div');
+    bars.className = 'bar-chart-bars';
+
+    const max = counts.reduce((m, v) => Math.max(m, v), 0);
+    counts.forEach((count, idx) => {
+      const item = document.createElement('div');
+      item.className = 'bar-chart-item';
+
+      const value = document.createElement('span');
+      value.className = 'bar-chart-value';
+      value.textContent = String(count);
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'bar-chart-bar-wrapper';
+
+      const bar = document.createElement('div');
+      bar.className = 'bar-chart-bar';
+      let percent = max ? (count / max) * 100 : 0;
+      if (count > 0 && percent < 8) percent = 8; // altura mínima para barras > 0
+      bar.style.height = `${percent}%`;
+      bar.title = `${MONTH_LABELS[idx]}: ${count}`;
+
+      wrapper.appendChild(bar);
+
+      const label = document.createElement('span');
+      label.className = 'bar-chart-label';
+      label.textContent = MONTH_LABELS[idx];
+
+      item.appendChild(value);
+      item.appendChild(wrapper);
+      item.appendChild(label);
+      bars.appendChild(item);
+    });
+
+    container.appendChild(bars);
+
+    if (!counts.some(Boolean)) {
+      const msg = document.createElement('p');
+      msg.className = 'muted chart-placeholder';
+      msg.textContent = 'Nenhum processo no ano selecionado.';
+      container.appendChild(msg);
+    }
   }
 
   function renderOverview() {
-    const container = el('overviewRings');
-    if (!container) return;
+    const countMap = {};
+    DASHBOARD_STATUSES.forEach(s => { countMap[s] = 0; });
+    (cachedProcesses || []).forEach(proc => {
+      if (!proc || !proc.status) return;
+      countMap[proc.status] = (countMap[proc.status] || 0) + 1;
+    });
 
     const select = el('entryYearSelect');
     const year = select && select.value ? Number(select.value) : NaN;
-    if (!Number.isFinite(year)) {
-      container.innerHTML = '<p class="muted">Nenhum dado para exibir.</p>';
-      return;
-    }
+    const hasYear = Number.isFinite(year);
 
-    // conta quantos processos iniciaram cada status no ano (pelo início do trecho)
-    const countMap = {};
-    Object.values(cachedStatusHistory).forEach(list => {
-      for (let i = 0; i < list.length; i++) {
-        const cur = list[i];
-        if (!cur?.start || !cur?.status) continue;
-        const startDate = new Date(cur.start);
-        if (Number.isNaN(+startDate)) continue;
-        if (startDate.getFullYear() !== year) continue;
-        countMap[cur.status] = (countMap[cur.status] || 0) + 1;
-      }
-    });
-
-    // médias por status (dias corridos) — baseadas no início efetivo (status_since)
     const agg = {};
     const now = new Date();
-    for (const list of Object.values(cachedStatusHistory)) {
-      for (let i = 0; i < list.length; i++) {
-        const cur = list[i];
-        if (!cur?.start || !cur?.status) continue;
+    if (hasYear) {
+      Object.values(cachedStatusHistory || {}).forEach(list => {
+        if (!Array.isArray(list)) return;
+        for (let i = 0; i < list.length; i++) {
+          const cur = list[i];
+          if (!cur || !cur.start || !cur.status) continue;
+          if (i > 0) {
+            const prev = list[i - 1];
+            if (prev && prev.start === cur.start && prev.status === cur.status) continue;
+          }
 
-        const startDate = new Date(cur.start);
-        if (Number.isNaN(+startDate)) continue;
-        const next = list[i + 1];
-        const endDate = next && next.start ? new Date(next.start) : now;
-        if (Number.isNaN(+endDate)) continue;
+          const startDate = new Date(cur.start);
+          if (Number.isNaN(+startDate)) continue;
+          const next = list[i + 1];
+          const endDate = next && next.start ? new Date(next.start) : now;
+          if (Number.isNaN(+endDate)) continue;
 
-        const startYear = startDate.getFullYear();
-        // Novo critério: entra se o início é no ano; corta no fim do ano
-        if (startYear !== year) continue;
-        const yearEnd = new Date(year + 1, 0, 1); // 01/jan do ano seguinte
-        const limitedEnd = endDate > yearEnd ? yearEnd : endDate;
+          const startYear = startDate.getFullYear();
+          const endYear = endDate.getFullYear();
+          if (startYear !== year || endYear !== year) continue;
 
-        const days = Utils.daysBetween(startDate, limitedEnd);
-        if (typeof days !== 'number' || Number.isNaN(days)) continue;
+          const days = Utils.daysBetween(startDate, endDate);
+          if (typeof days !== 'number' || Number.isNaN(days)) continue;
 
-        agg[cur.status] = agg[cur.status] || { sum: 0, n: 0 };
-        agg[cur.status].sum += days;
-        agg[cur.status].n += 1;
-      }
+          agg[cur.status] = agg[cur.status] || { sum: 0, n: 0 };
+          agg[cur.status].sum += days;
+          agg[cur.status].n += 1;
+        }
+      });
     }
 
     const ringStatuses = SPEED_STATUS_ORDER.filter(
@@ -269,127 +235,98 @@ window.Modules.dashboard = (() => {
         label,
         count: countMap[s] || 0,
         avg: agg[s] ? (agg[s].sum / agg[s].n) : null,
+        ariaLabel: `Velocidade média de ${label}`
       };
     });
 
-    const maxAvg = Math.max(...items.map(it => (typeof it.avg === 'number' ? it.avg : 0)), 0) || 0;
-    container.innerHTML = '';
-    if (!items.some(it => typeof it.avg === 'number')) {
-      const p = document.createElement('p');
-      p.className = 'muted';
-      p.textContent = 'Sem dados para o ano selecionado.';
-      container.appendChild(p);
-      return;
-    }
-
-    for (const it of items) {
-      const row = document.createElement('div');
-      row.className = 'speed-row';
-
-      const label = document.createElement('div');
-      label.className = 'speed-label';
-      label.textContent = it.label;
-
-      const value = document.createElement('div');
-      value.className = 'speed-value';
-      if (typeof it.avg === 'number' && Number.isFinite(it.avg)) {
-        value.textContent = `${it.avg.toFixed(1)} dias`;
-      } else {
-        value.textContent = '— dias';
-      }
-
-      const bar = document.createElement('div');
-      bar.className = 'speed-bar';
-      const widthPct = maxAvg ? Math.max(30, Math.round((it.avg || 0) / maxAvg * 100)) : 30;
-      bar.style.width = `${widthPct}%`;
-
-      row.appendChild(label);
-      row.appendChild(value);
-      row.appendChild(bar);
-      container.appendChild(row);
-    }
+    Utils.renderProcessBars('velocimetros', items);
   }
 
   function renderYearlyActivity() {
-    const container = el('yearlyActivityChart');
-    if (!container) return;
+    const metricEls = {
+      anadoc: el('dashboardMetricAnadoc'),
+      anatecPre: el('dashboardMetricAnatecPre'),
+      anatec: el('dashboardMetricAnatec'),
+      notifications: el('dashboardMetricNotifications'),
+      sigadaerJjaer: el('dashboardMetricSigadaerJjaer'),
+      sigadaerAgu: el('dashboardMetricSigadaerAgu')
+    };
+
+    Object.values(metricEls).forEach(node => {
+      if (node) node.textContent = '—';
+    });
 
     const select = el('entryYearSelect');
     const year = select && select.value ? Number(select.value) : NaN;
-    if (!Number.isFinite(year)) {
-      container.innerHTML = '<p class="muted">Nenhum dado para exibir.</p>';
-      return;
-    }
+    if (!Number.isFinite(year)) return;
 
     const counters = {
-      notifications_requested: 0,
-      notifications_read: 0,
-      sigadaer_requested: 0,
-      sigadaer_expedited: 0,
-      opinions_requested: 0
+      anadoc: 0,
+      anatecPre: 0,
+      anatec: 0,
+      notifications: 0,
+      sigadaerJjaer: 0,
+      sigadaerAgu: 0
     };
 
-    // Notifications
-    for (const n of cachedNotifications) {
-      if (n?.requested_at) {
-        const dt = new Date(n.requested_at);
-        if (Number.isFinite(+dt) && dt.getFullYear() === year) counters.notifications_requested++;
+    Object.values(cachedStatusHistory || {}).forEach(list => {
+      if (!Array.isArray(list)) return;
+      for (let i = 0; i < list.length; i++) {
+        const cur = list[i];
+        if (!cur || !cur.start || !cur.status) continue;
+        if (i > 0) {
+          const prev = list[i - 1];
+          if (prev && prev.start === cur.start && prev.status === cur.status) continue;
+        }
+
+        const startDate = new Date(cur.start);
+        if (Number.isNaN(+startDate) || startDate.getFullYear() !== year) continue;
+
+        if (cur.status === 'ANADOC') counters.anadoc += 1;
+        if (cur.status === 'ANATEC-PRE') counters.anatecPre += 1;
+        if (cur.status === 'ANATEC') counters.anatec += 1;
       }
-      if (n?.read_at) {
-        const dt = new Date(n.read_at);
-        if (Number.isFinite(+dt) && dt.getFullYear() === year) counters.notifications_read++;
+    });
+
+    (cachedNotifications || []).forEach(notification => {
+      if (!notification) return;
+      const { requested_at: requestedAt, read_at: readAt } = notification;
+
+      if (requestedAt) {
+        const requestedDate = new Date(requestedAt);
+        if (!Number.isNaN(+requestedDate) && requestedDate.getFullYear() === year) {
+          counters.notifications += 1;
+        }
       }
-    }
 
-    // Sigadaer
-    for (const s of cachedSigadaer) {
-      if (s?.requested_at) {
-        const dt = new Date(s.requested_at);
-        if (Number.isFinite(+dt) && dt.getFullYear() === year) counters.sigadaer_requested++;
+      if (readAt) {
+        const readDate = new Date(readAt);
+        if (!Number.isNaN(+readDate) && readDate.getFullYear() === year) {
+          counters.notifications += 1;
+        }
       }
-      if (s?.expedit_at) {
-        const dt = new Date(s.expedit_at);
-        if (Number.isFinite(+dt) && dt.getFullYear() === year) counters.sigadaer_expedited++;
-      }
-    }
+    });
 
-    // Opinions (ATM/DT/CGNA)
-    for (const o of cachedOpinions) {
-      if (!o?.type || !OPINION_TYPES_SET.has(o.type)) continue;
-      if (o?.requested_at) {
-        const dt = new Date(o.requested_at);
-        if (Number.isFinite(+dt) && dt.getFullYear() === year) counters.opinions_requested++;
-      }
-    }
+    (cachedSigadaer || []).forEach(sigadaer => {
+      if (!sigadaer) return;
+      const { type, status, expedit_at: expeditAt } = sigadaer;
+      if (!expeditAt || status !== 'EXPEDIDO') return;
 
-    // Render (sem alterar visual)
-    container.innerHTML = '';
-    const wrap = document.createElement('div');
-    wrap.className = 'stats-grid';
+      const expeditDate = new Date(expeditAt);
+      if (Number.isNaN(+expeditDate) || expeditDate.getFullYear() !== year) return;
 
-    function statCard(label, value) {
-      const card = document.createElement('div');
-      card.className = 'stat-card';
-      const h = document.createElement('h4');
-      h.textContent = label;
-      const v = document.createElement('div');
-      v.className = 'value';
-      v.textContent = YEARLY_COUNTER_FORMATTER.format(value || 0);
-      card.appendChild(h);
-      card.appendChild(v);
-      return card;
-    }
+      const normalizedType = typeof type === 'string' ? type.toUpperCase() : '';
+      if (normalizedType === 'JJAER') counters.sigadaerJjaer += 1;
+      if (normalizedType === 'AGU') counters.sigadaerAgu += 1;
+    });
 
-    wrap.appendChild(statCard('Notificações solicitadas', counters.notifications_requested));
-    wrap.appendChild(statCard('Notificações lidas', counters.notifications_read));
-    wrap.appendChild(statCard('SIGADAER solicitado', counters.sigadaer_requested));
-    wrap.appendChild(statCard('SIGADAER expedido', counters.sigadaer_expedited));
-    wrap.appendChild(statCard('Pareceres internos solicitados (ATM/DT/CGNA)', counters.opinions_requested));
-
-    container.appendChild(wrap);
+    Object.entries(metricEls).forEach(([key, node]) => {
+      if (!node) return;
+      node.textContent = YEARLY_COUNTER_FORMATTER.format(counters[key] || 0);
+    });
   }
 
-  function renderHourlyEngagementEmpty(message) {
+  function renderHourlyEngagementEmpty(message = 'Nenhum dado para exibir.') {
     const container = el('hourlyEngagementChart');
     if (!container) return;
     container.innerHTML = '';
@@ -422,60 +359,99 @@ window.Modules.dashboard = (() => {
       counts[hour] += 1;
     };
 
-    // Datas consideradas (todas com base em quando ocorreram de fato)
-    for (const p of cachedProcesses) registerDate(p?.first_entry_date);
-    for (const n of cachedNotifications) { registerDate(n?.requested_at); registerDate(n?.read_at); }
-    for (const s of cachedSigadaer) { registerDate(s?.requested_at); registerDate(s?.expedit_at); }
-    for (const o of cachedOpinions) { if (OPINION_TYPES_SET.has(o?.type)) registerDate(o?.requested_at); }
-    for (const list of Object.values(cachedStatusHistory)) for (const it of list) registerDate(it?.start);
+    Object.values(cachedStatusHistory || {}).forEach(list => {
+      if (!Array.isArray(list)) return;
+      for (let i = 0; i < list.length; i++) {
+        const cur = list[i];
+        if (!cur || !cur.start || !cur.status) continue;
+        if (i > 0) {
+          const prev = list[i - 1];
+          if (prev && prev.start === cur.start && prev.status === cur.status) continue;
+        }
+        registerDate(cur.start);
+      }
+    });
 
-    container.innerHTML = '';
-    const total = sumBy(counts, v => v);
+    (cachedSigadaer || []).forEach(item => {
+      if (!item) return;
+      if (item.requested_at) registerDate(item.requested_at);
+      if (item.status === 'EXPEDIDO' && item.expedit_at) registerDate(item.expedit_at);
+    });
+
+    (cachedOpinions || []).forEach(opinion => {
+      if (!opinion) return;
+      const type = typeof opinion.type === 'string' ? opinion.type.toUpperCase() : '';
+      if (!OPINION_TYPES_SET.has(type)) return;
+      if (opinion.requested_at) registerDate(opinion.requested_at);
+    });
+
+    const total = counts.reduce((sum, value) => sum + value, 0);
     if (!total) {
-      renderHourlyEngagementEmpty('Sem atividades no ano selecionado.');
+      renderHourlyEngagementEmpty('Nenhum evento registrado para o ano selecionado.');
       return;
     }
 
-    const header = document.createElement('div');
-    header.className = 'chart-header';
-    const title = document.createElement('h3');
-    title.textContent = `Engajamento por hora em ${year}`;
-    const bars = document.createElement('div');
-    bars.className = 'bars hourly';
+    const maxPercent = counts.reduce((max, value) => {
+      const pct = (value / total) * 100;
+      return pct > max ? pct : max;
+    }, 0);
 
-    counts.forEach((val, hr) => {
+    container.innerHTML = '';
+    const bars = document.createElement('div');
+    bars.className = 'bar-chart-bars';
+    bars.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
+
+    counts.forEach((value, hour) => {
+      const percent = (value / total) * 100;
+      const item = document.createElement('div');
+      item.className = 'bar-chart-item';
+
+      const valueNode = document.createElement('span');
+      valueNode.className = 'bar-chart-value';
+      valueNode.textContent = `${PERCENTAGE_FORMATTER.format(percent)}%`;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'bar-chart-bar-wrapper';
+
       const bar = document.createElement('div');
-      bar.className = 'bar';
-      bar.style.height = Math.max(2, Math.round((val / total) * 100)) + 'px';
-      bar.setAttribute('aria-label', `${String(hr).padStart(2, '0')}h: ${val}`);
-      bars.appendChild(bar);
+      bar.className = 'bar-chart-bar';
+      let heightPercent = maxPercent ? (percent / maxPercent) * 100 : 0;
+      if (percent > 0 && heightPercent < 8) heightPercent = 8;
+      bar.style.height = `${heightPercent}%`;
+      bar.title = `${String(hour).padStart(2, '0')}h: ${value} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
+
+      wrapper.appendChild(bar);
+
+      const label = document.createElement('span');
+      label.className = 'bar-chart-label';
+      label.textContent = `${String(hour).padStart(2, '0')}h`;
+
+      item.appendChild(valueNode);
+      item.appendChild(wrapper);
+      item.appendChild(label);
+      bars.appendChild(item);
     });
 
-    header.appendChild(title);
-    container.appendChild(header);
     container.appendChild(bars);
   }
 
   async function load() {
-    // Usa apenas a instância do cliente criada em supabaseClient.js
-    const sb = window.supabaseClient;
-    if (!sb) {
-      const once = (ev, fn) => document.addEventListener(ev, fn, { once: true });
-      const relaunch = () => window.Modules?.dashboard?.load && window.Modules.dashboard.load();
-      once('auth-ready', relaunch);
-      once('supabase-ready', relaunch);
-      console.warn('[dashboard] Supabase client ainda não disponível; aguardando auth-ready/supabase-ready.');
-      return;
-    }
+    renderEntryChartEmpty('Carregando…');
+    renderHourlyEngagementEmpty('Carregando…');
+    const yearSelect = el('entryYearSelect');
+    if (yearSelect) yearSelect.disabled = true;
 
-    const prevYear = el('entryYearSelect')?.value ? Number(el('entryYearSelect').value) : undefined;
+    cachedStatusHistory = {};
+    cachedNotifications = [];
+    cachedSigadaer = [];
+    cachedOpinions = [];
 
     const { data: procs } = await sb
       .from('processes')
       .select('id,status,status_since,first_entry_date');
 
     cachedProcesses = procs || [];
-    const hasYears = updateYearOptions(prevYear);
+    const hasYears = updateYearOptions();
     if (hasYears) renderEntryChart();
     else renderEntryChartEmpty('Nenhum dado para exibir.');
 
@@ -494,32 +470,35 @@ window.Modules.dashboard = (() => {
       .select('type, requested_at');
     cachedOpinions = opinions || [];
 
-    // Histórico de status: usar 'details.status_since' quando disponível
+    // Velocidade média — montar histórico de status por processo (usando 'history')
     const ids = (procs || []).map(p => p.id);
     const byProc = {};
     if (ids.length) {
       const { data: historyData } = await sb
         .from('history')
         .select('process_id,details,created_at')
+        .eq('action', 'Status atualizado')
         .in('process_id', ids)
-        .eq('action', 'Status atualizado');
-
-      for (const h of (historyData || [])) {
-        const pid = h.process_id;
-        const det = h.details || {};
-        const status = det.status;
-        const start = det.status_since || h.created_at; // data efetiva de início
-        if (!pid || !status || !start) continue;
-        byProc[pid] = byProc[pid] || [];
-        byProc[pid].push({ status, start });
-      }
+        .order('created_at');
+      (historyData || []).forEach(item => {
+        if (!item || !item.process_id) return;
+        let det = item.details || {};
+        if (typeof det === 'string') {
+          try { det = JSON.parse(det); } catch (_) { det = {}; }
+        }
+        const status = det?.status;
+        let start = det?.status_since || det?.start || item.created_at;
+        if (!status || !start) return;
+        const list = byProc[item.process_id] || (byProc[item.process_id] = []);
+        list.push({ status, start });
+      });
     }
 
-    // Garante o status atual como último ponto (se ainda não presente)
     (procs || []).forEach(proc => {
-      const list = byProc[proc.id] = byProc[proc.id] || [];
-      if (proc?.status && proc?.status_since) {
-        const already = list.some(x => x.status === proc.status && x.start === proc.status_since);
+      if (!proc || !proc.id) return;
+      const list = byProc[proc.id] || (byProc[proc.id] = []);
+      if (proc.status && proc.status_since) {
+        const already = list.some(entry => entry.status === proc.status && entry.start === proc.status_since);
         if (!already) list.push({ status: proc.status, start: proc.status_since });
       }
       list.sort((a, b) => new Date(a.start) - new Date(b.start));
