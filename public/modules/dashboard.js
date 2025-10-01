@@ -249,7 +249,8 @@ window.Modules.dashboard = (() => {
       anatec: el('dashboardMetricAnatec'),
       notifications: el('dashboardMetricNotifications'),
       sigadaerJjaer: el('dashboardMetricSigadaerJjaer'),
-      sigadaerAgu: el('dashboardMetricSigadaerAgu')
+      sigadaerAgu: el('dashboardMetricSigadaerAgu'),
+      sigadaerPref: el('dashboardMetricSigadaerPref') // PREF: Prefeitura
     };
 
     Object.values(metricEls).forEach(node => {
@@ -266,7 +267,8 @@ window.Modules.dashboard = (() => {
       anatec: 0,
       notifications: 0,
       sigadaerJjaer: 0,
-      sigadaerAgu: 0
+      sigadaerAgu: 0,
+      sigadaerPref: 0
     };
 
     Object.values(cachedStatusHistory || {}).forEach(list => {
@@ -288,7 +290,7 @@ window.Modules.dashboard = (() => {
       }
     });
 
-    // === AJUSTE: Notificações contam apenas por requested_at (data efetiva do pedido) ===
+    // Notificações: contam pela data efetiva do pedido
     (cachedNotifications || []).forEach(notification => {
       if (!notification) return;
       const { requested_at: requestedAt } = notification;
@@ -300,6 +302,7 @@ window.Modules.dashboard = (() => {
       }
     });
 
+    // SIGADAER: contam quando EXPEDIDO, pela data de expedição (expedit_at)
     (cachedSigadaer || []).forEach(sigadaer => {
       if (!sigadaer) return;
       const { type, status, expedit_at: expeditAt } = sigadaer;
@@ -311,6 +314,7 @@ window.Modules.dashboard = (() => {
       const normalizedType = typeof type === 'string' ? type.toUpperCase() : '';
       if (normalizedType === 'JJAER') counters.sigadaerJjaer += 1;
       if (normalizedType === 'AGU') counters.sigadaerAgu += 1;
+      if (normalizedType === 'PREF') counters.sigadaerPref += 1; // <-- incluído
     });
 
     Object.entries(metricEls).forEach(([key, node]) => {
