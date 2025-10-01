@@ -54,40 +54,73 @@ window.Modules.dashboard = (() => {
       renderYearlyActivity();
       renderHourlyEngagement();
     });
+
+    const refreshBtn = el('dashboardRefresh');
+    refreshBtn?.addEventListener('click', () => load());
   }
 
-  function renderEntryChartEmpty(message = 'Nenhum dado para exibir.') {
-    const container = el('entryChart');
-    if (!container) return;
-    setEntryYearTotal(null);
-    container.innerHTML = '';
-    const msg = document.createElement('p');
-    msg.className = 'muted chart-placeholder';
-    msg.textContent = message;
-    container.appendChild(msg);
+  function el(id) {
+    return document.getElementById(id);
   }
 
-  function setEntryYearTotal(value) {
-    const node = el('entryYearTotal');
-    if (!node) return;
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      node.textContent = YEARLY_COUNTER_FORMATTER.format(value);
-    } else {
-      node.textContent = '—';
+  function sumBy(arr, getter) {
+    let s = 0;
+    for (const it of arr) {
+      const v = getter(it);
+      if (typeof v === 'number' && Number.isFinite(v)) s += v;
     }
+    return s;
   }
 
-  function updateYearOptions() {
+  function updateYearOptions(previous) {
     const select = el('entryYearSelect');
     if (!select) return false;
 
-    const previous = select.value ? Number(select.value) : null;
     const yearSet = new Set();
-    (cachedProcesses || []).forEach(proc => {
-      const d = Utils.dateOnly(proc.first_entry_date);
-      if (!d || Number.isNaN(+d)) return;
-      yearSet.add(d.getFullYear());
-    });
+
+    // processos
+    for (const p of cachedProcesses) {
+      if (p?.first_entry_date) {
+        const y = new Date(p.first_entry_date).getFullYear();
+        if (Number.isFinite(y)) yearSet.add(y);
+      }
+    }
+    // notifications
+    for (const n of cachedNotifications) {
+      if (n?.requested_at) {
+        const y = new Date(n.requested_at).getFullYear();
+        if (Number.isFinite(y)) yearSet.add(y);
+      }
+      if (n?.read_at) {
+        const y = new Date(n.read_at).getFullYear();
+        if (Number.isFinite(y)) yearSet.add(y);
+      }
+    }
+    // sigadaer
+    for (const s of cachedSigadaer) {
+      if (s?.requested_at) {
+        const y = new Date(s.requested_at).getFullYear();
+        if (Number.isFinite(y)) yearSet.add(y);
+      }
+      if (s?.expedit_at) {
+        const y = new Date(s.expedit_at).getFullYear();
+        if (Number.isFinite(y)) yearSet.add(y);
+      }
+    }
+    // opinions
+    for (const o of cachedOpinions) {
+      if (o?.requested_at) {
+        const y = new Date(o.requested_at).getFullYear();
+        if (Number.isFinite(y)) yearSet.add(y);
+      }
+    }
+    // status history (usa start)
+    for (const list of Object.values(cachedStatusHistory)) {
+      for (const item of list) {
+        const y = new Date(item.start).getFullYear();
+        if (Number.isFinite(y)) yearSet.add(y);
+      }
+    }
 
     const years = Array.from(yearSet)
       .filter(y => Number.isFinite(y))
@@ -119,112 +152,112 @@ window.Modules.dashboard = (() => {
 
     const select = el('entryYearSelect');
     const year = select && select.value ? Number(select.value) : NaN;
-    if (!year || Number.isNaN(year)) {
+    if (!Number.isFinite(year)) {
       renderEntryChartEmpty('Nenhum dado para exibir.');
       return;
     }
 
-    const counts = new Array(12).fill(0);
-    (cachedProcesses || []).forEach(proc => {
-      const d = Utils.dateOnly(proc.first_entry_date);
-      if (!d || Number.isNaN(+d)) return;
-      if (d.getFullYear() !== year) return;
-      counts[d.getMonth()] += 1;
-    });
+    const months = new Array(12).fill(0);
 
-    const totalCount = counts.reduce((sum, value) => sum + value, 0);
-    setEntryYearTotal(totalCount);
+    // usa first_entry_date do processo
+    for (const p of cachedProcesses) {
+      const dt = p?.first_entry_date ? new Date(p.first_entry_date) : null;
+      if (!dt || Number.isNaN(+dt) || dt.getFullYear() !== year) continue;
+      months[dt.getMonth()] += 1;
+    }
 
     container.innerHTML = '';
+    const total = sumBy(months, v => v);
+    if (!total) {
+      renderEntryChartEmpty('Sem entradas para o ano selecionado.');
+      return;
+    }
+
+    const header = document.createElement('div');
+    header.className = 'chart-header';
+    const title = document.createElement('h3');
+    title.textContent = `Novos processos em ${year}`;
+    const counter = document.createElement('div');
+    counter.className = 'counter';
+    counter.textContent = YEARLY_COUNTER_FORMATTER.format(total);
+    header.appendChild(title);
+    header.appendChild(counter);
+
     const bars = document.createElement('div');
-    bars.className = 'bar-chart-bars';
-
-    const max = counts.reduce((m, v) => Math.max(m, v), 0);
-    counts.forEach((count, idx) => {
-      const item = document.createElement('div');
-      item.className = 'bar-chart-item';
-
-      const value = document.createElement('span');
-      value.className = 'bar-chart-value';
-      value.textContent = String(count);
-
-      const wrapper = document.createElement('div');
-      wrapper.className = 'bar-chart-bar-wrapper';
-
+    bars.className = 'bars';
+    months.forEach((val, idx) => {
       const bar = document.createElement('div');
-      bar.className = 'bar-chart-bar';
-      let percent = max ? (count / max) * 100 : 0;
-      if (count > 0 && percent < 8) percent = 8; // altura mínima para barras > 0
-      bar.style.height = `${percent}%`;
-      bar.title = `${MONTH_LABELS[idx]}: ${count}`;
-
-      wrapper.appendChild(bar);
-
-      const label = document.createElement('span');
-      label.className = 'bar-chart-label';
-      label.textContent = MONTH_LABELS[idx];
-
-      item.appendChild(value);
-      item.appendChild(wrapper);
-      item.appendChild(label);
-      bars.appendChild(item);
+      bar.className = 'bar';
+      bar.style.height = Math.max(4, Math.round((val / total) * 100)) + 'px';
+      bar.setAttribute('aria-label', `${MONTH_LABELS[idx]}: ${val}`);
+      bars.appendChild(bar);
     });
 
+    container.appendChild(header);
     container.appendChild(bars);
+  }
 
-    if (!counts.some(Boolean)) {
-      const msg = document.createElement('p');
-      msg.className = 'muted chart-placeholder';
-      msg.textContent = 'Nenhum processo no ano selecionado.';
-      container.appendChild(msg);
-    }
+  function renderEntryChartEmpty(message) {
+    const container = el('entryChart');
+    if (!container) return;
+    container.innerHTML = '';
+    const msg = document.createElement('p');
+    msg.className = 'muted chart-placeholder';
+    msg.textContent = message;
+    container.appendChild(msg);
   }
 
   function renderOverview() {
-    const countMap = {};
-    DASHBOARD_STATUSES.forEach(s => { countMap[s] = 0; });
-    (cachedProcesses || []).forEach(proc => {
-      if (!proc || !proc.status) return;
-      countMap[proc.status] = (countMap[proc.status] || 0) + 1;
-    });
+    const container = el('overviewRings');
+    if (!container) return;
 
     const select = el('entryYearSelect');
     const year = select && select.value ? Number(select.value) : NaN;
-    const hasYear = Number.isFinite(year);
+    if (!Number.isFinite(year)) {
+      container.innerHTML = '<p class="muted">Nenhum dado para exibir.</p>';
+      return;
+    }
 
+    // conta quantos processos estiveram em cada status no ano (pelo início do trecho)
+    const countMap = {};
+    Object.values(cachedStatusHistory).forEach(list => {
+      for (let i = 0; i < list.length; i++) {
+        const cur = list[i];
+        if (!cur?.start || !cur?.status) continue;
+        const startDate = new Date(cur.start);
+        if (Number.isNaN(+startDate)) continue;
+        if (startDate.getFullYear() !== year) continue;
+        countMap[cur.status] = (countMap[cur.status] || 0) + 1;
+      }
+    });
+
+    // médias por status (dias corridos)
     const agg = {};
     const now = new Date();
-    if (hasYear) {
-      Object.values(cachedStatusHistory || {}).forEach(list => {
-        if (!Array.isArray(list)) return;
-        for (let i = 0; i < list.length; i++) {
-          const cur = list[i];
-          if (!cur || !cur.start || !cur.status) continue;
-          if (i > 0) {
-            const prev = list[i - 1];
-            if (prev && prev.start === cur.start && prev.status === cur.status) continue;
-          }
+    for (const list of Object.values(cachedStatusHistory)) {
+      for (let i = 0; i < list.length; i++) {
+        const cur = list[i];
+        if (!cur?.start || !cur?.status) continue;
 
-          const startDate = new Date(cur.start);
-          if (Number.isNaN(+startDate)) continue;
-          const next = list[i + 1];
-          const endDate = next && next.start ? new Date(next.start) : now;
-          if (Number.isNaN(+endDate)) continue;
+        const startDate = new Date(cur.start);
+        if (Number.isNaN(+startDate)) continue;
+        const next = list[i + 1];
+        const endDate = next && next.start ? new Date(next.start) : now;
+        if (Number.isNaN(+endDate)) continue;
 
-          const startYear = startDate.getFullYear();
-          if (startYear !== year) continue;
+        const startYear = startDate.getFullYear();
+        // Novo critério: conta se o início é no ano selecionado e corta o fim no limite do ano
+        if (startYear !== year) continue;
+        const yearEnd = new Date(year + 1, 0, 1); // 01/jan do ano seguinte
+        const limitedEnd = endDate > yearEnd ? yearEnd : endDate;
 
-          // Limita o fim ao último dia do ano selecionado para evitar contaminar anos seguintes
-          const yearEnd = new Date(year + 1, 0, 1);
-          const limitedEnd = endDate < yearEnd ? endDate : yearEnd;
-          const days = Utils.daysBetween(startDate, limitedEnd);
-          if (typeof days !== 'number' || Number.isNaN(days)) continue;
+        const days = Utils.daysBetween(startDate, limitedEnd);
+        if (typeof days !== 'number' || Number.isNaN(days)) continue;
 
-          agg[cur.status] = agg[cur.status] || { sum: 0, n: 0 };
-          agg[cur.status].sum += days;
-          agg[cur.status].n += 1;
-        }
-      });
+        agg[cur.status] = agg[cur.status] || { sum: 0, n: 0 };
+        agg[cur.status].sum += days;
+        agg[cur.status].n += 1;
+      }
     }
 
     const ringStatuses = SPEED_STATUS_ORDER.filter(
@@ -241,94 +274,126 @@ window.Modules.dashboard = (() => {
       };
     });
 
-    Utils.renderProcessBars('velocimetros', items);
+    // max para largura proporcional (sem alterar visual)
+    const maxAvg = Math.max(...items.map(it => (typeof it.avg === 'number' ? it.avg : 0)), 0) || 0;
+    container.innerHTML = '';
+    if (!items.some(it => typeof it.avg === 'number')) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = 'Sem dados para o ano selecionado.';
+      container.appendChild(p);
+      return;
+    }
+
+    for (const it of items) {
+      const row = document.createElement('div');
+      row.className = 'speed-row';
+
+      const label = document.createElement('div');
+      label.className = 'speed-label';
+      label.textContent = it.label;
+
+      const value = document.createElement('div');
+      value.className = 'speed-value';
+      if (typeof it.avg === 'number' && Number.isFinite(it.avg)) {
+        value.textContent = `${it.avg.toFixed(1)} dias`;
+      } else {
+        value.textContent = '— dias';
+      }
+      value.setAttribute('aria-label', it.ariaLabel);
+
+      const bar = document.createElement('div');
+      bar.className = 'speed-bar';
+      const widthPct = maxAvg ? Math.max(30, Math.round((it.avg || 0) / maxAvg * 100)) : 30;
+      bar.style.width = `${widthPct}%`;
+
+      row.appendChild(label);
+      row.appendChild(value);
+      row.appendChild(bar);
+      container.appendChild(row);
+    }
   }
 
   function renderYearlyActivity() {
-    const metricEls = {
-      anadoc: el('dashboardMetricAnadoc'),
-      anatecPre: el('dashboardMetricAnatecPre'),
-      anatec: el('dashboardMetricAnatec'),
-      notifications: el('dashboardMetricNotifications'),
-      sigadaerJjaer: el('dashboardMetricSigadaerJjaer'),
-      sigadaerAgu: el('dashboardMetricSigadaerAgu')
-    };
-
-    Object.values(metricEls).forEach(node => {
-      if (node) node.textContent = '—';
-    });
+    const container = el('yearlyActivityChart');
+    if (!container) return;
 
     const select = el('entryYearSelect');
     const year = select && select.value ? Number(select.value) : NaN;
-    if (!Number.isFinite(year)) return;
+    if (!Number.isFinite(year)) {
+      container.innerHTML = '<p class="muted">Nenhum dado para exibir.</p>';
+      return;
+    }
 
     const counters = {
-      anadoc: 0,
-      anatecPre: 0,
-      anatec: 0,
-      notifications: 0,
-      sigadaerJjaer: 0,
-      sigadaerAgu: 0
+      notifications_requested: 0,
+      notifications_read: 0,
+      sigadaer_requested: 0,
+      sigadaer_expedited: 0,
+      opinions_requested: 0
     };
 
-    Object.values(cachedStatusHistory || {}).forEach(list => {
-      if (!Array.isArray(list)) return;
-      for (let i = 0; i < list.length; i++) {
-        const cur = list[i];
-        if (!cur || !cur.start || !cur.status) continue;
-        if (i > 0) {
-          const prev = list[i - 1];
-          if (prev && prev.start === cur.start && prev.status === cur.status) continue;
-        }
-
-        const startDate = new Date(cur.start);
-        if (Number.isNaN(+startDate) || startDate.getFullYear() !== year) continue;
-
-        if (cur.status === 'ANADOC') counters.anadoc += 1;
-        if (cur.status === 'ANATEC-PRE') counters.anatecPre += 1;
-        if (cur.status === 'ANATEC') counters.anatec += 1;
+    // Notifications
+    for (const n of cachedNotifications) {
+      if (n?.requested_at) {
+        const dt = new Date(n.requested_at);
+        if (Number.isFinite(+dt) && dt.getFullYear() === year) counters.notifications_requested++;
       }
-    });
-
-    (cachedNotifications || []).forEach(notification => {
-      if (!notification) return;
-      const { requested_at: requestedAt, read_at: readAt } = notification;
-
-      if (requestedAt) {
-        const requestedDate = new Date(requestedAt);
-        if (!Number.isNaN(+requestedDate) && requestedDate.getFullYear() === year) {
-          counters.notifications += 1;
-        }
+      if (n?.read_at) {
+        const dt = new Date(n.read_at);
+        if (Number.isFinite(+dt) && dt.getFullYear() === year) counters.notifications_read++;
       }
+    }
 
-      if (readAt) {
-        const readDate = new Date(readAt);
-        if (!Number.isNaN(+readDate) && readDate.getFullYear() === year) {
-          counters.notifications += 1;
-        }
+    // Sigadaer
+    for (const s of cachedSigadaer) {
+      if (s?.requested_at) {
+        const dt = new Date(s.requested_at);
+        if (Number.isFinite(+dt) && dt.getFullYear() === year) counters.sigadaer_requested++;
       }
-    });
+      if (s?.expedit_at) {
+        const dt = new Date(s.expedit_at);
+        if (Number.isFinite(+dt) && dt.getFullYear() === year) counters.sigadaer_expedited++;
+      }
+    }
 
-    (cachedSigadaer || []).forEach(sigadaer => {
-      if (!sigadaer) return;
-      const { type, status, expedit_at: expeditAt } = sigadaer;
-      if (!expeditAt || status !== 'EXPEDIDO') return;
+    // Opinions (ATM/DT/CGNA)
+    for (const o of cachedOpinions) {
+      if (!o?.type || !OPINION_TYPES_SET.has(o.type)) continue;
+      if (o?.requested_at) {
+        const dt = new Date(o.requested_at);
+        if (Number.isFinite(+dt) && dt.getFullYear() === year) counters.opinions_requested++;
+      }
+    }
 
-      const expeditDate = new Date(expeditAt);
-      if (Number.isNaN(+expeditDate) || expeditDate.getFullYear() !== year) return;
+    // Render (sem alterar visual)
+    container.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'stats-grid';
 
-      const normalizedType = typeof type === 'string' ? type.toUpperCase() : '';
-      if (normalizedType === 'JJAER') counters.sigadaerJjaer += 1;
-      if (normalizedType === 'AGU') counters.sigadaerAgu += 1;
-    });
+    function statCard(label, value) {
+      const card = document.createElement('div');
+      card.className = 'stat-card';
+      const h = document.createElement('h4');
+      h.textContent = label;
+      const v = document.createElement('div');
+      v.className = 'value';
+      v.textContent = YEARLY_COUNTER_FORMATTER.format(value || 0);
+      card.appendChild(h);
+      card.appendChild(v);
+      return card;
+    }
 
-    Object.entries(metricEls).forEach(([key, node]) => {
-      if (!node) return;
-      node.textContent = YEARLY_COUNTER_FORMATTER.format(counters[key] || 0);
-    });
+    wrap.appendChild(statCard('Notificações solicitadas', counters.notifications_requested));
+    wrap.appendChild(statCard('Notificações lidas', counters.notifications_read));
+    wrap.appendChild(statCard('SIGADAER solicitado', counters.sigadaer_requested));
+    wrap.appendChild(statCard('SIGADAER expedido', counters.sigadaer_expedited));
+    wrap.appendChild(statCard('Pareceres internos solicitados (ATM/DT/CGNA)', counters.opinions_requested));
+
+    container.appendChild(wrap);
   }
 
-  function renderHourlyEngagementEmpty(message = 'Nenhum dado para exibir.') {
+  function renderHourlyEngagementEmpty(message) {
     const container = el('hourlyEngagementChart');
     if (!container) return;
     container.innerHTML = '';
@@ -361,99 +426,69 @@ window.Modules.dashboard = (() => {
       counts[hour] += 1;
     };
 
-    Object.values(cachedStatusHistory || {}).forEach(list => {
-      if (!Array.isArray(list)) return;
-      for (let i = 0; i < list.length; i++) {
-        const cur = list[i];
-        if (!cur || !cur.start || !cur.status) continue;
-        if (i > 0) {
-          const prev = list[i - 1];
-          if (prev && prev.start === cur.start && prev.status === cur.status) continue;
-        }
-        registerDate(cur.start);
-      }
-    });
+    // Base de datas para engajamento por hora:
+    // - first_entry_date
+    // - requested_at / read_at (notificações)
+    // - requested_at / expedit_at (sigadaer)
+    // - requested_at de pareceres internos
+    // - início de cada status (status_since) do histórico
+    for (const p of cachedProcesses) {
+      registerDate(p?.first_entry_date);
+    }
+    for (const n of cachedNotifications) {
+      registerDate(n?.requested_at);
+      registerDate(n?.read_at);
+    }
+    for (const s of cachedSigadaer) {
+      registerDate(s?.requested_at);
+      registerDate(s?.expedit_at);
+    }
+    for (const o of cachedOpinions) {
+      if (!o?.type || !OPINION_TYPES_SET.has(o.type)) continue;
+      registerDate(o?.requested_at);
+    }
+    for (const list of Object.values(cachedStatusHistory)) {
+      for (const it of list) registerDate(it?.start);
+    }
 
-    (cachedSigadaer || []).forEach(item => {
-      if (!item) return;
-      if (item.requested_at) registerDate(item.requested_at);
-      if (item.status === 'EXPEDIDO' && item.expedit_at) registerDate(item.expedit_at);
-    });
-
-    (cachedOpinions || []).forEach(opinion => {
-      if (!opinion) return;
-      const type = typeof opinion.type === 'string' ? opinion.type.toUpperCase() : '';
-      if (!OPINION_TYPES_SET.has(type)) return;
-      if (opinion.requested_at) registerDate(opinion.requested_at);
-    });
-
-    const total = counts.reduce((sum, value) => sum + value, 0);
+    // Render simples (sem mudar visual)
+    container.innerHTML = '';
+    const total = sumBy(counts, v => v);
     if (!total) {
-      renderHourlyEngagementEmpty('Nenhum evento registrado para o ano selecionado.');
+      renderHourlyEngagementEmpty('Sem atividades no ano selecionado.');
       return;
     }
 
-    const maxPercent = counts.reduce((max, value) => {
-      const pct = (value / total) * 100;
-      return pct > max ? pct : max;
-    }, 0);
-
-    container.innerHTML = '';
+    const header = document.createElement('div');
+    header.className = 'chart-header';
+    const title = document.createElement('h3');
+    title.textContent = `Engajamento por hora em ${year}`;
     const bars = document.createElement('div');
-    bars.className = 'bar-chart-bars';
-    bars.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
+    bars.className = 'bars hourly';
 
-    counts.forEach((value, hour) => {
-      const percent = (value / total) * 100;
-      const item = document.createElement('div');
-      item.className = 'bar-chart-item';
-
-      const valueNode = document.createElement('span');
-      valueNode.className = 'bar-chart-value';
-      valueNode.textContent = `${PERCENTAGE_FORMATTER.format(percent)}%`;
-
-      const wrapper = document.createElement('div');
-      wrapper.className = 'bar-chart-bar-wrapper';
-
+    counts.forEach((val, hr) => {
       const bar = document.createElement('div');
-      bar.className = 'bar-chart-bar';
-      let heightPercent = maxPercent ? (percent / maxPercent) * 100 : 0;
-      if (percent > 0 && heightPercent < 8) heightPercent = 8;
-      bar.style.height = `${heightPercent}%`;
-      bar.title = `${String(hour).padStart(2, '0')}h: ${value} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
-
-      wrapper.appendChild(bar);
-
-      const label = document.createElement('span');
-      label.className = 'bar-chart-label';
-      label.textContent = `${String(hour).padStart(2, '0')}h`;
-
-      item.appendChild(valueNode);
-      item.appendChild(wrapper);
-      item.appendChild(label);
-      bars.appendChild(item);
+      bar.className = 'bar';
+      bar.style.height = Math.max(2, Math.round((val / total) * 100)) + 'px';
+      bar.setAttribute('aria-label', `${String(hr).padStart(2, '0')}h: ${val}`);
+      bars.appendChild(bar);
     });
 
+    header.appendChild(title);
+    container.appendChild(header);
     container.appendChild(bars);
   }
 
   async function load() {
-    renderEntryChartEmpty('Carregando…');
-    renderHourlyEngagementEmpty('Carregando…');
-    const yearSelect = el('entryYearSelect');
-    if (yearSelect) yearSelect.disabled = true;
-
-    cachedStatusHistory = {};
-    cachedNotifications = [];
-    cachedSigadaer = [];
-    cachedOpinions = [];
+    const sb = window.supabaseClient;
+    const prevYear = el('entryYearSelect')?.value ? Number(el('entryYearSelect').value) : undefined;
 
     const { data: procs } = await sb
       .from('processes')
       .select('id,status,status_since,first_entry_date');
 
     cachedProcesses = procs || [];
-    const hasYears = updateYearOptions();
+    const hasYears = updateYearOptions(prevYear);
     if (hasYears) renderEntryChart();
     else renderEntryChartEmpty('Nenhum dado para exibir.');
 
@@ -479,28 +514,25 @@ window.Modules.dashboard = (() => {
       const { data: historyData } = await sb
         .from('history')
         .select('process_id,details,created_at')
-        .eq('action', 'Status atualizado')
         .in('process_id', ids)
-        .order('created_at');
-      (historyData || []).forEach(item => {
-        if (!item || !item.process_id) return;
-        let det = item.details || {};
-        if (typeof det === 'string') {
-          try { det = JSON.parse(det); } catch (_) { det = {}; }
-        }
-        const status = det?.status;
-        let start = det?.status_since || det?.start || item.created_at;
-        if (!status || !start) return;
-        const list = byProc[item.process_id] || (byProc[item.process_id] = []);
-        list.push({ status, start });
-      });
+        .eq('action', 'Status atualizado');
+
+      for (const h of (historyData || [])) {
+        const pid = h.process_id;
+        const det = h.details || {};
+        const status = det.status;
+        const start = det.status_since || h.created_at; // usa data efetiva quando houver
+        if (!pid || !status || !start) continue;
+        byProc[pid] = byProc[pid] || [];
+        byProc[pid].push({ status, start });
+      }
     }
 
+    // garante o status atual como último ponto (se ainda não presente)
     (procs || []).forEach(proc => {
-      if (!proc || !proc.id) return;
-      const list = byProc[proc.id] || (byProc[proc.id] = []);
-      if (proc.status && proc.status_since) {
-        const already = list.some(entry => entry.status === proc.status && entry.start === proc.status_since);
+      const list = byProc[proc.id] = byProc[proc.id] || [];
+      if (proc?.status && proc?.status_since) {
+        const already = list.some(x => x.status === proc.status && x.start === proc.status_since);
         if (!already) list.push({ status: proc.status, start: proc.status_since });
       }
       list.sort((a, b) => new Date(a.start) - new Date(b.start));
