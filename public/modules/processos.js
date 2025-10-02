@@ -134,7 +134,7 @@ window.Modules.processos = (() => {
   // === Fim das adições do patch ===
 
   // === Patch: normalização de rótulos de Tipo de Processo ===
-  const PROCESS_TYPE_LABELS = ['PDIR', 'Inscrição', 'Alteração', 'Exploração', 'OPEA'];
+  const PROCESS_TYPE_LABELS = ['PDIR', 'Inscrição', 'Alteração', 'Exploração', 'OPEA', 'AD/HEL'];
   const PROCESS_TYPE_MAP = PROCESS_TYPE_LABELS.reduce((map, label) => {
     map[label] = label;
     map[`${label} - Documental`] = label;
@@ -435,7 +435,7 @@ window.Modules.processos = (() => {
           <h3>Novo Processo ${nup}</h3>
           <label>Tipo
             <select id="npTipo">
-              <option>PDIR</option><option>Inscrição</option><option>Alteração</option><option>Exploração</option><option>OPEA</option>
+              <option>PDIR</option><option>Inscrição</option><option>Alteração</option><option>Exploração</option><option>OPEA</option><option>AD/HEL</option>
             </select>
           </label>
           <label>Status
