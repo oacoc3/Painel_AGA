@@ -13,6 +13,9 @@
 
 window.Modules = window.Modules || {};
 window.Modules.processos = (() => {
+  // Garante que o cliente Supabase esteja acessível como 'sb' dentro do módulo
+  const sb = window.sb;
+
   let currentProcId = null;
   let currentNUP = '';
   let editingOpId = null;
@@ -23,6 +26,14 @@ window.Modules.processos = (() => {
   let PROC_PAGE = 1;
   const PROC_PAGE_SIZE = 50; // ajuste se necessário
 
+  // Filtros (patch)
+  const PROC_FILTERS = {
+    firstEntryFrom: '',
+    firstEntryTo: '',
+    obraFrom: '',
+    obraTo: '',
+    status: ''
+  };
 
   // Normaliza entrada de NUP para o formato do banco: XXXXXX/XXXX-XX
   function normalizeNupToBankFormat(input) {
@@ -86,6 +97,11 @@ window.Modules.processos = (() => {
     ['COMGAP', 90]
   ]);
 
+  // Cache de municípios (IBGE)
+  let MUNICIPALITY_CACHE = null;
+  let MUNICIPALITY_FETCH_PROMISE = null;
+  let MUNICIPALITY_LOAD_ERROR = null;
+
   const CLIPBOARD_ICON = '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="m10 16 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
   const el = (id) => document.getElementById(id);
@@ -130,6 +146,62 @@ window.Modules.processos = (() => {
     return PROCESS_TYPE_MAP[key] || key;
   };
   // ================================================
+
+  // Controles de filtro (patch)
+  function syncFilterControls() {
+    const firstEntryFrom = el('procFilterFirstEntryFrom');
+    if (firstEntryFrom) firstEntryFrom.value = PROC_FILTERS.firstEntryFrom || '';
+    const firstEntryTo = el('procFilterFirstEntryTo');
+    if (firstEntryTo) firstEntryTo.value = PROC_FILTERS.firstEntryTo || '';
+    const obraFrom = el('procFilterObraFrom');
+    if (obraFrom) obraFrom.value = PROC_FILTERS.obraFrom || '';
+    const obraTo = el('procFilterObraTo');
+    if (obraTo) obraTo.value = PROC_FILTERS.obraTo || '';
+    const statusSelect = el('procFilterStatus');
+    if (statusSelect) statusSelect.value = PROC_FILTERS.status || '';
+  }
+
+  function updateProcFiltersFromUI() {
+    PROC_FILTERS.firstEntryFrom = el('procFilterFirstEntryFrom')?.value || '';
+    PROC_FILTERS.firstEntryTo = el('procFilterFirstEntryTo')?.value || '';
+    PROC_FILTERS.obraFrom = el('procFilterObraFrom')?.value || '';
+    PROC_FILTERS.obraTo = el('procFilterObraTo')?.value || '';
+    PROC_FILTERS.status = el('procFilterStatus')?.value || '';
+  }
+
+  function clearProcFilters() {
+    PROC_FILTERS.firstEntryFrom = '';
+    PROC_FILTERS.firstEntryTo = '';
+    PROC_FILTERS.obraFrom = '';
+    PROC_FILTERS.obraTo = '';
+    PROC_FILTERS.status = '';
+  }
+
+  function setupFilterControls() {
+    const form = el('procFilters');
+    form?.addEventListener('submit', (ev) => ev.preventDefault());
+
+    const statusSelect = el('procFilterStatus');
+    if (statusSelect) {
+      const options = ['<option value="">Todos</option>'].concat(
+        PROCESS_STATUSES.map(status => `<option value="${status}">${status}</option>`)
+      ).join('');
+      statusSelect.innerHTML = options;
+    }
+
+    syncFilterControls();
+
+    el('procFilterApply')?.addEventListener('click', async () => {
+      updateProcFiltersFromUI();
+      await loadProcessList({ page: 1 });
+    });
+
+    el('procFilterClear')?.addEventListener('click', async () => {
+      clearProcFilters();
+      syncFilterControls();
+      await loadProcessList({ page: 1 });
+    });
+  }
 
   const SafeUtils = {
     setMsg(id, text, isError = false) {
@@ -307,7 +379,7 @@ window.Modules.processos = (() => {
         if (el('btnNovoProc')) el('btnNovoProc').disabled = false;
 
         U.setMsg('procMsg', 'Processo encontrado.');
-        // NOVO (patch): calcular a página onde o processo aparece e abrir a lista já posicionada
+        // calcular a página onde o processo aparece e abrir a lista já posicionada
         let targetPage = null;
         if (data.created_at) {
           try {
@@ -670,6 +742,13 @@ window.Modules.processos = (() => {
         .order('id', { ascending: false })
         .range(from, to);
 
+      // Filtros (se presentes)
+      if (PROC_FILTERS.status) query.eq('status', PROC_FILTERS.status);
+      if (PROC_FILTERS.firstEntryFrom) query.gte('first_entry_date', PROC_FILTERS.firstEntryFrom);
+      if (PROC_FILTERS.firstEntryTo) query.lte('first_entry_date', PROC_FILTERS.firstEntryTo);
+      if (PROC_FILTERS.obraFrom) query.gte('obra_termino_date', PROC_FILTERS.obraFrom);
+      if (PROC_FILTERS.obraTo) query.lte('obra_termino_date', PROC_FILTERS.obraTo);
+
       let toRef;
       const timeout = new Promise((_, reject) => {
         toRef = setTimeout(() => reject(new Error('timeout')), 10000);
@@ -761,7 +840,7 @@ window.Modules.processos = (() => {
       const pagesTotal = typeof count === 'number' ? Math.max(1, Math.ceil(count / size)) : 1;
       renderProcPagination({ page: p, pagesTotal, count: count || rows.length });
 
-      // Bind row events (mantém comportamento existente)
+      // Bind row events
       tbody.addEventListener('click', async (ev) => {
         const tr = ev.target.closest('tr');
         if (!tr) return;
@@ -822,7 +901,7 @@ window.Modules.processos = (() => {
     }
   }
 
-  // === NOVO: lista de checklists preenchidas (patch aplicado) ===
+  // === Lista de checklists preenchidas ===
   async function loadChecklistList(procId, targetId = 'ckLista') {
     const box = el(targetId);
     if (!box) return;
@@ -1007,7 +1086,7 @@ window.Modules.processos = (() => {
     try {
       const { data, error } = await sb
         .from('sigadaer')
-        .select('id,numbers,type,requested_at,status,expedit_at,received_at,deadline_days')
+        .select('id,numbers,type,requested_at,status,expedit_at,received_at,deadline_days,municipality_name,municipality_uf')
         .eq('process_id', procId)
         .order('requested_at', { ascending: false });
       if (error) throw error;
@@ -1019,6 +1098,11 @@ window.Modules.processos = (() => {
           value: r => Array.isArray(r.numbers) ? r.numbers.map(n => String(n).padStart(6, '0')).join('; ') : ''
         },
         { key: 'type', label: 'Tipo' },
+        {
+          key: 'municipality',
+          label: 'Município/UF',
+          value: r => formatMunicipalityLabel(r.municipality_name, r.municipality_uf)
+        },
         { key: 'deadline_days', label: 'Prazo (dias)' },
         { key: 'requested_at', label: 'Solicitada em', value: r => U.fmtDateTime(r.requested_at) },
         { key: 'status', label: 'Status' },
@@ -1029,6 +1113,14 @@ window.Modules.processos = (() => {
           render: (r) => {
             const wrap = document.createElement('div');
             wrap.className = 'action-buttons';
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.textContent = 'Editar';
+            editBtn.addEventListener('click', () => {
+              if (!guardProcessWrite('procMsg')) return;
+              showSigEditForm(r, procId);
+            });
+            wrap.appendChild(editBtn);
             if (r.status === 'SOLICITADO') {
               const b = document.createElement('button');
               b.type = 'button';
@@ -1067,7 +1159,7 @@ window.Modules.processos = (() => {
     }
   }
 
-  // === NOVO: abrir PDF de checklist (patch aplicado) ===
+  // === PDF de checklist ===
   async function abrirChecklistPDF(id) {
     const win = window.open('', '_blank');
     if (win) win.opener = null;
@@ -1101,7 +1193,7 @@ window.Modules.processos = (() => {
     }
   }
 
-  // === NOVO: popup de checklists ===
+  // === Popups auxiliares ===
   async function showChecklistPopup(procId = currentProcId) {
     if (!procId) return;
     popupProcId = procId;
@@ -1300,6 +1392,101 @@ window.Modules.processos = (() => {
       .filter(n => n !== null);
   }
 
+  function formatMunicipalityLabel(name, uf) {
+    return name && uf ? `${name} - ${uf}` : '';
+  }
+
+  function parseMunicipalityValue(value) {
+    if (!value) return { name: '', uf: '' };
+    const [nameRaw, ufRaw] = value.split('|');
+    const name = (nameRaw || '').trim();
+    const uf = (ufRaw || '').trim();
+    if (!name || !uf) return { name: '', uf: '' };
+    return { name, uf };
+  }
+
+  async function ensureMunicipalitiesLoaded() {
+    if (Array.isArray(MUNICIPALITY_CACHE) && MUNICIPALITY_CACHE.length) {
+      return MUNICIPALITY_CACHE;
+    }
+    if (MUNICIPALITY_FETCH_PROMISE) return MUNICIPALITY_FETCH_PROMISE;
+
+    MUNICIPALITY_FETCH_PROMISE = (async () => {
+      MUNICIPALITY_LOAD_ERROR = null;
+      try {
+        const resp = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/municipios');
+        if (!resp.ok) throw new Error(`IBGE ${resp.status}`);
+        const data = await resp.json();
+        const map = new Map();
+        (Array.isArray(data) ? data : []).forEach(item => {
+          const name = item?.nome;
+          const uf = item?.microrregiao?.mesorregiao?.UF?.sigla;
+          if (!name || !uf) return;
+          const key = `${name}|${uf}`;
+          if (!map.has(key)) map.set(key, { name, uf });
+        });
+        const list = Array.from(map.values()).sort((a, b) => {
+          if (a.uf === b.uf) return a.name.localeCompare(b.name, 'pt-BR');
+          return a.uf.localeCompare(b.uf, 'pt-BR');
+        });
+        MUNICIPALITY_CACHE = list;
+        return list;
+      } catch (err) {
+        MUNICIPALITY_LOAD_ERROR = err;
+        throw err;
+      } finally {
+        MUNICIPALITY_FETCH_PROMISE = null;
+      }
+    })();
+
+    try {
+      return await MUNICIPALITY_FETCH_PROMISE;
+    } catch (err) {
+      console.error('Falha ao carregar municípios do IBGE', err);
+      return [];
+    }
+  }
+
+  async function populateMunicipalitySelect(select, selectedName = '', selectedUf = '') {
+    if (!select) return;
+    select.innerHTML = '<option value="">Carregando municípios…</option>';
+    select.disabled = true;
+
+    const list = await ensureMunicipalitiesLoaded();
+    if (!list.length) {
+      const message = MUNICIPALITY_LOAD_ERROR
+        ? 'Não foi possível carregar municípios do IBGE'
+        : 'Nenhum município disponível';
+      select.innerHTML = `<option value="">${message}</option>`;
+      select.disabled = true;
+      return;
+    }
+
+    select.disabled = false;
+    select.innerHTML = '<option value="">Selecione um município</option>';
+    const target = selectedName && selectedUf ? `${selectedName}|${selectedUf}` : '';
+    list.forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = `${item.name}|${item.uf}`;
+      opt.textContent = formatMunicipalityLabel(item.name, item.uf);
+      select.appendChild(opt);
+    });
+    if (target) select.value = target;
+  }
+
+  function updateMunicipalityRequirement(select, type) {
+    if (!select) return;
+    const required = String(type || '').toUpperCase() === 'PREF';
+    const label = select.closest('label');
+    if (required) {
+      select.setAttribute('required', 'true');
+      if (label) label.classList.add('required');
+    } else {
+      select.removeAttribute('required');
+      if (label) label.classList.remove('required');
+    }
+  }
+
   function showCadOpiniaoForm(procId = currentProcId) {
     if (!procId) return;
     if (!guardProcessWriteSilent('procMsg')) return;
@@ -1425,6 +1612,11 @@ window.Modules.processos = (() => {
         <label>Números (separe com espaços, vírgulas ou ponto e vírgula)
           <input type="text" id="sgNumeros" placeholder="123456; 654321">
         </label>
+        <label>Município/UF
+          <select id="sgMunicipio">
+            <option value="">Carregando municípios…</option>
+          </select>
+        </label>
         <label>Prazo (dias)
           <input type="number" id="sgPrazo" min="0" step="1" placeholder="30">
         </label>
@@ -1439,18 +1631,20 @@ window.Modules.processos = (() => {
     dlg.addEventListener('close', () => dlg.remove());
     const tipoSelect = dlg.querySelector('#sgTipo');
     const prazoInput = dlg.querySelector('#sgPrazo');
+    const municipioSelect = dlg.querySelector('#sgMunicipio');
+    populateMunicipalitySelect(municipioSelect);
     const applyDefaultPrazo = () => {
       if (!tipoSelect || !prazoInput) return;
-      const defaultPrazo = SIGADAER_DEFAULT_DEADLINES.get(tipoSelect.value);
-      if (defaultPrazo !== undefined) {
-        prazoInput.value = String(defaultPrazo);
-      } else {
-        prazoInput.value = '';
-      }
+      const def = SIGADAER_DEFAULT_DEADLINES.get(String(tipoSelect.value || '').toUpperCase());
+      if (def !== undefined) prazoInput.value = String(def);
+      else prazoInput.value = '';
     };
     applyDefaultPrazo();
+    const updateMunicipioRequired = () => updateMunicipalityRequirement(municipioSelect, tipoSelect?.value || '');
+    updateMunicipioRequired();
     tipoSelect?.addEventListener('change', () => {
       applyDefaultPrazo();
+      updateMunicipioRequired();
     });
     dlg.querySelector('#btnSalvarSg')?.addEventListener('click', async ev => {
       ev.preventDefault();
@@ -1479,14 +1673,37 @@ window.Modules.processos = (() => {
     const prazoTexto = dlg.querySelector('#sgPrazo')?.value || '';
     const prazoDiasValor = prazoTexto ? parseInt(prazoTexto, 10) : NaN;
     const prazoDias = Number.isNaN(prazoDiasValor) || prazoDiasValor <= 0 ? null : prazoDiasValor;
+
+    const municipioSelect = dlg.querySelector('#sgMunicipio');
+    const { name: municipalityName, uf: municipalityUf } = parseMunicipalityValue(municipioSelect?.value || '');
+    const isPref = String(tipo).toUpperCase() === 'PREF';
+    if (isPref) {
+      if (municipioSelect?.disabled) {
+        const msg = MUNICIPALITY_LOAD_ERROR
+          ? 'Não foi possível carregar a lista de municípios do IBGE. Tente novamente.'
+          : 'Aguarde o carregamento da lista de municípios do IBGE antes de continuar.';
+        U.setMsg('sgCadMsg', msg, true);
+        return;
+      }
+      if (!municipalityName || !municipalityUf) {
+        U.setMsg('sgCadMsg', 'Selecione o município/UF do SIGADAER.', true);
+        municipioSelect?.focus();
+        municipioSelect?.reportValidity?.();
+        return;
+      }
+    }
+
     const payload = {
       process_id: procId,
       type: tipo,
       requested_at: new Date(solicitadaEm).toISOString(),
       status: 'SOLICITADO',
-      numbers: numeros
+      numbers: numeros,
+      deadline_days: prazoDias,
+      municipality_name: municipalityName || null,
+      municipality_uf: municipalityUf || null
     };
-    if (prazoDias !== null) payload.deadline_days = prazoDias;
+
     try {
       const u = await getUser();
       if (!u) return U.setMsg('sgCadMsg', 'Sessão expirada.', true);
@@ -1625,7 +1842,7 @@ window.Modules.processos = (() => {
     dlg.showModal();
   }
 
-  // NOVO (patch): marcar notificação como RESPONDIDA/Resolvida
+  // Marcar notificação como RESPONDIDA/Resolvida
   function showNtResolvidaForm(id, respondedAt) {
     editingNtId = id;
     if (!guardProcessWriteSilent('procMsg')) return;
@@ -1667,7 +1884,7 @@ window.Modules.processos = (() => {
     }
   }
 
-  // NOVO (patch): persistir RESPONDIDA/Resolvida
+  // Persistir RESPONDIDA/Resolvida
   async function salvarNtResolvida(dlg) {
     if (!editingNtId) return;
     if (!guardProcessWriteSilent('ntResolvidaMsg')) return;
@@ -1814,7 +2031,6 @@ window.Modules.processos = (() => {
   }
 
   // === Atualização de botões extras / listas ===
-
   async function reloadLists() {
     await loadProcessList();
     if (popupProcId && el('ckListaPop')) await loadChecklistList(popupProcId, 'ckListaPop');
@@ -1837,6 +2053,7 @@ window.Modules.processos = (() => {
 
   async function init() {
     bindEvents();
+    setupFilterControls(); // (patch) apenas ativa se os elementos existirem no HTML
     clearProcessForm();     // apenas NUP + Buscar habilitados
     await loadProcessList();
 

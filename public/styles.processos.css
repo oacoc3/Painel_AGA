@@ -149,3 +149,62 @@
   gap: 8px;
   margin-top: 12px;
 }
+
+/* ===================== */
+/* Bloco novo do PATCH   */
+/* ===================== */
+
+.proc-filters {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+
+.proc-filters-group {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.proc-filters-group legend {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.proc-filters-group label,
+.proc-filters-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.proc-filters-status select,
+.proc-filters-group input[type="date"] {
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.proc-filters-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.proc-filters-actions button {
+  padding: 6px 10px;
+}
+
+.proc-popup label.required::after {
+  content: ' *';
+  color: #c00;
+  font-weight: 600;
+}
