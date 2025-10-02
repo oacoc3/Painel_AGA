@@ -38,6 +38,8 @@
         <button data-route="prazos">Prazos</button>
         <button data-route="modelos">Modelos</button>
         <button data-route="analise" class="active">Documental</button>
+        <button data-route="adhel">AD/HEL</button>
+        <button data-route="pessoal">Pessoal</button>
         <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
       </nav>
       <div id="userBox" class="user hidden">
@@ -52,16 +54,13 @@
         <div class="analysis-grid">
           <div class="analysis-col">
             <div class="card">
-              <h2>Nova Análise Documental</h2>
+              <h2>Nova análise documental</h2>
               <form id="formAD" data-ajax>
                 <label>NUP <input id="adNUP" required placeholder="000000/0000-00"></label>
-                <label>Tipo do Processo
+                <label>Tipo do processo
                   <select id="adTipo">
-                    <option>PDIR</option>
-                    <option>Inscrição</option>
-                    <option>Alteração</option>
-                    <option>Exploração</option>
                     <option>OPEA</option>
+                    <option>AD/HEL</option>
                   </select>
                 </label>
                 <div class="row actions">
@@ -71,17 +70,17 @@
                 <div id="adMsg" class="msg"></div>
               </form>
             </div>
-              <div class="card" id="adApprovedChecklistsCard">
+            <div class="card" id="adApprovedChecklistsCard">
               <h2>Checklists aprovadas</h2>
               <div id="adApprovedList" class="table scrolly"></div>
             </div>
           </div>
           <div class="card" id="adChecklistCard">
             <h2>Checklist</h2>
-              <div id="ckContainer" class="scrolly"></div>
+            <div id="ckContainer" class="scrolly"></div>
             <div class="row actions" id="adActions">
               <button id="btnLimparChecklist" type="button" disabled>Limpar</button>
-               <button id="adBtnFinalizarChecklist" type="button" disabled>Finalizar</button>
+              <button id="adBtnFinalizarChecklist" type="button" disabled>Finalizar</button>
             </div>
           </div>
         </div>
