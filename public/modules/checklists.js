@@ -8,8 +8,8 @@ window.Modules.checklists = (() => {
 
   // --- (NOVO) Opções de tipos de checklist + aliases/canônicos ---
   const CHECKLIST_TYPE_OPTIONS = [
-    { value: 'OPEA', label: 'OPEA', variants: ['OPEA', 'OPEA - Documental'] },
-    { value: 'AD/HEL', label: 'AD/HEL', variants: ['AD/HEL', 'AD/HEL - Documental'] }
+    { value: 'OPEA', label: 'OPEA - Documental', variants: ['OPEA', 'OPEA - Documental'] },
+    { value: 'AD/HEL', label: 'AD/HEL - Documental', variants: ['AD/HEL', 'AD/HEL - Documental'] }
   ];
 
   const TYPE_ALIAS_MAP = new Map();
