@@ -8,8 +8,18 @@ window.Modules.checklists = (() => {
 
   // --- (NOVO) Opções de tipos de checklist + aliases/canônicos ---
   const CHECKLIST_TYPE_OPTIONS = [
-    { value: 'OPEA', label: 'OPEA - Documental', variants: ['OPEA', 'OPEA - Documental'] },
-    { value: 'AD/HEL', label: 'AD/HEL - Documental', variants: ['AD/HEL', 'AD/HEL - Documental'] }
+    {
+      value: 'OPEA',
+      label: 'OPEA - Documental',
+      variants: ['OPEA', 'OPEA - Documental'],
+      dbValue: 'OPEA - Documental'
+    },
+    {
+      value: 'AD/HEL',
+      label: 'AD/HEL - Documental',
+      variants: ['AD/HEL', 'AD/HEL - Documental'],
+      dbValue: 'AD/HEL - Documental'
+    }
   ];
 
   const TYPE_ALIAS_MAP = new Map();
@@ -29,6 +39,11 @@ window.Modules.checklists = (() => {
   }, {});
 
   const CANONICAL_TYPES = new Set(CHECKLIST_TYPE_OPTIONS.map(opt => opt.value));
+
+  const TYPE_DB_VALUE_MAP = CHECKLIST_TYPE_OPTIONS.reduce((map, opt) => {
+    map[opt.value] = opt.dbValue || opt.value;
+    return map;
+  }, {});
 
   function canonicalizeChecklistType(value) {
     if (typeof value !== 'string') return '';
@@ -247,6 +262,7 @@ window.Modules.checklists = (() => {
     templates = (data || [])
       .map(row => ({
         ...row,
+        // Normaliza para canônico em memória (ex.: 'OPEA - Documental' -> 'OPEA')
         type: canonicalizeChecklistType(row.type || '')
       }))
       .filter(row => CANONICAL_TYPES.has(row.type));
@@ -299,6 +315,7 @@ window.Modules.checklists = (() => {
       // Normaliza e valida o tipo
       const rawType = form.querySelector('#ckCat')?.value || '';
       const type = canonicalizeChecklistType(rawType);
+      const dbType = TYPE_DB_VALUE_MAP[type] || type;
       if (!type || !CANONICAL_TYPES.has(type) || !items.length) {
         return Utils.setMsg('ckMsg', 'Preencha todos os campos.', true);
       }
@@ -313,7 +330,7 @@ window.Modules.checklists = (() => {
 
       if (selected && !isEditingApproved) {
         const { error } = await sb.from('checklist_templates')
-          .update({ name, type, items })
+          .update({ name, type: dbType, items })
           .eq('id', selected.id);
         if (error) return Utils.setMsg('ckMsg', error.message, true);
       } else {
@@ -323,7 +340,7 @@ window.Modules.checklists = (() => {
         const version = max + 1;
         const payload = {
           name,
-          type,
+          type: dbType,
           items,
           version,
           created_by: u.id,
