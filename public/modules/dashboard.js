@@ -24,6 +24,15 @@ window.Modules.dashboard = (() => {
     'APROV',
     'ICA-PUB'
   ];
+
+  // >>> Patch: médias de pareceres (ATM/DT)
+  const OPINION_AVERAGE_TYPES = ['ATM', 'DT'];
+  const OPINION_LABELS = {
+    ATM: 'Análise ATM',
+    DT: 'Análise DT'
+  };
+  // <<< Patch
+
   const STATUS_LABELS = {
     CONFEC: 'Confecção de Notificação',
     'REV-OACO': 'Revisão Chefe OACO',
@@ -197,6 +206,7 @@ window.Modules.dashboard = (() => {
     const hasYear = Number.isFinite(year);
 
     const agg = {};
+    const opinionAgg = {}; // <<< Patch
     const now = new Date();
     if (hasYear) {
       Object.values(cachedStatusHistory || {}).forEach(list => {
@@ -229,18 +239,67 @@ window.Modules.dashboard = (() => {
       });
     }
 
+    // >>> Patch: agregação de médias de pareceres (ATM/DT) por ano (solicitação → recebimento)
+    if (hasYear) {
+      (cachedOpinions || []).forEach(opinion => {
+        if (!opinion) return;
+        const type = typeof opinion.type === 'string' ? opinion.type.toUpperCase() : '';
+        if (!OPINION_AVERAGE_TYPES.includes(type)) return;
+        if (!opinion.requested_at) return;
+        const receivedValue = opinion.received_at || opinion.receb_at; // tolerante a nome alternativo
+        if (!receivedValue) return;
+
+        const startDate = new Date(opinion.requested_at);
+        const endDate = new Date(receivedValue);
+        if (Number.isNaN(+startDate) || Number.isNaN(+endDate)) return;
+        if (startDate.getFullYear() !== year || endDate.getFullYear() !== year) return;
+
+        const days = Utils.daysBetween(startDate, endDate);
+        if (typeof days !== 'number' || Number.isNaN(days)) return;
+
+        const bucket = opinionAgg[type] || (opinionAgg[type] = { sum: 0, n: 0 });
+        bucket.sum += days;
+        bucket.n += 1;
+      });
+    }
+
+    const getOpinionAverage = (type) => {
+      const entry = opinionAgg[type];
+      if (!entry || !entry.n) return null;
+      const avg = entry.sum / entry.n;
+      return Number.isFinite(avg) ? avg : null;
+    };
+    // <<< Patch
+
     const ringStatuses = SPEED_STATUS_ORDER.filter(
       status => !EXCLUDED_RING_STATUSES.has(status) && DASHBOARD_STATUSES.includes(status)
     );
-    const items = ringStatuses.map(s => {
-      const label = STATUS_LABELS[s] || s;
-      return {
-        status: s,
+
+    const items = [];
+    ringStatuses.forEach(statusCode => {
+      const label = STATUS_LABELS[statusCode] || statusCode;
+      items.push({
+        status: statusCode,
         label,
-        count: countMap[s] || 0,
-        avg: agg[s] ? (agg[s].sum / agg[s].n) : null,
+        count: countMap[statusCode] || 0,
+        avg: agg[statusCode] ? (agg[statusCode].sum / agg[statusCode].n) : null,
         ariaLabel: `Velocidade média de ${label}`
-      };
+      });
+
+      // >>> Patch: inserir as médias de pareceres logo após ANATEC-PRE
+      if (statusCode === 'ANATEC-PRE') {
+        OPINION_AVERAGE_TYPES.forEach(type => {
+          const avg = getOpinionAverage(type);
+          items.push({
+            status: `OP-${type}`,
+            label: OPINION_LABELS[type] || type,
+            count: null,
+            avg,
+            ariaLabel: `Tempo médio da ${OPINION_LABELS[type] || type} (da solicitação ao recebimento)`
+          });
+        });
+      }
+      // <<< Patch
     });
 
     Utils.renderProcessBars('velocimetros', items);
@@ -490,9 +549,11 @@ window.Modules.dashboard = (() => {
       .select('type, status, requested_at, expedit_at');
     cachedSigadaer = sigadaer || [];
 
+    // >>> Patch: incluir received_at para calcular médias
     const { data: opinions } = await sb
       .from('internal_opinions')
-      .select('type, requested_at');
+      .select('type, requested_at, received_at');
+    // <<< Patch
     cachedOpinions = opinions || [];
 
     // Velocidade média — montar histórico de status por processo (usando 'history')
