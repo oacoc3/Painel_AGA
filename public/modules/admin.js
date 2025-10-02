@@ -12,7 +12,8 @@ window.Modules.admin = (() => {
   const AUDIT_EVENT_LABELS = {
     login: 'Login',
     logout: 'Logout',
-    module_access: 'Acesso ao módulo'
+    module_access: 'Acesso ao módulo',
+    unavailability_created: 'Indisponibilidade cadastrada'
   };
   const AUDIT_MODULE_LABELS = {
     dashboard: 'Início',
@@ -20,9 +21,77 @@ window.Modules.admin = (() => {
     prazos: 'Prazos',
     modelos: 'Modelos',
     analise: 'Documental',
+    adhel: 'AD/HEL',
+    pessoal: 'Pessoal',
     admin: 'Administração',
     login: 'Login'
   };
+
+  const AUDIT_USERS = new Map();
+
+  const normalizeAuditUserKey = (value) => (
+    typeof value === 'string'
+      ? value.trim().toLowerCase()
+      : ''
+  );
+
+  function registerAuditUser(source) {
+    if (!source) return;
+    const id = source.id || source.profile_id || null;
+    if (!id) return;
+    const existing = AUDIT_USERS.get(id) || {};
+    const name = source.name || existing.name || '';
+    const email = source.email || existing.email || '';
+    const role = source.role || existing.role || '';
+    const deletedAt = source.deleted_at || source.profile_deleted_at || existing.deleted_at || null;
+    AUDIT_USERS.set(id, { id, name, email, role, deleted_at: deletedAt });
+  }
+
+  function registerAuditUsers(list = []) {
+    list.forEach(item => registerAuditUser(item));
+  }
+
+  function populateAuditUserFilter({ preserveSelection } = {}) {
+    const select = el('auditFilterUser');
+    if (!select) return;
+    const currentValue = preserveSelection ? select.value : '';
+    select.innerHTML = '';
+
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Todos os usuários';
+    select.appendChild(defaultOption);
+
+    const entries = Array.from(AUDIT_USERS.values()).sort((a, b) => {
+      const aKey = normalizeAuditUserKey(a.name || a.email || a.id || '');
+      const bKey = normalizeAuditUserKey(b.name || b.email || b.id || '');
+      return aKey.localeCompare(bKey, 'pt-BR');
+    });
+
+    const validIds = new Set();
+    entries.forEach(user => {
+      const option = document.createElement('option');
+      option.value = user.id;
+      const parts = [];
+      if (user.name) parts.push(user.name);
+      if (user.email) parts.push(user.email);
+      let label = parts.join(' — ') || user.id;
+      if (user.deleted_at) label += ' (inativo)';
+      option.textContent = label;
+      select.appendChild(option);
+      validIds.add(user.id);
+    });
+
+    if (currentValue && validIds.has(currentValue)) {
+      select.value = currentValue;
+    } else {
+      select.value = '';
+    }
+  }
+
+  function getAuditFilterUserId() {
+    return el('auditFilterUser')?.value || '';
+  }
 
   const el = id => document.getElementById(id);
 
@@ -64,6 +133,8 @@ window.Modules.admin = (() => {
     const size = Math.max(1, Number(pageSize) || ADMIN_PAGE_SIZE);
     ADMIN_PAGE = p;
     ADMIN_CACHE = all;
+    registerAuditUsers(all);
+    populateAuditUserFilter({ preserveSelection: true });
     const pagesTotal = Math.max(1, Math.ceil(all.length / size));
     const from = (p - 1) * size;
     const to = from + size;
@@ -145,36 +216,29 @@ window.Modules.admin = (() => {
     }
   ];
 
-  function getAuditFilterQuery() {
-    return (el('auditFilterName')?.value || '').trim().toLowerCase();
-  }
-
   function renderAuditTable({ preserveMessage } = {}) {
     const tableId = 'auditLogTable';
     const msgId = 'auditLogMsg';
-    const query = getAuditFilterQuery();
+    const selectedUserId = getAuditFilterUserId();
 
     if (!AUDIT_LOG_CACHE.length) {
       Utils.renderTable(tableId, AUDIT_TABLE_HEADERS, []);
-      if (!preserveMessage && query) {
-        Utils.setMsg(msgId, 'Nenhum evento encontrado para o filtro.');
+      if (!preserveMessage && selectedUserId) {
+        Utils.setMsg(msgId, 'Nenhum evento encontrado para o usuário selecionado.');
       }
       return;
     }
 
-    const filtered = query
-      ? AUDIT_LOG_CACHE.filter(row => {
-          const haystack = `${row.name || ''} ${row.email || ''}`.toLowerCase();
-          return haystack.includes(query);
-        })
+    const filtered = selectedUserId
+      ? AUDIT_LOG_CACHE.filter(row => String(row.profile_id || row.id || '') === selectedUserId)
       : AUDIT_LOG_CACHE;
 
     Utils.renderTable(tableId, AUDIT_TABLE_HEADERS, filtered);
 
     if (preserveMessage) return;
 
-    if (query && !filtered.length) {
-      Utils.setMsg(msgId, 'Nenhum evento encontrado para o filtro.');
+    if (selectedUserId && !filtered.length) {
+      Utils.setMsg(msgId, 'Nenhum evento encontrado para o usuário selecionado.');
     } else {
       Utils.setMsg(msgId, '');
     }
@@ -201,6 +265,8 @@ window.Modules.admin = (() => {
       })) : [];
 
       AUDIT_LOG_CACHE = rows;
+      registerAuditUsers(rows);
+      populateAuditUserFilter({ preserveSelection: true });
 
       if (!rows.length) {
         Utils.setMsg(msgId, 'Nenhum evento registrado.');
@@ -215,6 +281,7 @@ window.Modules.admin = (() => {
       Utils.setMsg(msgId, err?.message || 'Falha ao carregar registros.', true);
       AUDIT_LOG_CACHE = [];
       renderAuditTable({ preserveMessage: true });
+      populateAuditUserFilter({ preserveSelection: true });
     }
   }
 
@@ -288,7 +355,7 @@ window.Modules.admin = (() => {
 
   // --- (NOVO) Bind de ações da auditoria ---
   function bindAuditActions() {
-    el('auditFilterName')?.addEventListener('input', () => {
+    el('auditFilterUser')?.addEventListener('change', () => {
       renderAuditTable({ preserveMessage: !AUDIT_LOG_CACHE.length });
     });
     el('btnAuditRefresh')?.addEventListener('click', ev => {
