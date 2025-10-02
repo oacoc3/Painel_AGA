@@ -1,128 +1,603 @@
-diff --git a/public/modules/dashboard.js b/public/modules/dashboard.js
-index 7b0c2a1..e19d9a3 100644
---- a/public/modules/dashboard.js
-+++ b/public/modules/dashboard.js
-@@ -1,6 +1,7 @@
- // public/modules/dashboard.js
- (function () {
-   const sb = window.sb;
-+  const el = (id) => document.getElementById(id);
+// public/modules/dashboard.js
+window.Modules = window.Modules || {};
+window.Modules.dashboard = (() => {
+  const DASHBOARD_STATUSES = window.Modules.statuses.PROCESS_STATUSES;
+  const EXCLUDED_RING_STATUSES = new Set([
+    'SOB-PDIR',
+    'SOB-EXPL',
+    'ARQ',
+    'EDICAO',
+    'SOB-DOC',
+    'SOB-TEC',
+    'DECEA',
+    'AGD-RESP',
+    'AGD-LEIT',
+    'ICA-EXTR'
+  ]);
+  const SPEED_STATUS_ORDER = [
+    'ANADOC',
+    'ANAICA',
+    'ANATEC-PRE',
+    'ANATEC',
+    'CONFEC',
+    'REV-OACO',
+    'APROV',
+    'ICA-PUB'
+  ];
 
-   // ... (demais imports/constantes/funções que você já tem)
+  // >>> Patch: médias de pareceres (ATM/DT)
+  const OPINION_AVERAGE_TYPES = ['ATM', 'DT'];
+  const OPINION_LABELS = {
+    ATM: 'Análise ATM',
+    DT: 'Análise DT'
+  };
+  // <<< Patch
 
-   // -----------------------------------------------------------------------------
--  // Renderização: Distribuição horária (um gráfico)
--  async function loadHourlyEngagement() {
--    const box = document.getElementById('hourlyEngagementChart');
--    if (!box) return;
-+  // Renderização: Distribuição horária (dias úteis x fim de semana)
-+  async function loadHourlyEngagement() {
-+    const boxWeekdays = el('hourlyEngagementChartWeekdays');
-+    const boxWeekend  = el('hourlyEngagementChartWeekend');
-+    // Compat: caso o HTML antigo ainda exista, não quebrar
-+    const legacyBox   = el('hourlyEngagementChart');
-+    if (!boxWeekdays && !boxWeekend && !legacyBox) return;
+  const STATUS_LABELS = {
+    CONFEC: 'Confecção de Notificação',
+    'REV-OACO': 'Revisão Chefe OACO',
+    APROV: 'Aprovação Chefe AGA',
+    'ICA-PUB': 'ICA - Publicação de Portaria',
+    ANADOC: 'Análise Documental',
+    'ANATEC-PRE': 'Análise Técnica Preliminar',
+    ANATEC: 'Análise Técnica',
+    ANAICA: 'ICA - Análise Documental/Técnica'
+  };
+  const MONTH_LABELS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+  const YEARLY_COUNTER_FORMATTER = new Intl.NumberFormat('pt-BR');
+  const PERCENTAGE_FORMATTER = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 
-     try {
--      // ⚠️ Reutilize sua origem atual (RPC/view/tabela). Exemplo genérico:
--      // Esperado: linhas com { hour: 0..23, count: number } OU { hour, dow, count }
--      const { data, error } = await sb.rpc('dashboard_hourly_engagement', { days: 90 });
-+      // ⚠️ Reutilize sua origem atual (RPC/view/tabela).
-+      // Esperado: linhas com { hour: 0..23, count: number }
-+      //           OU { hour: 0..23, dow: 0..6, count: number }
-+      // Troque abaixo pela sua chamada real (select / rpc / view):
-+      const { data, error } = await sb.rpc('dashboard_hourly_engagement', { days: 90 });
-       if (error) throw error;
-       const rows = Array.isArray(data) ? data : [];
+  const OPINION_TYPES_SET = new Set(['ATM', 'DT', 'CGNA']);
 
--      renderHourlyHistogram(box, rows);
-+      // Split em dias úteis vs fds; se não houver 'dow', duplica para ambos
-+      const split = splitWeekdaysWeekend(rows);
-+
-+      if (boxWeekdays) {
-+        renderHourlyHistogram(boxWeekdays, split.weekdays);
-+      } else if (legacyBox) {
-+        // compat: se só existir o container legado, mostra dias úteis nele
-+        renderHourlyHistogram(legacyBox, split.weekdays);
-+      }
-+
-+      if (boxWeekend) {
-+        renderHourlyHistogram(boxWeekend, split.weekend);
-+      }
-     } catch (err) {
--      console.error('[dashboard] hourly engagement:', err);
--      safeSetChartError('hourlyEngagementChart', 'Falha ao carregar distribuição horária.');
-+      console.error('[dashboard] hourly engagement:', err);
-+      if (boxWeekdays) safeSetChartError('hourlyEngagementChartWeekdays', 'Falha ao carregar (dias úteis).');
-+      if (boxWeekend)  safeSetChartError('hourlyEngagementChartWeekend',  'Falha ao carregar (fim de semana).');
-+      if (!boxWeekdays && !boxWeekend && legacyBox) {
-+        safeSetChartError('hourlyEngagementChart', 'Falha ao carregar distribuição horária.');
-+      }
-     }
-   }
+  let cachedProcesses = [];
+  let cachedStatusHistory = {};
+  let cachedNotifications = [];
+  let cachedSigadaer = [];
+  let cachedOpinions = [];
 
-+  // Se existirem dows (0..6), agrega no cliente para dias úteis (1..5) e fds (0,6).
-+  // Caso contrário, duplica a mesma série para ambos.
-+  function splitWeekdaysWeekend(rows) {
-+    const hasDow = rows.some(r => r.dow != null || r.day_of_week != null);
-+    const getDow = (r) => (r.dow != null ? r.dow : r.day_of_week);
-+
-+    if (!hasDow) {
-+      const series = aggregate24(rows);
-+      return { weekdays: series, weekend: series };
-+    }
-+    const wd = rows.filter(r => [1,2,3,4,5].includes(getDow(r)));
-+    const we = rows.filter(r => [0,6].includes(getDow(r)));
-+    return { weekdays: aggregate24(wd), weekend: aggregate24(we) };
-+  }
-+
-+  // Consolida em 24 bins (0..23), garantindo zeros
-+  function aggregate24(rows) {
-+    const bins = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 }));
-+    for (const r of rows) {
-+      const h = Number(r.hour);
-+      const c = Number(r.count || 0);
-+      if (!Number.isNaN(h) && h >= 0 && h <= 23) {
-+        bins[h].count += c;
-+      }
-+    }
-+    return bins;
-+  }
-+
-   // Desenha um histograma de 24 barras dentro de um container
--  function renderHourlyHistogram(containerEl, rows) {
-+  function renderHourlyHistogram(containerEl, rows) {
-     if (!containerEl) return;
-     containerEl.innerHTML = '';
+  function el(id) {
+    return document.getElementById(id);
+  }
 
-     const data = ensure24(rows);
-     const max = Math.max(1, ...data.map(d => d.count || 0));
-@@ -45,7 +86,7 @@
-     containerEl.appendChild(wrapper);
-   }
+  function init() {
+    const yearSelect = el('entryYearSelect');
+    yearSelect?.addEventListener('change', () => {
+      renderEntryChart();
+      renderOverview();
+      renderYearlyActivity();
+      renderHourlyEngagement();
+    });
+  }
 
-   // Garante 24 barras (0..23), com zeros onde faltar
-   function ensure24(rows) {
--    const map = new Map(rows.map(r => [Number(r.hour), Number(r.count || 0)]));
-+    const map = new Map((rows || []).map(r => [Number(r.hour), Number(r.count || 0)]));
-     const out = [];
-     for (let h = 0; h < 24; h++) {
-       out.push({ hour: h, count: map.get(h) || 0 });
-@@ -53,6 +94,7 @@
-     return out;
-   }
+  function renderEntryChartEmpty(message = 'Nenhum dado para exibir.') {
+    const container = el('entryChart');
+    if (!container) return;
+    setEntryYearTotal(null);
+    container.innerHTML = '';
+    const msg = document.createElement('p');
+    msg.className = 'muted chart-placeholder';
+    msg.textContent = message;
+    container.appendChild(msg);
+  }
 
-   // -----------------------------------------------------------------------------
-   // Inicialização
-   async function init() {
-     try {
-       // ... (suas outras cargas de dashboard)
-       await loadHourlyEngagement();
-     } catch (err) {
-       console.error('[dashboard] init:', err);
-     }
-   }
+  function setEntryYearTotal(value) {
+    const node = el('entryYearTotal');
+    if (!node) return;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      node.textContent = YEARLY_COUNTER_FORMATTER.format(value);
+    } else {
+      node.textContent = '—';
+    }
+  }
 
-   window.Modules = window.Modules || {};
-   window.Modules.dashboard = { init };
- })();
+  function updateYearOptions() {
+    const select = el('entryYearSelect');
+    if (!select) return false;
+
+    const previous = select.value ? Number(select.value) : null;
+    const yearSet = new Set();
+    (cachedProcesses || []).forEach(proc => {
+      const d = Utils.dateOnly(proc.first_entry_date);
+      if (!d || Number.isNaN(+d)) return;
+      yearSet.add(d.getFullYear());
+    });
+
+    const years = Array.from(yearSet)
+      .filter(y => Number.isFinite(y))
+      .sort((a, b) => b - a);
+
+    select.innerHTML = '';
+    if (!years.length) {
+      select.value = '';
+      select.disabled = true;
+      return false;
+    }
+
+    select.disabled = false;
+    years.forEach(year => {
+      const opt = document.createElement('option');
+      opt.value = String(year);
+      opt.textContent = String(year);
+      select.appendChild(opt);
+    });
+
+    const chosen = (Number.isFinite(previous) && years.includes(previous)) ? previous : years[0];
+    select.value = String(chosen);
+    return true;
+  }
+
+  function renderEntryChart() {
+    const container = el('entryChart');
+    if (!container) return;
+
+    const select = el('entryYearSelect');
+    const year = select && select.value ? Number(select.value) : NaN;
+    if (!year || Number.isNaN(year)) {
+      renderEntryChartEmpty('Nenhum dado para exibir.');
+      return;
+    }
+
+    const counts = new Array(12).fill(0);
+    (cachedProcesses || []).forEach(proc => {
+      const d = Utils.dateOnly(proc.first_entry_date);
+      if (!d || Number.isNaN(+d)) return;
+      if (d.getFullYear() !== year) return;
+      counts[d.getMonth()] += 1;
+    });
+
+    const totalCount = counts.reduce((sum, value) => sum + value, 0);
+    setEntryYearTotal(totalCount);
+
+    container.innerHTML = '';
+    const bars = document.createElement('div');
+    bars.className = 'bar-chart-bars';
+
+    const max = counts.reduce((m, v) => Math.max(m, v), 0);
+    counts.forEach((count, idx) => {
+      const item = document.createElement('div');
+      item.className = 'bar-chart-item';
+
+      const value = document.createElement('span');
+      value.className = 'bar-chart-value';
+      value.textContent = String(count);
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'bar-chart-bar-wrapper';
+
+      const bar = document.createElement('div');
+      bar.className = 'bar-chart-bar';
+      let percent = max ? (count / max) * 100 : 0;
+      if (count > 0 && percent < 8) percent = 8; // altura mínima para barras > 0
+      bar.style.height = `${percent}%`;
+      bar.title = `${MONTH_LABELS[idx]}: ${count}`;
+
+      wrapper.appendChild(bar);
+
+      const label = document.createElement('span');
+      label.className = 'bar-chart-label';
+      label.textContent = MONTH_LABELS[idx];
+
+      item.appendChild(value);
+      item.appendChild(wrapper);
+      item.appendChild(label);
+      bars.appendChild(item);
+    });
+
+    container.appendChild(bars);
+
+    if (!counts.some(Boolean)) {
+      const msg = document.createElement('p');
+      msg.className = 'muted chart-placeholder';
+      msg.textContent = 'Nenhum processo no ano selecionado.';
+      container.appendChild(msg);
+    }
+  }
+
+  function renderOverview() {
+    const countMap = {};
+    DASHBOARD_STATUSES.forEach(s => { countMap[s] = 0; });
+    (cachedProcesses || []).forEach(proc => {
+      if (!proc || !proc.status) return;
+      countMap[proc.status] = (countMap[proc.status] || 0) + 1;
+    });
+
+    const select = el('entryYearSelect');
+    const year = select && select.value ? Number(select.value) : NaN;
+    const hasYear = Number.isFinite(year);
+
+    const agg = {};
+    const opinionAgg = {}; // <<< Patch
+    const now = new Date();
+    if (hasYear) {
+      Object.values(cachedStatusHistory || {}).forEach(list => {
+        if (!Array.isArray(list)) return;
+        for (let i = 0; i < list.length; i++) {
+          const cur = list[i];
+          if (!cur || !cur.start || !cur.status) continue;
+          if (i > 0) {
+            const prev = list[i - 1];
+            if (prev && prev.start === cur.start && prev.status === cur.status) continue;
+          }
+
+          const startDate = new Date(cur.start);
+          if (Number.isNaN(+startDate)) continue;
+          const next = list[i + 1];
+          const endDate = next && next.start ? new Date(next.start) : now;
+          if (Number.isNaN(+endDate)) continue;
+
+          const startYear = startDate.getFullYear();
+          const endYear = endDate.getFullYear();
+          if (startYear !== year || endYear !== year) continue;
+
+          const days = Utils.daysBetween(startDate, endDate);
+          if (typeof days !== 'number' || Number.isNaN(days)) continue;
+
+          agg[cur.status] = agg[cur.status] || { sum: 0, n: 0 };
+          agg[cur.status].sum += days;
+          agg[cur.status].n += 1;
+        }
+      });
+    }
+
+    // >>> Patch: agregação de médias de pareceres (ATM/DT) por ano (solicitação → recebimento)
+    if (hasYear) {
+      (cachedOpinions || []).forEach(opinion => {
+        if (!opinion) return;
+        const type = typeof opinion.type === 'string' ? opinion.type.toUpperCase() : '';
+        if (!OPINION_AVERAGE_TYPES.includes(type)) return;
+        if (!opinion.requested_at) return;
+        const receivedValue = opinion.received_at || opinion.receb_at; // tolerante a nome alternativo
+        if (!receivedValue) return;
+
+        const startDate = new Date(opinion.requested_at);
+        const endDate = new Date(receivedValue);
+        if (Number.isNaN(+startDate) || Number.isNaN(+endDate)) return;
+        if (startDate.getFullYear() !== year || endDate.getFullYear() !== year) return;
+
+        const days = Utils.daysBetween(startDate, endDate);
+        if (typeof days !== 'number' || Number.isNaN(days)) return;
+
+        const bucket = opinionAgg[type] || (opinionAgg[type] = { sum: 0, n: 0 });
+        bucket.sum += days;
+        bucket.n += 1;
+      });
+    }
+
+    const getOpinionAverage = (type) => {
+      const entry = opinionAgg[type];
+      if (!entry || !entry.n) return null;
+      const avg = entry.sum / entry.n;
+      return Number.isFinite(avg) ? avg : null;
+    };
+    // <<< Patch
+
+    const ringStatuses = SPEED_STATUS_ORDER.filter(
+      status => !EXCLUDED_RING_STATUSES.has(status) && DASHBOARD_STATUSES.includes(status)
+    );
+
+    const items = [];
+    ringStatuses.forEach(statusCode => {
+      const label = STATUS_LABELS[statusCode] || statusCode;
+      items.push({
+        status: statusCode,
+        label,
+        count: countMap[statusCode] || 0,
+        avg: agg[statusCode] ? (agg[statusCode].sum / agg[statusCode].n) : null,
+        ariaLabel: `Velocidade média de ${label}`
+      });
+
+      // >>> Patch: inserir as médias de pareceres logo após ANATEC-PRE
+      if (statusCode === 'ANATEC-PRE') {
+        OPINION_AVERAGE_TYPES.forEach(type => {
+          const avg = getOpinionAverage(type);
+          items.push({
+            status: `OP-${type}`,
+            label: OPINION_LABELS[type] || type,
+            count: null,
+            avg,
+            ariaLabel: `Tempo médio da ${OPINION_LABELS[type] || type} (da solicitação ao recebimento)`
+          });
+        });
+      }
+      // <<< Patch
+    });
+
+    Utils.renderProcessBars('velocimetros', items);
+  }
+
+  function renderYearlyActivity() {
+    const metricEls = {
+      anadoc: el('dashboardMetricAnadoc'),
+      anatecPre: el('dashboardMetricAnatecPre'),
+      anatec: el('dashboardMetricAnatec'),
+      notifications: el('dashboardMetricNotifications'),
+      sigadaerJjaer: el('dashboardMetricSigadaerJjaer'),
+      sigadaerAgu: el('dashboardMetricSigadaerAgu'),
+      sigadaerPref: el('dashboardMetricSigadaerPref') // PREF: Prefeitura
+    };
+
+    Object.values(metricEls).forEach(node => {
+      if (node) node.textContent = '—';
+    });
+
+    const select = el('entryYearSelect');
+    const year = select && select.value ? Number(select.value) : NaN;
+    if (!Number.isFinite(year)) return;
+
+    const counters = {
+      anadoc: 0,
+      anatecPre: 0,
+      anatec: 0,
+      notifications: 0,
+      sigadaerJjaer: 0,
+      sigadaerAgu: 0,
+      sigadaerPref: 0
+    };
+
+    Object.values(cachedStatusHistory || {}).forEach(list => {
+      if (!Array.isArray(list)) return;
+      for (let i = 0; i < list.length; i++) {
+        const cur = list[i];
+        if (!cur || !cur.start || !cur.status) continue;
+        if (i > 0) {
+          const prev = list[i - 1];
+          if (prev && prev.start === cur.start && prev.status === cur.status) continue;
+        }
+
+        const startDate = new Date(cur.start);
+        if (Number.isNaN(+startDate) || startDate.getFullYear() !== year) continue;
+
+        if (cur.status === 'ANADOC') counters.anadoc += 1;
+        if (cur.status === 'ANATEC-PRE') counters.anatecPre += 1;
+        if (cur.status === 'ANATEC') counters.anatec += 1;
+      }
+    });
+
+    // Notificações: contam pela data efetiva do pedido
+    (cachedNotifications || []).forEach(notification => {
+      if (!notification) return;
+      const { requested_at: requestedAt } = notification;
+      if (!requestedAt) return;
+
+      const requestedDate = new Date(requestedAt);
+      if (!Number.isNaN(+requestedDate) && requestedDate.getFullYear() === year) {
+        counters.notifications += 1;
+      }
+    });
+
+    // SIGADAER: contam quando EXPEDIDO, pela data de expedição (expedit_at)
+    (cachedSigadaer || []).forEach(sigadaer => {
+      if (!sigadaer) return;
+      const { type, status, expedit_at: expeditAt } = sigadaer;
+      if (!expeditAt || status !== 'EXPEDIDO') return;
+
+      const expeditDate = new Date(expeditAt);
+      if (Number.isNaN(+expeditDate) || expeditDate.getFullYear() !== year) return;
+
+      const normalizedType = typeof type === 'string' ? type.toUpperCase() : '';
+      if (normalizedType === 'JJAER') counters.sigadaerJjaer += 1;
+      if (normalizedType === 'AGU') counters.sigadaerAgu += 1;
+      if (normalizedType === 'PREF') counters.sigadaerPref += 1; // incluído
+    });
+
+    Object.entries(metricEls).forEach(([key, node]) => {
+      if (!node) return;
+      node.textContent = YEARLY_COUNTER_FORMATTER.format(counters[key] || 0);
+    });
+  }
+
+  function renderHourlyEngagementEmpty(message = 'Nenhum dado para exibir.') {
+    const container = el('hourlyEngagementChart');
+    if (!container) return;
+    container.innerHTML = '';
+    const msg = document.createElement('p');
+    msg.className = 'muted chart-placeholder';
+    msg.textContent = message;
+    container.appendChild(msg);
+  }
+
+  function renderHourlyEngagement() {
+    const container = el('hourlyEngagementChart');
+    if (!container) return;
+
+    const select = el('entryYearSelect');
+    const year = select && select.value ? Number(select.value) : NaN;
+    if (!Number.isFinite(year)) {
+      renderHourlyEngagementEmpty('Nenhum dado para exibir.');
+      return;
+    }
+
+    const counts = new Array(24).fill(0);
+
+    const registerDate = dateValue => {
+      if (!dateValue) return;
+      const dt = dateValue instanceof Date ? dateValue : new Date(dateValue);
+      if (!dt || Number.isNaN(+dt)) return;
+      if (dt.getFullYear() !== year) return;
+      const hour = dt.getHours();
+      if (!Number.isInteger(hour) || hour < 0 || hour > 23) return;
+      counts[hour] += 1;
+    };
+
+    Object.values(cachedStatusHistory || {}).forEach(list => {
+      if (!Array.isArray(list)) return;
+      for (let i = 0; i < list.length; i++) {
+        const cur = list[i];
+        if (!cur || !cur.start || !cur.status) continue;
+        if (i > 0) {
+          const prev = list[i - 1];
+          if (prev && prev.start === cur.start && prev.status === cur.status) continue;
+        }
+        registerDate(cur.start);
+      }
+    });
+
+    (cachedSigadaer || []).forEach(item => {
+      if (!item) return;
+      if (item.requested_at) registerDate(item.requested_at);
+      if (item.status === 'EXPEDIDO' && item.expedit_at) registerDate(item.expedit_at);
+    });
+
+    (cachedOpinions || []).forEach(opinion => {
+      if (!opinion) return;
+      const type = typeof opinion.type === 'string' ? opinion.type.toUpperCase() : '';
+      if (!OPINION_TYPES_SET.has(type)) return;
+      if (opinion.requested_at) registerDate(opinion.requested_at);
+    });
+
+    const total = counts.reduce((sum, value) => sum + value, 0);
+    if (!total) {
+      renderHourlyEngagementEmpty('Nenhum evento registrado para o ano selecionado.');
+      return;
+    }
+
+    const maxPercent = counts.reduce((max, value) => {
+      const pct = (value / total) * 100;
+      return pct > max ? pct : max;
+    }, 0);
+
+    container.innerHTML = '';
+    const bars = document.createElement('div');
+    bars.className = 'bar-chart-bars';
+    bars.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
+
+    // >>> Patch aplicado: destaque de "fora do expediente" (antes de 08h ou a partir de 16h)
+    let offHoursCount = 0;
+
+    counts.forEach((value, hour) => {
+      const percent = (value / total) * 100;
+      const item = document.createElement('div');
+      item.className = 'bar-chart-item';
+
+      const isOffHours = hour < 8 || hour >= 16;
+      if (isOffHours) {
+        item.classList.add('off-hours');
+        offHoursCount += value;
+      }
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'bar-chart-bar-wrapper';
+
+      const bar = document.createElement('div');
+      bar.className = 'bar-chart-bar';
+      if (isOffHours) bar.classList.add('off-hours');
+      let heightPercent = maxPercent ? (percent / maxPercent) * 100 : 0;
+      if (percent > 0 && heightPercent < 8) heightPercent = 8;
+      bar.style.height = `${heightPercent}%`;
+      bar.title = `${String(hour).padStart(2, '0')}h: ${value} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
+
+      wrapper.appendChild(bar);
+
+      const label = document.createElement('span');
+      label.className = 'bar-chart-label';
+      label.textContent = `${String(hour).padStart(2, '0')}h`;
+
+      // Removido: nó de valor percentual no topo (conforme patch)
+      item.appendChild(wrapper);
+      item.appendChild(label);
+      bars.appendChild(item);
+    });
+
+    container.appendChild(bars);
+
+    // Resumo "Fora do expediente"
+    const offHoursPercent = (offHoursCount / total) * 100;
+    const summary = document.createElement('div');
+    summary.className = 'hourly-engagement-summary';
+
+    const summaryLabel = document.createElement('span');
+    summaryLabel.className = 'hourly-engagement-summary-label';
+    summaryLabel.textContent = 'Fora do expediente';
+
+    const summaryValue = document.createElement('strong');
+    summaryValue.className = 'hourly-engagement-summary-value';
+    summaryValue.textContent = `${PERCENTAGE_FORMATTER.format(offHoursPercent)}%`;
+
+    summary.appendChild(summaryLabel);
+    summary.appendChild(summaryValue);
+    container.appendChild(summary);
+    // <<< Patch aplicado
+  }
+
+  async function load() {
+    renderEntryChartEmpty('Carregando…');
+    renderHourlyEngagementEmpty('Carregando…');
+    const yearSelect = el('entryYearSelect');
+    if (yearSelect) yearSelect.disabled = true;
+
+    cachedStatusHistory = {};
+    cachedNotifications = [];
+    cachedSigadaer = [];
+    cachedOpinions = [];
+
+    const { data: procs } = await sb
+      .from('processes')
+      .select('id,status,status_since,first_entry_date');
+
+    cachedProcesses = procs || [];
+    const hasYears = updateYearOptions();
+    if (hasYears) renderEntryChart();
+    else renderEntryChartEmpty('Nenhum dado para exibir.');
+
+    const { data: notifications } = await sb
+      .from('notifications')
+      .select('requested_at, read_at');
+    cachedNotifications = notifications || [];
+
+    const { data: sigadaer } = await sb
+      .from('sigadaer')
+      .select('type, status, requested_at, expedit_at');
+    cachedSigadaer = sigadaer || [];
+
+    // >>> Patch: incluir received_at para calcular médias
+    const { data: opinions } = await sb
+      .from('internal_opinions')
+      .select('type, requested_at, received_at');
+    // <<< Patch
+    cachedOpinions = opinions || [];
+
+    // Velocidade média — montar histórico de status por processo (usando 'history')
+    const ids = (procs || []).map(p => p.id);
+    const byProc = {};
+    if (ids.length) {
+      const { data: historyData } = await sb
+        .from('history')
+        .select('process_id,details,created_at')
+        .eq('action', 'Status atualizado')
+        .in('process_id', ids)
+        .order('created_at');
+      (historyData || []).forEach(item => {
+        if (!item || !item.process_id) return;
+        let det = item.details || {};
+        if (typeof det === 'string') {
+          try { det = JSON.parse(det); } catch (_) { det = {}; }
+        }
+        const status = det?.status;
+        let start = det?.status_since || det?.start || item.created_at;
+        if (!status || !start) return;
+        const list = byProc[item.process_id] || (byProc[item.process_id] = []);
+        list.push({ status, start });
+      });
+    }
+
+    (procs || []).forEach(proc => {
+      if (!proc || !proc.id) return;
+      const list = byProc[proc.id] || (byProc[proc.id] = []);
+      if (proc.status && proc.status_since) {
+        const already = list.some(entry => entry.status === proc.status && entry.start === proc.status_since);
+        if (!already) list.push({ status: proc.status, start: proc.status_since });
+      }
+      list.sort((a, b) => new Date(a.start) - new Date(b.start));
+    });
+
+    cachedStatusHistory = byProc;
+
+    renderOverview();
+    renderYearlyActivity();
+    renderHourlyEngagement();
+
+    if (yearSelect) yearSelect.disabled = false;
+  }
+
+  return { init, load };
+})();
