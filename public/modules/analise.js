@@ -13,12 +13,31 @@ window.Modules.analise = (() => {
   const EXTRA_NC_CODE = CHECKLIST_PDF.EXTRA_NON_CONFORMITY_CODE || '__ck_extra_nc__';
 
   // ==== Normalização de tipos de processo x tipos de checklist (patch) ====
-  const SUPPORTED_PROCESS_TYPES = ['OPEA', 'AD/HEL'];
-  const CHECKLIST_TYPE_VARIANTS = {
-    OPEA: ['OPEA', 'OPEA - Documental'],
-    'AD/HEL': ['AD/HEL', 'AD/HEL - Documental']
-  };
-  const DEFAULT_PROCESS_TYPE = SUPPORTED_PROCESS_TYPES[0];
+  const PROCESS_TYPE_TO_CHECKLIST = new Map([
+    ['OPEA', ['OPEA - Documental']],
+    ['PDIR', ['AD/HEL - Documental']],
+    ['Inscrição', ['AD/HEL - Documental']],
+    ['Alteração', ['AD/HEL - Documental']],
+    ['Exploração', ['AD/HEL - Documental']]
+  ]);
+  const SUPPORTED_PROCESS_TYPES = Array.from(PROCESS_TYPE_TO_CHECKLIST.keys());
+  const DEFAULT_PROCESS_TYPE = 'OPEA';
+
+  const CHECKLIST_TYPE_VARIANTS = new Map([
+    ['OPEA - Documental', ['OPEA - Documental', 'OPEA']],
+    ['AD/HEL - Documental', ['AD/HEL - Documental', 'AD/HEL']]
+  ]);
+
+  const CHECKLIST_TO_PROCESS_TYPES = (() => {
+    const map = new Map();
+    PROCESS_TYPE_TO_CHECKLIST.forEach((checklists, type) => {
+      checklists.forEach(checklist => {
+        if (!map.has(checklist)) map.set(checklist, new Set());
+        map.get(checklist).add(type);
+      });
+    });
+    return map;
+  })();
 
   const TYPE_ALIAS_MAP = (() => {
     const map = new Map();
@@ -31,10 +50,19 @@ window.Modules.analise = (() => {
       const key = normalizeKey(alias);
       if (key) map.set(key, canonical);
     };
-    SUPPORTED_PROCESS_TYPES.forEach(type => {
+
+    PROCESS_TYPE_TO_CHECKLIST.forEach((checklists, type) => {
       register(type, type);
-      (CHECKLIST_TYPE_VARIANTS[type] || []).forEach(variant => register(variant, type));
+      register(`${type} - Documental`, type);
+      checklists.forEach(checklist => {
+        const processTypesForChecklist = CHECKLIST_TO_PROCESS_TYPES.get(checklist);
+        if (processTypesForChecklist && processTypesForChecklist.size === 1) {
+          const variants = CHECKLIST_TYPE_VARIANTS.get(checklist) || [];
+          variants.forEach(variant => register(variant, type));
+        }
+      });
     });
+
     return { map, normalizeKey };
   })();
 
@@ -48,10 +76,14 @@ window.Modules.analise = (() => {
 
   const getChecklistTypeVariants = (value) => {
     const normalized = normalizeProcessType(value);
-    if (!SUPPORTED_PROCESS_TYPES.includes(normalized)) return [];
-    const variants = CHECKLIST_TYPE_VARIANTS[normalized] || [];
-    const unique = new Set([normalized, ...variants]);
-    return Array.from(unique);
+    if (!normalized || !PROCESS_TYPE_TO_CHECKLIST.has(normalized)) return [];
+    const variants = new Set();
+    const checklists = PROCESS_TYPE_TO_CHECKLIST.get(normalized) || [];
+    checklists.forEach(checklist => {
+      variants.add(checklist);
+      (CHECKLIST_TYPE_VARIANTS.get(checklist) || []).forEach(alias => variants.add(alias));
+    });
+    return Array.from(variants);
   };
 
   const normalizeValue = (value) => (
