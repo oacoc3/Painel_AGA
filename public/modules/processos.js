@@ -555,8 +555,8 @@ window.Modules.processos = (() => {
         </label>
         <label>Desde <input type="datetime-local" id="stDesde" required></label>
         <menu>
-          <button value="cancel">Cancelar</button>
-          <button id="stSalvar" value="default">Salvar</button>
+          <button type="button" id="stFechar">Fechar</button>
+          <button id="stSalvar" type="button">Salvar</button>
         </menu>
       </form>`;
     document.body.appendChild(dlg);
@@ -565,6 +565,10 @@ window.Modules.processos = (() => {
     const dt = dlg.querySelector('#stDesde');
     if (dt && curDate) dt.value = U.toDateTimeLocalValue(curDate);
     dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#stFechar')?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      dlg.close();
+    });
     dlg.querySelector('#stSalvar')?.addEventListener('click', async (ev) => {
       ev.preventDefault();
       const dtValue = dt?.value || '';
@@ -600,14 +604,18 @@ window.Modules.processos = (() => {
         <h3>Atualizar 1ª entrada</h3>
         <label>Data <input type="date" id="feData"></label>
         <menu>
-          <button value="cancel">Cancelar</button>
-          <button id="feSalvar" value="default">Salvar</button>
+          <button type="button" id="feFechar">Fechar</button>
+          <button id="feSalvar" type="button">Salvar</button>
         </menu>
       </form>`;
     document.body.appendChild(dlg);
     const input = dlg.querySelector('#feData');
     if (input && curDate) input.value = U.toDateInputValue(curDate);
     dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('#feFechar')?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      dlg.close();
+    });
     dlg.querySelector('#feSalvar')?.addEventListener('click', async (ev) => {
       ev.preventDefault();
       const val = input?.value || '';
@@ -1263,7 +1271,7 @@ window.Modules.processos = (() => {
     popupProcId = procId;
     const dlg = document.createElement('dialog');
     dlg.className = 'hist-popup';
-    dlg.innerHTML = '<div id="obsListaPop" class="table scrolly">Carregando…</div><div id="obsForm" class="hidden"><textarea id="obsTexto" rows="3"></textarea></div><menu><button type="button" id="obsNova">Nova</button><button type="button" id="obsSalvar" disabled>Salvar</button><button type="button" id="obsFechar">Cancelar</button></menu><div id="obsMsg" class="msg"></div>';
+    dlg.innerHTML = '<div id="obsListaPop" class="table scrolly">Carregando…</div><div id="obsForm" class="hidden"><textarea id="obsTexto" rows="3"></textarea></div><menu><button type="button" id="obsNova">Nova</button><button type="button" id="obsSalvar" disabled>Salvar</button><button type="button" id="obsFechar">Fechar</button></menu><div id="obsMsg" class="msg"></div>';
     document.body.appendChild(dlg);
     dlg.addEventListener('close', () => { dlg.remove(); popupProcId = null; });
     dlg.querySelector('#obsFechar').addEventListener('click', () => dlg.close());
@@ -1301,6 +1309,27 @@ window.Modules.processos = (() => {
       U.setMsg('obsMsg', e.message || String(e), true);
     }
   }
+
+  // ===== NOVOS HELPERS (patch) =====
+  function getUserDisplayName(user) {
+    if (!user) return '';
+    const metadataName = user.user_metadata && user.user_metadata.name;
+    return metadataName || user.email || user.id || '';
+  }
+
+  async function insertProcessHistoryRecord(processId, action, details, user) {
+    if (!processId || !user?.id || !action) return;
+    const payload = {
+      process_id: processId,
+      action,
+      details,
+      user_id: user.id,
+      user_name: getUserDisplayName(user)
+    };
+    const { error } = await sb.from('history').insert(payload);
+    if (error) throw error;
+  }
+  // ================================
 
   function formatHistoryDetails(det) {
     if (!det) return '';
@@ -1426,7 +1455,8 @@ window.Modules.processos = (() => {
           if (!map.has(key)) map.set(key, { name, uf });
         });
         const list = Array.from(map.values()).sort((a, b) => {
-          if (a.uf === b.uf) return a.name.localeCompare(b.name, 'pt-BR');
+          const nameCompare = a.name.localeCompare(b.name, 'pt-BR');
+          if (nameCompare !== 0) return nameCompare;
           return a.uf.localeCompare(b.uf, 'pt-BR');
         });
         MUNICIPALITY_CACHE = list;
@@ -1709,6 +1739,24 @@ window.Modules.processos = (() => {
       if (!u) return U.setMsg('sgCadMsg', 'Sessão expirada.', true);
       const { error } = await sb.from('sigadaer').insert({ ...payload, created_by: u.id });
       if (error) throw error;
+      // Registro de histórico (patch)
+      try {
+        const municipalityLabel = municipalityName && municipalityUf
+          ? formatMunicipalityLabel(municipalityName, municipalityUf)
+          : null;
+        await insertProcessHistoryRecord(procId, 'SIGADAER cadastrado', {
+          type: tipo,
+          status: payload.status,
+          numbers: numeros,
+          requested_at: payload.requested_at,
+          deadline_days: payload.deadline_days,
+          municipality_name: municipalityName || null,
+          municipality_uf: municipalityUf || null,
+          municipality: municipalityLabel
+        }, u);
+      } catch (historyErr) {
+        console.error('Falha ao registrar histórico do SIGADAER', historyErr);
+      }
       dlg.close();
       await loadProcessList();
       if (procId && el('sgListaPop')) await loadSIGList(procId, 'sgListaPop');
@@ -2030,7 +2078,7 @@ window.Modules.processos = (() => {
     }
   }
 
-  // === Atualização de botões extras / listas ===
+  // === Atualização de botões extras / listas —
   async function reloadLists() {
     await loadProcessList();
     if (popupProcId && el('ckListaPop')) await loadChecklistList(popupProcId, 'ckListaPop');
