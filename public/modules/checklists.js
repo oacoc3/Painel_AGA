@@ -9,15 +9,13 @@ window.Modules.checklists = (() => {
   // --- (NOVO) Opções de tipos de checklist + aliases/canônicos ---
   const CHECKLIST_TYPE_OPTIONS = [
     {
-      value: 'OPEA',
+      value: 'OPEA - Documental',
       label: 'OPEA - Documental',
-      variants: ['OPEA', 'OPEA - Documental'],
       dbValue: 'OPEA - Documental'
     },
     {
-      value: 'AD/HEL',
+      value: 'AD/HEL - Documental',
       label: 'AD/HEL - Documental',
-      variants: ['AD/HEL', 'AD/HEL - Documental'],
       dbValue: 'AD/HEL - Documental'
     }
   ];
