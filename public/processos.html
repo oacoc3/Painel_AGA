@@ -54,7 +54,7 @@
     <main class="main">
       <section id="viewProcessos" class="view">
         <div class="split processos">
-          <!-- COLUNA ESQUERDA: Formulário de processo -->
+          <!-- COLUNA ESQUERDA: Formulário de processo + filtros -->
           <div class="card">
             <h2>Busca</h2>
 
@@ -69,11 +69,7 @@
 
               <div id="procMsg" class="msg"></div>
             </form>
-          </div>
 
-          <!-- COLUNA DO MEIO: Lista de processos -->
-          <div class="card">
-            <h2>Processos</h2>
             <form id="procFilters" class="proc-filters" data-ajax>
               <fieldset class="proc-filters-group">
                 <legend>1ª Entrada</legend>
@@ -101,6 +97,11 @@
                 <button type="button" id="procFilterClear">Limpar</button>
               </div>
             </form>
+          </div>
+
+          <!-- COLUNA DO MEIO: Lista de processos -->
+          <div class="card">
+            <h2>Processos</h2>
             <div id="procLista" class="table scrolly"></div>
           </div>
         </div>
