@@ -2,6 +2,21 @@
 window.Modules = window.Modules || {};
 window.Modules.prazos = (() => {
   const U = Utils;
+  const FLAG_ALLOWED_ROLES = new Set(['Administrador', 'Analista OACO']);
+
+  function canUserTriggerFlag() {
+    const role = AccessGuards?.getRole ? AccessGuards.getRole() : null;
+    return role ? FLAG_ALLOWED_ROLES.has(role) : false;
+  }
+
+  function notifyFlagAccessDenied() {
+    const message = AccessGuards?.message || 'Função não disponível para o seu perfil de acesso.';
+    try {
+      window.alert(message);
+    } catch (err) {
+      console.warn('Acesso negado à funcionalidade de sinalização.', err);
+    }
+  }
 
   let pareceres = [];
   let remocao = [];
@@ -353,6 +368,10 @@ window.Modules.prazos = (() => {
     if (supportsFlag) {
       dlg.querySelector('[data-action="flag"]')?.addEventListener('click', ev => {
         ev.preventDefault();
+        if (!canUserTriggerFlag()) {
+          notifyFlagAccessDenied();
+          return;
+        }
         dlg.close();
         showFlagForm(cardKey, row, flag);
       });
@@ -382,6 +401,10 @@ window.Modules.prazos = (() => {
     const config = getCardConfig(cardKey);
     if (!config.supportsFlagging) return;
     const formCfg = config.form || {};
+    if (!canUserTriggerFlag()) {
+      notifyFlagAccessDenied();
+      return;
+    }
 
     const dlg = document.createElement('dialog');
     dlg.className = 'prazo-popup';

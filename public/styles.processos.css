@@ -157,7 +157,7 @@
 .proc-filters {
   display: grid;
   gap: 8px;
-  margin-bottom: 12px;
+  margin: 12px 0; /* (patch) era margin-bottom: 12px; */
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   align-items: end;
 }
