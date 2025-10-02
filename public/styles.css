@@ -74,6 +74,10 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   #viewDashboard .grid {
     grid-template-columns: 1fr;
   }
+  /* (patch) grade pessoal responsiva em 1 coluna */
+  .pessoal-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 
@@ -206,6 +210,27 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .admin-col > .card:first-child > form { min-height: 0; }
 .analysis-grid { display: grid; grid-template-columns: 1fr 3fr; gap: 12px; height: 100%; }
 .analysis-grid > * { min-height: 0; }
+
+/* (patch) grade de “pessoal” */
+.pessoal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 12px;
+  height: 100%;
+}
+.pessoal-grid > .card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.pessoal-grid .card .table {
+  flex: 1;
+}
+.pessoal-grid .card .table table {
+  width: 100%;
+}
+
 .analysis-col { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
 
 /* Grade de 3 colunas (base) */
@@ -442,6 +467,33 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .warn  { color: #a60; }
 .err   { color: #900; }
 
+.toast-popup {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 18px;
+  background: rgba(75, 111, 145, 0.95);
+  color: #fff;
+  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.3);
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  margin: 0;
+  max-width: 280px;
+  text-align: center;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 10;
+}
+.toast-popup::backdrop {
+  background: transparent;
+}
+.toast-popup p {
+  margin: 0;
+}
+.toast-popup.toast-popup-open {
+  display: block;
+}
+
 .prazo-popup {
   padding: 0;
   border: 1px solid var(--line);
@@ -482,6 +534,35 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   gap: 8px;
   justify-content: flex-end;
   margin: 12px 0 0;
+  padding: 0;
+}
+
+/* (patch) popup de disponibilidade */
+.availability-popup {
+  border: none;
+  border-radius: 8px;
+  padding: 0;
+  max-width: 440px;
+  width: calc(100vw - 36px);
+  box-shadow: 0 18px 36px rgba(17, 24, 39, 0.25);
+}
+.availability-popup::backdrop {
+  background: rgba(17, 24, 39, 0.45);
+}
+.availability-popup form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+}
+.availability-popup textarea {
+  min-height: 96px;
+}
+.availability-popup menu {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
   padding: 0;
 }
 
@@ -798,5 +879,12 @@ footer { padding: 8px 12px; background: #faf9f7; }
 
   .main {
     margin-left: 0;
+  }
+
+  /* (patch) posicionamento do toast em telas pequenas */
+  .toast-popup {
+    left: 16px;
+    right: 16px;
+    top: 16px;
   }
 }
