@@ -201,17 +201,17 @@ window.Modules.pessoal = (() => {
       const counts = new Map();
 
       if (profiles.length) {
+        // >>> Correção: sem .group() e sem "count:id"; contamos no JS.
         const { data, error } = await sb
           .from('checklist_responses')
-          .select('filled_by, count:id', { head: false })
+          .select('filled_by', { head: false })
           .eq('status', 'final')
-          .not('filled_by', 'is', null)
-          .group('filled_by');
+          .not('filled_by', 'is', null);
         if (error) throw error;
+
         (data || []).forEach(row => {
           if (!row?.filled_by) return;
-          const value = Number(row.count) || 0;
-          counts.set(row.filled_by, value);
+          counts.set(row.filled_by, (counts.get(row.filled_by) || 0) + 1);
         });
       }
 
@@ -231,6 +231,7 @@ window.Modules.pessoal = (() => {
           return aKey.localeCompare(bKey, 'pt-BR');
         });
 
+      // Mantido seu padrão de chamada:
       Utils.renderTable(tableId, PRODUCTIVITY_COLUMNS, rows);
       Utils.setMsg(msgId, rows.length ? '' : 'Nenhum usuário encontrado.');
     } catch (err) {
@@ -247,7 +248,8 @@ window.Modules.pessoal = (() => {
     try {
       const { data, error } = await sb
         .from('user_unavailabilities')
-        .select('id,profile_id,description,starts_at,ends_at,created_at,created_by, profile:profile_id (id,name,email,role,deleted_at), creator:created_by (id,name,email,role,deleted_at)')
+        // >>> Correção: remover deleted_at dos relacionamentos
+        .select('id,profile_id,description,starts_at,ends_at,created_at,created_by, profile:profile_id (id,name,email,role), creator:created_by (id,name,email,role)')
         .order('starts_at', { ascending: false });
       if (error) throw error;
 
