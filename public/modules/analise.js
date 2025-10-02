@@ -616,7 +616,7 @@ window.Modules.analise = (() => {
     const rawType = el('adTipo')?.value || '';
     const processType = normalizeProcessType(rawType);
     if (!nup) return Utils.setMsg('adMsg', 'Informe um NUP.', true);
-    if (!processType) return Utils.setMsg('adMsg', 'Selecione o tipo do processo.', true);
+    if (!processType) return Utils.setMsg('adMsg', 'Selecione o tipo da checklist.', true);
 
     const { data: proc } = await sb.from('processes').select('id,type').eq('nup', nup).maybeSingle();
     if (proc) {
