@@ -13,24 +13,45 @@ window.Modules.analise = (() => {
   const EXTRA_NC_CODE = CHECKLIST_PDF.EXTRA_NON_CONFORMITY_CODE || '__ck_extra_nc__';
 
   // ==== Normalização de tipos de processo x tipos de checklist (patch) ====
-  const PROCESS_TYPES = ['PDIR', 'Inscrição', 'Alteração', 'Exploração', 'OPEA'];
-  const CHECKLIST_TYPES = PROCESS_TYPES.reduce((map, type) => {
-    map[type] = `${type} - Documental`;
-    return map;
-  }, {});
-  const PROCESS_TYPE_LOOKUP = Object.entries(CHECKLIST_TYPES).reduce((map, [procType, checklistType]) => {
-    map[procType] = procType;
-    map[checklistType] = procType;
-    return map;
-  }, {});
+  const SUPPORTED_PROCESS_TYPES = ['OPEA', 'AD/HEL'];
+  const CHECKLIST_TYPE_VARIANTS = {
+    OPEA: ['OPEA', 'OPEA - Documental'],
+    'AD/HEL': ['AD/HEL', 'AD/HEL - Documental']
+  };
+  const DEFAULT_PROCESS_TYPE = SUPPORTED_PROCESS_TYPES[0];
+
+  const TYPE_ALIAS_MAP = (() => {
+    const map = new Map();
+    const normalizeKey = (value) => (
+      typeof value === 'string'
+        ? value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+        : ''
+    );
+    const register = (alias, canonical) => {
+      const key = normalizeKey(alias);
+      if (key) map.set(key, canonical);
+    };
+    SUPPORTED_PROCESS_TYPES.forEach(type => {
+      register(type, type);
+      (CHECKLIST_TYPE_VARIANTS[type] || []).forEach(variant => register(variant, type));
+    });
+    return { map, normalizeKey };
+  })();
+
   const normalizeProcessType = (value) => {
     if (typeof value !== 'string') return '';
-    const key = value.trim();
-    return PROCESS_TYPE_LOOKUP[key] || key;
+    const key = TYPE_ALIAS_MAP.normalizeKey(value);
+    if (TYPE_ALIAS_MAP.map.has(key)) return TYPE_ALIAS_MAP.map.get(key);
+    const trimmed = value.trim();
+    return SUPPORTED_PROCESS_TYPES.includes(trimmed) ? trimmed : '';
   };
-  const toChecklistType = (value) => {
+
+  const getChecklistTypeVariants = (value) => {
     const normalized = normalizeProcessType(value);
-    return CHECKLIST_TYPES[normalized] || value;
+    if (!SUPPORTED_PROCESS_TYPES.includes(normalized)) return [];
+    const variants = CHECKLIST_TYPE_VARIANTS[normalized] || [];
+    const unique = new Set([normalized, ...variants]);
+    return Array.from(unique);
   };
 
   const normalizeValue = (value) => (
@@ -67,6 +88,44 @@ window.Modules.analise = (() => {
 
   const scheduleDraftSave = debounce(() => { saveChecklistDraft(); }, 600);
 
+  // ===== Toast “Rascunho salvo!” (patch) =====
+  let draftPopupDialog = null;
+  let draftPopupTimer = null;
+  function showDraftSavedPopup() {
+    try {
+      if (draftPopupTimer) {
+        clearTimeout(draftPopupTimer);
+        draftPopupTimer = null;
+      }
+    } catch (_) {}
+    if (draftPopupDialog?.open) {
+      try { draftPopupDialog.close(); } catch (_) {}
+    }
+    if (draftPopupDialog) {
+      draftPopupDialog.remove();
+      draftPopupDialog = null;
+    }
+    const dlg = document.createElement('dialog');
+    dlg.className = 'toast-popup';
+    dlg.innerHTML = '<p>Rascunho salvo!</p>';
+    dlg.addEventListener('close', () => {
+      try { dlg.remove(); } catch (_) {}
+      if (draftPopupDialog === dlg) {
+        draftPopupDialog = null;
+        draftPopupTimer = null;
+      }
+    });
+    document.body.appendChild(dlg);
+    try { dlg.showModal(); } catch (_) { dlg.classList.add('toast-popup-open'); }
+    draftPopupDialog = dlg;
+    draftPopupTimer = window.setTimeout(() => {
+      if (dlg.open) {
+        try { dlg.close(); } catch (_) {}
+      }
+    }, 1800);
+  }
+  // ===========================================
+
   // ===== Guardas de escrita documental =====
   const Access = window.AccessGuards || null;
   function guardDocumentalWrite(options = {}) {
@@ -77,19 +136,13 @@ window.Modules.analise = (() => {
   // ================================================
 
   async function loadTemplatesFor(processType) {
-    const normalized = normalizeProcessType(processType);
-    const documentalTypes = new Set(Object.values(CHECKLIST_TYPES).map(type => type.trim()));
-    const seeds = [processType, normalized, CHECKLIST_TYPES[normalized]];
-    const candidates = [];
-    seeds.forEach((seed) => {
-      if (typeof seed !== 'string') return;
-      const mapped = toChecklistType(seed);
-      if (typeof mapped !== 'string') return;
-      const trimmed = mapped.trim();
-      if (!trimmed || !documentalTypes.has(trimmed)) return;
-      if (!candidates.includes(trimmed)) candidates.push(trimmed);
-    });
-    if (!candidates.length) return [];
+    const candidates = new Set();
+    if (typeof processType === 'string' && processType.trim()) {
+      getChecklistTypeVariants(processType).forEach(value => candidates.add(value));
+    }
+    if (!candidates.size) return [];
+
+    const candidateList = Array.from(candidates);
 
     let query = sb
       .from('checklist_templates')
@@ -98,9 +151,9 @@ window.Modules.analise = (() => {
       .order('name')
       .order('version', { ascending: false });
 
-    query = candidates.length === 1
-      ? query.eq('type', candidates[0])
-      : query.in('type', candidates);
+    query = candidateList.length === 1
+      ? query.eq('type', candidateList[0])
+      : query.in('type', candidateList);
 
     const { data, error } = await query;
     if (error) return [];
@@ -466,6 +519,7 @@ window.Modules.analise = (() => {
       filled_by: u.id
     };
 
+    let saved = false;
     try {
       if (currentDraftId) {
         const { error } = await sb
@@ -474,6 +528,7 @@ window.Modules.analise = (() => {
           .eq('id', currentDraftId)
           .eq('status', 'draft');
         if (error) throw error;
+        saved = true;
       } else {
         const { data, error } = await sb
           .from('checklist_responses')
@@ -488,9 +543,13 @@ window.Modules.analise = (() => {
           .single();
         if (error) throw error;
         currentDraftId = data?.id || null;
+        saved = true;
       }
     } catch (err) {
       console.error('Falha ao salvar rascunho da checklist.', err);
+    }
+    if (saved) {
+      showDraftSavedPopup();
     }
   }
 
@@ -688,10 +747,7 @@ window.Modules.analise = (() => {
     el('adNUP').value = '';
     const tipoField = el('adTipo');
     if (tipoField) {
-      tipoField.value = 'PDIR';
-      if (tipoField.value !== 'PDIR' && CHECKLIST_TYPES.PDIR) {
-        tipoField.value = CHECKLIST_TYPES.PDIR;
-      }
+      tipoField.value = DEFAULT_PROCESS_TYPE;
     }
     Utils.setMsg('adMsg', '');
     currentProcessId = null;

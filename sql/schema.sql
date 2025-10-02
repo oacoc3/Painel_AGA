@@ -588,15 +588,120 @@ BEGIN
   ) THEN
     EXECUTE $pol$
       CREATE POLICY "history_delete_admin"
-      ON public.history
-      FOR DELETE
-      TO authenticated
-      USING (
-        EXISTS (
-          SELECT 1 FROM public.profiles p
-          WHERE p.id = auth.uid() AND p.role = 'Administrador'
+        ON public.history
+        FOR DELETE
+        TO authenticated
+        USING (
+          EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.id = auth.uid() AND p.role = 'Administrador'
+          )
         )
+    $pol$;
+  END IF;
+
+  ----------------------------------------------------------------
+  -- USER UNAVAILABILITIES: tabela e políticas
+  ----------------------------------------------------------------
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='user_unavailabilities'
+  ) THEN
+    EXECUTE $sql$
+      CREATE TABLE public.user_unavailabilities (
+        id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+        profile_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+        description text NOT NULL,
+        starts_at timestamptz NOT NULL,
+        ends_at timestamptz NOT NULL,
+        created_by uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+        created_at timestamptz NOT NULL DEFAULT timezone('America/Recife', now()),
+        updated_at timestamptz NOT NULL DEFAULT timezone('America/Recife', now())
       )
+    $sql$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.constraint_column_usage
+    WHERE table_schema = 'public'
+      AND table_name = 'user_unavailabilities'
+      AND constraint_name = 'user_unavailabilities_chk_range'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.user_unavailabilities
+      ADD CONSTRAINT user_unavailabilities_chk_range CHECK (ends_at > starts_at)';
+  END IF;
+
+  EXECUTE $sql$
+    ALTER TABLE public.user_unavailabilities
+      ALTER COLUMN created_by SET DEFAULT auth.uid()
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.user_unavailabilities
+      ALTER COLUMN created_at SET DEFAULT timezone('America/Recife', now())
+  $sql$;
+
+  EXECUTE $sql$
+    ALTER TABLE public.user_unavailabilities
+      ALTER COLUMN updated_at SET DEFAULT timezone('America/Recife', now())
+  $sql$;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'trg_user_unavailabilities_set_updated_at'
+      AND tgrelid = 'public.user_unavailabilities'::regclass
+  ) THEN
+    EXECUTE 'DROP TRIGGER trg_user_unavailabilities_set_updated_at ON public.user_unavailabilities';
+  END IF;
+
+  EXECUTE $sql$
+    CREATE TRIGGER trg_user_unavailabilities_set_updated_at
+      BEFORE UPDATE ON public.user_unavailabilities
+      FOR EACH ROW
+      EXECUTE FUNCTION extensions.moddatetime(updated_at)
+  $sql$;
+
+  EXECUTE $sql$
+    CREATE INDEX IF NOT EXISTS user_unavailabilities_profile_id_idx
+      ON public.user_unavailabilities (profile_id)
+  $sql$;
+
+  EXECUTE $sql$
+    CREATE INDEX IF NOT EXISTS user_unavailabilities_starts_at_idx
+      ON public.user_unavailabilities (starts_at DESC)
+  $sql$;
+
+  EXECUTE 'ALTER TABLE public.user_unavailabilities ENABLE ROW LEVEL SECURITY';
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='user_unavailabilities' AND policyname='user_unavailabilities_select_authenticated'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "user_unavailabilities_select_authenticated"
+        ON public.user_unavailabilities
+        FOR SELECT
+        TO authenticated
+        USING (true)
+    $pol$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='user_unavailabilities' AND policyname='user_unavailabilities_insert_self_or_admin'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "user_unavailabilities_insert_self_or_admin"
+        ON public.user_unavailabilities
+        FOR INSERT
+        TO authenticated
+        WITH CHECK (
+          profile_id = auth.uid()
+          OR EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.id = auth.uid() AND p.role = 'Administrador'
+          )
+        )
     $pol$;
   END IF;
 

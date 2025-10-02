@@ -10,6 +10,8 @@
     prazos: 'prazos.html',
     modelos: 'modelos.html',
     analise: 'analise.html',
+    adhel: 'adhel.html',
+    pessoal: 'pessoal.html',
     admin: 'admin.html'
   };
 
@@ -119,6 +121,10 @@
       return false;
     }
   }
+
+  // Torna o registrador de auditoria disponível globalmente (p. ex., para módulos chamarem manualmente).
+  window.AppAudit = window.AppAudit || {};
+  window.AppAudit.recordEvent = recordAuditEvent;
 
   async function recordLoginEvent(session) {
     if (!session?.user?.id) return false;
@@ -488,6 +494,8 @@
       case 'prazos':     window.Modules.prazos?.load?.(); break;
       case 'modelos':    window.Modules.modelos?.load?.(); break;
       case 'analise':    window.Modules.analise?.load?.(); break;
+      case 'adhel':      window.Modules.adhel?.load?.(); break;
+      case 'pessoal':    window.Modules.pessoal?.load?.(); break;
       case 'admin':      if (isAdmin) { window.Modules.admin?.load?.(); window.Modules.checklists?.load?.(); } break;
     }
 

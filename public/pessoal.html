@@ -18,13 +18,10 @@
   <script src="./utils.js" defer></script>
   <!-- Guardas de segurança: não alteram visual -->
   <script src="./safety-guards.js" defer></script>
-  <!-- jsPDF para exportar PDF (Análise Documental) -->
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
   <script src="./mpa.js" defer></script>
-  <script src="./modules/checklists/pdf.js" defer></script>
-  <script src="./modules/analise.js" defer></script>
+  <script src="./modules/pessoal.js" defer></script>
 </head>
-<body data-route="analise">
+<body data-route="pessoal">
   <div id="app" class="vh">
     <header class="bar">
       <div class="brand">
@@ -37,9 +34,9 @@
         <button data-route="processos">Processos</button>
         <button data-route="prazos">Prazos</button>
         <button data-route="modelos">Modelos</button>
-        <button data-route="analise" class="active">Documental</button>
+        <button data-route="analise">Documental</button>
         <button data-route="adhel">AD/HEL</button>
-        <button data-route="pessoal">Pessoal</button>
+        <button data-route="pessoal" class="active">Pessoal</button>
         <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
       </nav>
       <div id="userBox" class="user hidden">
@@ -50,38 +47,20 @@
     </header>
 
     <main class="main">
-      <section id="viewAnalise" class="view">
-        <div class="analysis-grid">
-          <div class="analysis-col">
-            <div class="card">
-              <h2>Nova análise documental</h2>
-              <form id="formAD" data-ajax>
-                <label>NUP <input id="adNUP" required placeholder="000000/0000-00"></label>
-                <label>Tipo do processo
-                  <select id="adTipo">
-                    <option>OPEA</option>
-                    <option>AD/HEL</option>
-                  </select>
-                </label>
-                <div class="row actions">
-                  <button id="btnLimparAD" type="button">Limpar</button>
-                  <button id="btnIniciarAD" type="button">Iniciar Preenchimento de Checklist</button>
-                </div>
-                <div id="adMsg" class="msg"></div>
-              </form>
+      <section id="viewPessoal" class="view">
+        <div class="pessoal-grid">
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
+              <h2>Disponibilidade</h2>
+              <button id="btnNewUnavailability" type="button">Cadastrar indisponibilidade</button>
             </div>
-            <div class="card" id="adApprovedChecklistsCard">
-              <h2>Checklists aprovadas</h2>
-              <div id="adApprovedList" class="table scrolly"></div>
-            </div>
+            <div id="availabilityMsg" class="msg"></div>
+            <div id="availabilityList" class="table scrolly"></div>
           </div>
-          <div class="card" id="adChecklistCard">
-            <h2>Checklist</h2>
-            <div id="ckContainer" class="scrolly"></div>
-            <div class="row actions" id="adActions">
-              <button id="btnLimparChecklist" type="button" disabled>Limpar</button>
-              <button id="adBtnFinalizarChecklist" type="button" disabled>Finalizar</button>
-            </div>
+          <div class="card">
+            <h2>Produtividade</h2>
+            <div id="productivityMsg" class="msg"></div>
+            <div id="productivityList" class="table scrolly"></div>
           </div>
         </div>
       </section>
@@ -93,6 +72,26 @@
       <span id="footBuild"></span>
     </footer>
   </div>
+
+  <dialog id="unavailabilityDialog" class="availability-popup">
+    <form id="unavailabilityForm" method="dialog" data-ajax>
+      <h3>Registrar indisponibilidade</h3>
+      <label>Descrição da indisponibilidade
+        <textarea id="unavailabilityDescription" required></textarea>
+      </label>
+      <label>Início
+        <input type="datetime-local" id="unavailabilityStart" required />
+      </label>
+      <label>Fim
+        <input type="datetime-local" id="unavailabilityEnd" required />
+      </label>
+      <menu>
+        <button value="cancel">Cancelar</button>
+        <button id="btnSaveUnavailability" type="button">Salvar</button>
+      </menu>
+      <div id="unavailabilityFormMsg" class="msg"></div>
+    </form>
+  </dialog>
 
   <!-- Preenche build no cabeçalho e rodapé -->
   <script defer src="./build-info-client.js"></script>

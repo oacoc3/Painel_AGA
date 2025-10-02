@@ -36,6 +36,8 @@
         <button data-route="prazos">Prazos</button>
         <button data-route="modelos">Modelos</button>
         <button data-route="analise">Documental</button>
+        <button data-route="adhel">AD/HEL</button>
+        <button data-route="pessoal">Pessoal</button>
         <button data-route="admin" id="btnAdmin" class="hidden active">Administração</button>
       </nav>
       <div id="userBox" class="user hidden">
@@ -80,8 +82,10 @@
             <div class="card">
               <h2>Auditoria de sessões</h2>
               <p class="muted">Registros recentes de login, logout e acesso aos módulos.</p>
-                <div class="row" style="display:flex;gap:.5rem;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
-                <input id="auditFilterName" type="search" placeholder="Filtrar por usuário" style="flex:1;" />
+              <div class="row" style="display:flex;gap:.5rem;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+                <select id="auditFilterUser" style="flex:1;" aria-label="Filtrar por usuário">
+                  <option value="">Todos os usuários</option>
+                </select>
                 <button id="btnAuditRefresh" type="button">Atualizar</button>
               </div>
               <div id="auditLogMsg" class="msg"></div>
@@ -105,11 +109,8 @@
                   <input type="hidden" id="ckId">
                   <label>Tipo
                     <select id="ckCat" required>
-                      <option>PDIR - Documental</option>
-                      <option>Inscrição - Documental</option>
-                      <option>Alteração - Documental</option>
-                      <option>Exploração - Documental</option>
-                      <option>OPEA - Documental</option>
+                      <option>OPEA</option>
+                      <option>AD/HEL</option>
                     </select>
                   </label>
                   <label>Itens</label>
