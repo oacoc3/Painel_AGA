@@ -101,7 +101,17 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .dashboard-col > .chart-card {
   flex: 1;
 }
+.dashboard-col > .entry-chart-card {
+  flex: 0 0 auto;
+}
 
+.entry-chart-card .bar-chart {
+  min-height: 190px;
+}
+
+.entry-chart-card .bar-chart-bars {
+  min-height: 150px;
+}
 /* ===== PATCH aplicado no bloco de métricas ===== */
 .metrics-card .metrics-grid {
   display: grid;
