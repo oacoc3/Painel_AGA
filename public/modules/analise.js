@@ -179,7 +179,7 @@ window.Modules.analise = (() => {
     let query = sb
       .from('checklist_templates')
       .select('id,name,type,version,items')
-      .not('approved_by', 'is', null)
+      .not('approved_at', 'is', null)
       .order('name')
       .order('version', { ascending: false });
 
