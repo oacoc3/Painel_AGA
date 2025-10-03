@@ -304,9 +304,32 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .hourly-engagement-chart .bar-chart-item { gap: 4px; }
 .hourly-engagement-chart .bar-chart-value { font-size: 11px; }
 .hourly-engagement-chart .bar-chart-label { font-size: 10px; letter-spacing: 0; }
-/* ====== Início das ADIÇÕES do patch (off-hours + resumo) ====== */
-.hourly-engagement-chart .bar-chart-bar.off-hours { background: var(--warn); }
-.hourly-engagement-chart .bar-chart-item.off-hours .bar-chart-label { color: var(--warn); }
+/* ====== Início das ADIÇÕES do patch (visualização horária) ====== */
+.hourly-engagement-chart .bar-chart-item.multi { align-items: stretch; }
+.hourly-engagement-chart .bar-chart-item.multi .bar-chart-label { margin-top: 4px; }
+.hourly-engagement-chart .bar-chart-bar-wrapper.multi { padding: 4px; }
+.hourly-engagement-chart .hourly-multi-cells {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+  align-items: end;
+}
+.hourly-engagement-chart .hourly-multi-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+}
+.hourly-engagement-chart .hourly-multi-cell .bar-chart-bar { width: 100%; }
+.hourly-engagement-chart .bar-chart-bar.blue { background: #2f6fb3; }
+.hourly-engagement-chart .bar-chart-bar.yellow { background: #d29b22; }
+.hourly-engagement-chart .bar-chart-bar.red { background: #c0392b; }
+.hourly-engagement-chart .bar-chart-value.blue { color: #2f6fb3; }
+.hourly-engagement-chart .bar-chart-value.yellow { color: #b7791f; }
+.hourly-engagement-chart .bar-chart-value.red { color: #c0392b; }
+.hourly-engagement-chart .bar-chart-label.black { color: #111; }
+.hourly-engagement-chart .bar-chart-label.red { color: #c0392b; }
 
 .hourly-engagement-summary {
   margin-top: 12px;

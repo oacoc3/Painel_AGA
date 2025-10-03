@@ -49,6 +49,41 @@ window.Modules.dashboard = (() => {
 
   const OPINION_TYPES_SET = new Set(['ATM', 'DT', 'CGNA']);
 
+  // >>> Patch novo: grupos/visões para Engajamento por Hora
+  const HOURLY_GROUPS = [
+    {
+      key: 'monThu',
+      label: 'Segunda à quinta',
+      unifiedColorClass: 'blue',
+      defaultBarClass: 'blue',
+      offHours: hour => hour < 8 || hour >= 16
+    },
+    {
+      key: 'friday',
+      label: 'Sexta',
+      unifiedColorClass: 'yellow',
+      defaultBarClass: 'blue',
+      offHours: hour => hour < 8 || hour >= 12
+    },
+    {
+      key: 'weekend',
+      label: 'Sábados e domingos',
+      unifiedColorClass: 'red',
+      defaultBarClass: 'red',
+      offHours: () => true
+    }
+  ];
+
+  const HOURLY_GROUP_MAP = HOURLY_GROUPS.reduce((acc, group) => {
+    acc[group.key] = group;
+    return acc;
+  }, {});
+
+  const HOURLY_VIEW_DEFAULT = 'unified';
+  const HOURLY_VIEW_VALUES = new Set([HOURLY_VIEW_DEFAULT, ...HOURLY_GROUPS.map(group => group.key)]);
+  const HOURLY_VIEW_SELECT_ID = 'hourlyEngagementViewSelect';
+  // <<< Patch novo
+
   let cachedProcesses = [];
   let cachedStatusHistory = {};
   let cachedNotifications = [];
@@ -67,6 +102,13 @@ window.Modules.dashboard = (() => {
       renderYearlyActivity();
       renderHourlyEngagement();
     });
+
+    // >>> Patch novo: seletor de visão do gráfico horário (se existir no HTML)
+    const hourlyViewSelect = el(HOURLY_VIEW_SELECT_ID);
+    hourlyViewSelect?.addEventListener('change', () => {
+      renderHourlyEngagement();
+    });
+    // <<< Patch novo
   }
 
   function renderEntryChartEmpty(message = 'Nenhum dado para exibir.') {
@@ -396,18 +438,28 @@ window.Modules.dashboard = (() => {
     container.appendChild(msg);
   }
 
-  function renderHourlyEngagement() {
-    const container = el('hourlyEngagementChart');
-    if (!container) return;
+  // >>> Patch novo: suporte a múltiplas visões do gráfico horário
+  function getSelectedHourlyView() {
+    const select = el(HOURLY_VIEW_SELECT_ID);
+    if (!select) return HOURLY_VIEW_DEFAULT;
+    const { value } = select;
+    if (HOURLY_VIEW_VALUES.has(value)) return value;
+    return HOURLY_VIEW_DEFAULT;
+  }
 
-    const select = el('entryYearSelect');
-    const year = select && select.value ? Number(select.value) : NaN;
-    if (!Number.isFinite(year)) {
-      renderHourlyEngagementEmpty('Nenhum dado para exibir.');
-      return;
-    }
+  function determineHourlyGroupKey(date) {
+    const day = date.getDay();
+    if (day >= 1 && day <= 4) return 'monThu';
+    if (day === 5) return 'friday';
+    if (day === 0 || day === 6) return 'weekend';
+    return null;
+  }
 
-    const counts = new Array(24).fill(0);
+  function computeHourlyEngagementData(year) {
+    const groups = {};
+    HOURLY_GROUPS.forEach(group => {
+      groups[group.key] = new Array(24).fill(0);
+    });
 
     const registerDate = dateValue => {
       if (!dateValue) return;
@@ -416,7 +468,9 @@ window.Modules.dashboard = (() => {
       if (dt.getFullYear() !== year) return;
       const hour = dt.getHours();
       if (!Number.isInteger(hour) || hour < 0 || hour > 23) return;
-      counts[hour] += 1;
+      const groupKey = determineHourlyGroupKey(dt);
+      if (!groupKey) return;
+      groups[groupKey][hour] += 1;
     };
 
     Object.values(cachedStatusHistory || {}).forEach(list => {
@@ -445,63 +499,140 @@ window.Modules.dashboard = (() => {
       if (opinion.requested_at) registerDate(opinion.requested_at);
     });
 
-    const total = counts.reduce((sum, value) => sum + value, 0);
-    if (!total) {
-      renderHourlyEngagementEmpty('Nenhum evento registrado para o ano selecionado.');
-      return;
-    }
+    const totals = {};
+    const offHoursByGroup = {};
+    let overallTotal = 0;
 
-    const maxPercent = counts.reduce((max, value) => {
-      const pct = (value / total) * 100;
-      return pct > max ? pct : max;
-    }, 0);
+    HOURLY_GROUPS.forEach(group => {
+      const list = groups[group.key] || [];
+      const groupTotal = list.reduce((sum, value) => sum + value, 0);
+      totals[group.key] = groupTotal;
+      overallTotal += groupTotal;
+      offHoursByGroup[group.key] = list.reduce((sum, value, hour) => (
+        group.offHours(hour) ? sum + value : sum
+      ), 0);
+    });
 
-    container.innerHTML = '';
+    return { groups, totals, overallTotal, offHoursByGroup };
+  }
+
+  function renderUnifiedHourlyView(container, data) {
+    const { overallTotal } = data;
     const bars = document.createElement('div');
     bars.className = 'bar-chart-bars';
     bars.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
 
-    // >>> Patch aplicado: destaque de "fora do expediente" (antes de 08h ou a partir de 16h)
-    let offHoursCount = 0;
+    const allPercents = [];
+    HOURLY_GROUPS.forEach(group => {
+      const counts = data.groups[group.key] || [];
+      counts.forEach(value => {
+        const percent = overallTotal ? (value / overallTotal) * 100 : 0;
+        allPercents.push(percent);
+      });
+    });
+
+    const maxPercent = allPercents.reduce((max, value) => (value > max ? value : max), 0);
+
+    for (let hour = 0; hour < 24; hour++) {
+      const item = document.createElement('div');
+      item.className = 'bar-chart-item multi';
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'bar-chart-bar-wrapper multi';
+
+      const cells = document.createElement('div');
+      cells.className = 'hourly-multi-cells';
+
+      HOURLY_GROUPS.forEach(group => {
+        const cell = document.createElement('div');
+        cell.className = 'hourly-multi-cell';
+
+        const count = data.groups[group.key]?.[hour] || 0;
+        const percent = overallTotal ? (count / overallTotal) * 100 : 0;
+
+        const valueNode = document.createElement('span');
+        valueNode.className = `bar-chart-value ${group.unifiedColorClass}`;
+        valueNode.textContent = `${PERCENTAGE_FORMATTER.format(percent)}%`;
+
+        const bar = document.createElement('div');
+        bar.className = `bar-chart-bar ${group.unifiedColorClass}`;
+        let heightPercent = maxPercent ? (percent / maxPercent) * 100 : 0;
+        if (percent > 0 && heightPercent < 8) heightPercent = 8;
+        bar.style.height = `${heightPercent}%`;
+        bar.title = `${group.label} — ${String(hour).padStart(2, '0')}h: ${count} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
+
+        cell.appendChild(valueNode);
+        cell.appendChild(bar);
+        cells.appendChild(cell);
+      });
+
+      wrapper.appendChild(cells);
+      item.appendChild(wrapper);
+
+      const label = document.createElement('span');
+      label.className = 'bar-chart-label black';
+      label.textContent = `${String(hour).padStart(2, '0')}h`;
+      item.appendChild(label);
+
+      bars.appendChild(item);
+    }
+
+    container.appendChild(bars);
+  }
+
+  function renderSingleHourlyView(container, data, group) {
+    const { overallTotal } = data;
+    const bars = document.createElement('div');
+    bars.className = 'bar-chart-bars';
+    bars.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
+
+    const counts = data.groups[group.key] || [];
+    const percents = counts.map(value => (overallTotal ? (value / overallTotal) * 100 : 0));
+    const maxPercent = percents.reduce((max, value) => (value > max ? value : max), 0);
 
     counts.forEach((value, hour) => {
-      const percent = (value / total) * 100;
+      const percent = percents[hour] || 0;
       const item = document.createElement('div');
       item.className = 'bar-chart-item';
 
-      const isOffHours = hour < 8 || hour >= 16;
-      if (isOffHours) {
-        item.classList.add('off-hours');
-        offHoursCount += value;
-      }
+      const isOffHours = group.offHours(hour);
+      const barColorClass = group.key === 'weekend' ? 'red' : (isOffHours ? 'red' : group.defaultBarClass);
+      const valueColorClass = barColorClass;
+      const labelColorClass = group.key === 'weekend' ? 'red' : (isOffHours ? 'red' : 'black');
+
+      const valueNode = document.createElement('span');
+      valueNode.className = `bar-chart-value ${valueColorClass}`;
+      valueNode.textContent = `${PERCENTAGE_FORMATTER.format(percent)}%`;
 
       const wrapper = document.createElement('div');
       wrapper.className = 'bar-chart-bar-wrapper';
 
       const bar = document.createElement('div');
-      bar.className = 'bar-chart-bar';
-      if (isOffHours) bar.classList.add('off-hours');
+      bar.className = `bar-chart-bar ${barColorClass}`;
       let heightPercent = maxPercent ? (percent / maxPercent) * 100 : 0;
       if (percent > 0 && heightPercent < 8) heightPercent = 8;
       bar.style.height = `${heightPercent}%`;
-      bar.title = `${String(hour).padStart(2, '0')}h: ${value} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
+      bar.title = `${group.label} — ${String(hour).padStart(2, '0')}h: ${value} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
 
       wrapper.appendChild(bar);
 
       const label = document.createElement('span');
-      label.className = 'bar-chart-label';
+      label.className = `bar-chart-label ${labelColorClass}`;
       label.textContent = `${String(hour).padStart(2, '0')}h`;
 
-      // Removido: nó de valor percentual no topo (conforme patch)
+      item.appendChild(valueNode);
       item.appendChild(wrapper);
       item.appendChild(label);
       bars.appendChild(item);
     });
 
     container.appendChild(bars);
+  }
 
-    // Resumo "Fora do expediente"
-    const offHoursPercent = (offHoursCount / total) * 100;
+  function appendHourlySummary(container, data) {
+    const offHoursTotal = HOURLY_GROUPS.reduce((sum, group) => sum + (data.offHoursByGroup[group.key] || 0), 0);
+    const offHoursPercent = data.overallTotal ? (offHoursTotal / data.overallTotal) * 100 : 0;
+
     const summary = document.createElement('div');
     summary.className = 'hourly-engagement-summary';
 
@@ -516,7 +647,40 @@ window.Modules.dashboard = (() => {
     summary.appendChild(summaryLabel);
     summary.appendChild(summaryValue);
     container.appendChild(summary);
-    // <<< Patch aplicado
+  }
+  // <<< Patch novo
+
+  function renderHourlyEngagement() {
+    const container = el('hourlyEngagementChart');
+    if (!container) return;
+
+    const select = el('entryYearSelect');
+    const year = select && select.value ? Number(select.value) : NaN;
+    if (!Number.isFinite(year)) {
+      renderHourlyEngagementEmpty('Nenhum dado para exibir.');
+      return;
+    }
+
+    // >>> Patch novo: calcula dados por grupos e renderiza conforme a visão escolhida
+    const data = computeHourlyEngagementData(year);
+    if (!data.overallTotal) {
+      renderHourlyEngagementEmpty('Nenhum evento registrado para o ano selecionado.');
+      return;
+    }
+
+    container.innerHTML = '';
+    const view = getSelectedHourlyView();
+
+    if (view === 'unified') {
+      renderUnifiedHourlyView(container, data);
+    } else if (HOURLY_GROUP_MAP[view]) {
+      renderSingleHourlyView(container, data, HOURLY_GROUP_MAP[view]);
+    } else {
+      renderUnifiedHourlyView(container, data);
+    }
+
+    appendHourlySummary(container, data);
+    // <<< Patch novo
   }
 
   async function load() {
