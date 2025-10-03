@@ -6,9 +6,48 @@ window.Modules.checklists = (() => {
   let templates = [];
   const CARD_MSG_ID = 'ckManageMsg';
 
+  // --- (NOVO) Opções de tipos de checklist + aliases/canônicos ---
+  const CHECKLIST_TYPE_OPTIONS = [
+    {
+      value: 'OPEA - Documental',
+      label: 'OPEA - Documental',
+      dbValue: 'OPEA - Documental'
+    },
+    {
+      value: 'AD/HEL - Documental',
+      label: 'AD/HEL - Documental',
+      dbValue: 'AD/HEL - Documental'
+    }
+  ];
+
+  const TYPE_ALIAS_MAP = new Map();
+  CHECKLIST_TYPE_OPTIONS.forEach(opt => {
+    const register = (alias) => {
+      if (!alias) return;
+      TYPE_ALIAS_MAP.set(alias, opt.value);
+      TYPE_ALIAS_MAP.set(alias.toLowerCase(), opt.value);
+    };
+    register(opt.value);
+    (opt.variants || []).forEach(register);
+  });
+
+  const TYPE_LABEL_MAP = CHECKLIST_TYPE_OPTIONS.reduce((map, opt) => {
+    map[opt.value] = opt.label;
+    return map;
+  }, {});
+
+  const CANONICAL_TYPES = new Set(CHECKLIST_TYPE_OPTIONS.map(opt => opt.value));
+
+  const TYPE_DB_VALUE_MAP = CHECKLIST_TYPE_OPTIONS.reduce((map, opt) => {
+    map[opt.value] = opt.dbValue || opt.value;
+    return map;
+  }, {});
+
   function canonicalizeChecklistType(value) {
     if (typeof value !== 'string') return '';
-    return value.trim();
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    return TYPE_ALIAS_MAP.get(trimmed) || TYPE_ALIAS_MAP.get(trimmed.toLowerCase()) || trimmed;
   }
   // ----------------------------------------------------------------
 
@@ -141,7 +180,7 @@ window.Modules.checklists = (() => {
       selected = null;
       renderCats(catsContainer);
       highlightRow(null);
-      if (typeField) typeField.value = '';
+      if (typeField) typeField.value = CHECKLIST_TYPE_OPTIONS[0]?.value || '';
     }
     updateActionButtons();
     dlg.showModal();
@@ -160,7 +199,7 @@ window.Modules.checklists = (() => {
   function renderList() {
     const rows = templates;
     const { tbody } = Utils.renderTable('listaCk', [
-      { key: 'type', label: 'Tipo', value: r => r.type || '' },
+      { key: 'type', label: 'Tipo', value: r => TYPE_LABEL_MAP[r.type] || r.type || '' },
       { key: 'version', label: 'Versão', align: 'center' },
       { key: 'created_at', label: 'Criado em', value: r => Utils.fmtDateTime(r.created_at) },
       { key: 'approved_at', label: 'Aprovada em', value: r => r.approved_at ? Utils.fmtDateTime(r.approved_at) : '' }
@@ -221,11 +260,10 @@ window.Modules.checklists = (() => {
     templates = (data || [])
       .map(row => ({
         ...row,
-        type: canonicalizeChecklistType(row.type || ''),
-        name: row.name || canonicalizeChecklistType(row.type || ''),
-        items: Array.isArray(row.items) ? row.items : []
+        // Normaliza para canônico em memória (ex.: 'OPEA - Documental' -> 'OPEA')
+        type: canonicalizeChecklistType(row.type || '')
       }))
-      .filter(row => row.type);
+      .filter(row => CANONICAL_TYPES.has(row.type));
 
     selected = null;
     highlightRow(null);
@@ -237,6 +275,14 @@ window.Modules.checklists = (() => {
     const dlg = getDialog();
     const catsContainer = getCatsContainer();
     const form = getForm();
+
+    // (NOVO) Popular <select id="ckCat"> com opções canônicas
+    const typeSelect = form?.querySelector('#ckCat');
+    if (typeSelect) {
+      typeSelect.innerHTML = CHECKLIST_TYPE_OPTIONS
+        .map(opt => `<option value="${opt.value}">${opt.label}</option>`)
+        .join('');
+    }
 
     el('btnAddCat').addEventListener('click', () => addCategory(catsContainer));
     el('btnCloseChecklist').addEventListener('click', () => closeChecklistDialog());
@@ -267,7 +313,8 @@ window.Modules.checklists = (() => {
       // Normaliza e valida o tipo
       const rawType = form.querySelector('#ckCat')?.value || '';
       const type = canonicalizeChecklistType(rawType);
-      if (!type || !items.length) {
+      const dbType = TYPE_DB_VALUE_MAP[type] || type;
+      if (!type || !CANONICAL_TYPES.has(type) || !items.length) {
         return Utils.setMsg('ckMsg', 'Preencha todos os campos.', true);
       }
 
@@ -276,12 +323,12 @@ window.Modules.checklists = (() => {
       const u = await getUser();
       if (!u) return Utils.setMsg('ckMsg', 'Sessão expirada.', true);
 
-      const name = selected?.name?.trim() || type;
+      const name = selected?.name?.trim() || TYPE_LABEL_MAP[type] || type;
       const isEditingApproved = !!selected?.approved_at;
 
       if (selected && !isEditingApproved) {
         const { error } = await sb.from('checklist_templates')
-          .update({ name, type, items })
+          .update({ name, type: dbType, items })
           .eq('id', selected.id);
         if (error) return Utils.setMsg('ckMsg', error.message, true);
       } else {
@@ -291,7 +338,7 @@ window.Modules.checklists = (() => {
         const version = max + 1;
         const payload = {
           name,
-          type,
+          type: dbType,
           items,
           version,
           created_by: u.id,

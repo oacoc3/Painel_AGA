@@ -396,7 +396,6 @@ window.Modules.dashboard = (() => {
     container.appendChild(msg);
   }
 
-  // >>> Patch aplicado: agrupar por séries (Seg–Qui, Sexta, Fim de semana) e detalhar "fora do expediente" por série
   function renderHourlyEngagement() {
     const container = el('hourlyEngagementChart');
     if (!container) return;
@@ -408,18 +407,7 @@ window.Modules.dashboard = (() => {
       return;
     }
 
-    const monThuCounts = new Array(24).fill(0);
-    const fridayCounts = new Array(24).fill(0);
-    const weekendCounts = new Array(24).fill(0);
-    const totalsBySeries = { monThu: 0, friday: 0, weekend: 0 };
-    const offHoursBySeries = { monThu: 0, friday: 0, weekend: 0 };
-
-    const getSeriesForDate = dt => {
-      const day = dt.getDay(); // 0=Dom, 1=Seg, ... 6=Sáb
-      if (day >= 1 && day <= 4) return 'monThu';
-      if (day === 5) return 'friday';
-      return 'weekend';
-    };
+    const counts = new Array(24).fill(0);
 
     const registerDate = dateValue => {
       if (!dateValue) return;
@@ -428,13 +416,7 @@ window.Modules.dashboard = (() => {
       if (dt.getFullYear() !== year) return;
       const hour = dt.getHours();
       if (!Number.isInteger(hour) || hour < 0 || hour > 23) return;
-      const seriesKey = getSeriesForDate(dt);
-      const seriesMap = seriesKey === 'monThu' ? monThuCounts : seriesKey === 'friday' ? fridayCounts : weekendCounts;
-      seriesMap[hour] += 1;
-      totalsBySeries[seriesKey] += 1;
-      if (hour < 8 || hour >= 16) {
-        offHoursBySeries[seriesKey] += 1;
-      }
+      counts[hour] += 1;
     };
 
     Object.values(cachedStatusHistory || {}).forEach(list => {
@@ -463,51 +445,54 @@ window.Modules.dashboard = (() => {
       if (opinion.requested_at) registerDate(opinion.requested_at);
     });
 
-    const total = totalsBySeries.monThu + totalsBySeries.friday + totalsBySeries.weekend;
+    const total = counts.reduce((sum, value) => sum + value, 0);
     if (!total) {
       renderHourlyEngagementEmpty('Nenhum evento registrado para o ano selecionado.');
       return;
     }
 
-    const maxValue = Math.max(...monThuCounts, ...fridayCounts, ...weekendCounts);
+    const maxPercent = counts.reduce((max, value) => {
+      const pct = (value / total) * 100;
+      return pct > max ? pct : max;
+    }, 0);
 
     container.innerHTML = '';
     const bars = document.createElement('div');
     bars.className = 'bar-chart-bars';
     bars.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
 
-    const SERIES_CONFIG = [
-      { key: 'monThu', label: 'Segunda a quinta', className: 'mon-thu', values: monThuCounts },
-      { key: 'friday', label: 'Sexta-feira', className: 'friday', values: fridayCounts },
-      { key: 'weekend', label: 'Fins de semana', className: 'weekend', values: weekendCounts }
-    ];
+    // >>> Patch aplicado: destaque de "fora do expediente" (antes de 08h ou a partir de 16h)
+    let offHoursCount = 0;
 
-    monThuCounts.forEach((_, hour) => {
+    counts.forEach((value, hour) => {
+      const percent = (value / total) * 100;
       const item = document.createElement('div');
       item.className = 'bar-chart-item';
 
       const isOffHours = hour < 8 || hour >= 16;
-      if (isOffHours) item.classList.add('off-hours');
+      if (isOffHours) {
+        item.classList.add('off-hours');
+        offHoursCount += value;
+      }
 
       const wrapper = document.createElement('div');
-      wrapper.className = 'bar-chart-bar-wrapper hourly-bar-wrapper';
+      wrapper.className = 'bar-chart-bar-wrapper';
 
-      SERIES_CONFIG.forEach(series => {
-        const value = series.values[hour];
-        const bar = document.createElement('div');
-        bar.className = `bar-chart-bar ${series.className}`;
-        let heightPercent = maxValue ? (value / maxValue) * 100 : 0;
-        if (value > 0 && heightPercent < 8) heightPercent = 8;
-        bar.style.height = `${heightPercent}%`;
-        const percent = total ? (value / total) * 100 : 0;
-        bar.title = `${series.label} — ${String(hour).padStart(2, '0')}h: ${value} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
-        wrapper.appendChild(bar);
-      });
+      const bar = document.createElement('div');
+      bar.className = 'bar-chart-bar';
+      if (isOffHours) bar.classList.add('off-hours');
+      let heightPercent = maxPercent ? (percent / maxPercent) * 100 : 0;
+      if (percent > 0 && heightPercent < 8) heightPercent = 8;
+      bar.style.height = `${heightPercent}%`;
+      bar.title = `${String(hour).padStart(2, '0')}h: ${value} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
+
+      wrapper.appendChild(bar);
 
       const label = document.createElement('span');
       label.className = 'bar-chart-label';
       label.textContent = `${String(hour).padStart(2, '0')}h`;
 
+      // Removido: nó de valor percentual no topo (conforme patch)
       item.appendChild(wrapper);
       item.appendChild(label);
       bars.appendChild(item);
@@ -515,7 +500,8 @@ window.Modules.dashboard = (() => {
 
     container.appendChild(bars);
 
-    // Resumo "Fora do expediente" por série
+    // Resumo "Fora do expediente"
+    const offHoursPercent = (offHoursCount / total) * 100;
     const summary = document.createElement('div');
     summary.className = 'hourly-engagement-summary';
 
@@ -523,40 +509,15 @@ window.Modules.dashboard = (() => {
     summaryLabel.className = 'hourly-engagement-summary-label';
     summaryLabel.textContent = 'Fora do expediente';
 
-    const summaryItems = document.createElement('div');
-    summaryItems.className = 'hourly-engagement-summary-items';
-
-    SERIES_CONFIG.forEach(series => {
-      const totalSeries = totalsBySeries[series.key];
-      const offHoursSeries = offHoursBySeries[series.key];
-      const item = document.createElement('div');
-      item.className = `hourly-engagement-summary-item ${series.className}`;
-
-      const itemLabel = document.createElement('span');
-      itemLabel.className = 'hourly-engagement-summary-item-label';
-      itemLabel.textContent = series.label;
-
-      const itemValue = document.createElement('strong');
-      itemValue.className = 'hourly-engagement-summary-item-value';
-      itemValue.textContent = totalSeries
-        ? `${PERCENTAGE_FORMATTER.format((offHoursSeries / totalSeries) * 100)}%`
-        : '—';
-
-      const itemDetail = document.createElement('span');
-      itemDetail.className = 'hourly-engagement-summary-item-detail';
-      itemDetail.textContent = `${offHoursSeries} de ${totalSeries} evento(s)`;
-
-      item.appendChild(itemLabel);
-      item.appendChild(itemValue);
-      item.appendChild(itemDetail);
-      summaryItems.appendChild(item);
-    });
+    const summaryValue = document.createElement('strong');
+    summaryValue.className = 'hourly-engagement-summary-value';
+    summaryValue.textContent = `${PERCENTAGE_FORMATTER.format(offHoursPercent)}%`;
 
     summary.appendChild(summaryLabel);
-    summary.appendChild(summaryItems);
+    summary.appendChild(summaryValue);
     container.appendChild(summary);
+    // <<< Patch aplicado
   }
-  // <<< Patch aplicado
 
   async function load() {
     renderEntryChartEmpty('Carregando…');

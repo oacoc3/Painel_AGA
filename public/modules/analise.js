@@ -12,173 +12,85 @@ window.Modules.analise = (() => {
   const CHECKLIST_PDF = window.Modules?.checklistPDF || {};
   const EXTRA_NC_CODE = CHECKLIST_PDF.EXTRA_NON_CONFORMITY_CODE || '__ck_extra_nc__';
 
-  // ==== Tipos de checklist dinâmicos (últimas versões aprovadas) ====
-  const CHECKLIST_TYPE_DATA = new Map();       // canonical -> { canonical, label, version, template }
-  const CHECKLIST_TYPE_ALIASES = new Map();    // normalized alias -> canonical
-  let CHECKLIST_TYPE_ORDER = [];               // ordem para popular o <select>
+  // ==== Normalização de tipos de processo x tipos de checklist (patch) ====
+  const PROCESS_TYPE_TO_CHECKLIST = new Map([
+    ['OPEA', ['OPEA - Documental']],
+    ['PDIR', ['AD/HEL - Documental']],
+    ['Inscrição', ['AD/HEL - Documental']],
+    ['Alteração', ['AD/HEL - Documental']],
+    ['Exploração', ['AD/HEL - Documental']]
+  ]);
+  const SUPPORTED_PROCESS_TYPES = Array.from(PROCESS_TYPE_TO_CHECKLIST.keys());
+  const DEFAULT_PROCESS_TYPE = 'OPEA';
+
+  const CHECKLIST_TYPE_VARIANTS = new Map([
+    ['OPEA - Documental', ['OPEA - Documental', 'OPEA']],
+    ['AD/HEL - Documental', ['AD/HEL - Documental', 'AD/HEL']]
+  ]);
+
+  const CHECKLIST_TO_PROCESS_TYPES = (() => {
+    const map = new Map();
+    PROCESS_TYPE_TO_CHECKLIST.forEach((checklists, type) => {
+      checklists.forEach(checklist => {
+        if (!map.has(checklist)) map.set(checklist, new Set());
+        map.get(checklist).add(type);
+      });
+    });
+    return map;
+  })();
+
+  const TYPE_ALIAS_MAP = (() => {
+    const map = new Map();
+    const normalizeKey = (value) => (
+      typeof value === 'string'
+        ? value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+        : ''
+    );
+    const register = (alias, canonical) => {
+      const key = normalizeKey(alias);
+      if (key) map.set(key, canonical);
+    };
+
+    PROCESS_TYPE_TO_CHECKLIST.forEach((checklists, type) => {
+      register(type, type);
+      register(`${type} - Documental`, type);
+      checklists.forEach(checklist => {
+        const processTypesForChecklist = CHECKLIST_TO_PROCESS_TYPES.get(checklist);
+        if (processTypesForChecklist && processTypesForChecklist.size === 1) {
+          const variants = CHECKLIST_TYPE_VARIANTS.get(checklist) || [];
+          variants.forEach(variant => register(variant, type));
+        }
+      });
+    });
+
+    return { map, normalizeKey };
+  })();
+
+  const normalizeProcessType = (value) => {
+    if (typeof value !== 'string') return '';
+    const key = TYPE_ALIAS_MAP.normalizeKey(value);
+    if (TYPE_ALIAS_MAP.map.has(key)) return TYPE_ALIAS_MAP.map.get(key);
+    const trimmed = value.trim();
+    return SUPPORTED_PROCESS_TYPES.includes(trimmed) ? trimmed : '';
+  };
+
+  const getChecklistTypeVariants = (value) => {
+    const normalized = normalizeProcessType(value);
+    if (!normalized || !PROCESS_TYPE_TO_CHECKLIST.has(normalized)) return [];
+    const variants = new Set();
+    const checklists = PROCESS_TYPE_TO_CHECKLIST.get(normalized) || [];
+    checklists.forEach(checklist => {
+      variants.add(checklist);
+      (CHECKLIST_TYPE_VARIANTS.get(checklist) || []).forEach(alias => variants.add(alias));
+    });
+    return Array.from(variants);
+  };
 
   const normalizeValue = (value) => (
     typeof value === 'string'
       ? value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
       : ''
   );
-
-  const normalizeChecklistTypeKey = (value) => normalizeValue(value);
-
-  function registerChecklistAlias(alias, canonical) {
-    if (!alias || !canonical) return;
-    const key = normalizeChecklistTypeKey(alias);
-    if (key) CHECKLIST_TYPE_ALIASES.set(key, canonical);
-  }
-
-  function getDefaultProcessType() {
-    return CHECKLIST_TYPE_ORDER[0] || '';
-  }
-
-  function getCanonicalProcessType(value) {
-    const key = normalizeChecklistTypeKey(value);
-    if (!key) return '';
-    return CHECKLIST_TYPE_ALIASES.get(key) || '';
-  }
-
-  const normalizeProcessType = (value) => {
-    if (typeof value !== 'string') return '';
-    return getCanonicalProcessType(value) || value.trim();
-  };
-
-  function getTemplateForProcessType(value) {
-    const canonical = getCanonicalProcessType(value);
-    if (!canonical) return null;
-    const entry = CHECKLIST_TYPE_DATA.get(canonical);
-    return entry ? entry.template : null;
-  }
-
-  function updateChecklistTypeSelect({ preserveSelection = true } = {}) {
-    const select = el('adTipo');
-    const btnIniciar = el('btnIniciarAD');
-    if (!select) return;
-
-    const previousValue = preserveSelection ? select.value : '';
-    select.innerHTML = '';
-
-    if (!CHECKLIST_TYPE_ORDER.length) {
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = 'Nenhuma checklist aprovada';
-      select.appendChild(option);
-      select.disabled = true;
-      if (btnIniciar) btnIniciar.disabled = true;
-      return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    CHECKLIST_TYPE_ORDER.forEach(type => {
-      const entry = CHECKLIST_TYPE_DATA.get(type);
-      if (!entry) return;
-      const option = document.createElement('option');
-      option.value = type;
-      const versionLabel = entry.version != null ? ` (v${entry.version})` : '';
-      option.textContent = `${entry.label}${versionLabel}`;
-      fragment.appendChild(option);
-    });
-    select.appendChild(fragment);
-
-    let nextValue = '';
-    if (preserveSelection && previousValue) {
-      const previousCanonical = getCanonicalProcessType(previousValue);
-      if (previousCanonical && CHECKLIST_TYPE_DATA.has(previousCanonical)) {
-        nextValue = previousCanonical;
-      }
-    }
-    if (!nextValue) nextValue = getDefaultProcessType();
-    if (nextValue) select.value = nextValue;
-    select.disabled = false;
-    if (btnIniciar) btnIniciar.disabled = false;
-  }
-
-  async function refreshChecklistTypeOptions({ preserveSelection = true } = {}) {
-    const select = el('adTipo');
-    const btnIniciar = el('btnIniciarAD');
-    if (select) {
-      select.disabled = true;
-      select.innerHTML = '<option value="">Carregando…</option>';
-    }
-    if (btnIniciar) btnIniciar.disabled = true;
-
-    try {
-      const { data, error } = await sb
-        .from('checklist_templates')
-        .select('id,name,type,version,items,approved_at')
-        .not('approved_at', 'is', null)
-        .order('type')
-        .order('version', { ascending: false });
-      if (error) throw error;
-
-      // pega a última versão por "type" (ou "name" se faltar)
-      const latestByType = new Map();
-      (Array.isArray(data) ? data : []).forEach(row => {
-        const canonical = (row.type || row.name || '').trim();
-        if (!canonical) return;
-        if (!latestByType.has(canonical)) latestByType.set(canonical, row);
-      });
-
-      const entries = Array.from(latestByType.values()).map(row => {
-        const canonical = (row.type || row.name || '').trim();
-        const label = (row.name || canonical).trim() || canonical;
-        return {
-          canonical,
-          label,
-          version: row.version != null ? row.version : null,
-          template: {
-            id: row.id,
-            name: row.name || label,
-            type: canonical,
-            version: row.version,
-            items: Array.isArray(row.items) ? row.items : []
-          }
-        };
-      }).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-
-      CHECKLIST_TYPE_DATA.clear();
-      CHECKLIST_TYPE_ALIASES.clear();
-      CHECKLIST_TYPE_ORDER = [];
-
-      entries.forEach(entry => {
-        CHECKLIST_TYPE_DATA.set(entry.canonical, entry);
-        CHECKLIST_TYPE_ORDER.push(entry.canonical);
-        const candidates = [entry.canonical, entry.label, entry.template.name, entry.template.type];
-        candidates.forEach(value => {
-          const trimmed = (value || '').trim();
-          if (!trimmed) return;
-          registerChecklistAlias(trimmed, entry.canonical);
-          const dashIndex = trimmed.indexOf(' - ');
-          if (dashIndex > 0) registerChecklistAlias(trimmed.slice(0, dashIndex), entry.canonical);
-          const mdashIndex = trimmed.indexOf(' — ');
-          if (mdashIndex > 0) registerChecklistAlias(trimmed.slice(0, mdashIndex), entry.canonical);
-        });
-      });
-
-      updateChecklistTypeSelect({ preserveSelection });
-
-      if (!CHECKLIST_TYPE_ORDER.length) {
-        Utils.setMsg('adMsg', 'Nenhuma checklist aprovada. Cadastre uma no módulo Administração.', true);
-      } else {
-        Utils.setMsg('adMsg', '');
-      }
-
-      return CHECKLIST_TYPE_ORDER.length;
-    } catch (err) {
-      Utils.setMsg('adMsg', err.message || 'Falha ao carregar checklists aprovadas.', true);
-      CHECKLIST_TYPE_DATA.clear();
-      CHECKLIST_TYPE_ALIASES.clear();
-      CHECKLIST_TYPE_ORDER = [];
-      updateChecklistTypeSelect({ preserveSelection: false });
-      return 0;
-    } finally {
-      if (select) select.disabled = CHECKLIST_TYPE_ORDER.length === 0;
-      if (btnIniciar) btnIniciar.disabled = CHECKLIST_TYPE_ORDER.length === 0;
-    }
-  }
 
   function evaluateChecklistResult(source) {
     if (typeof CHECKLIST_PDF.getChecklistResult === 'function') {
@@ -256,8 +168,33 @@ window.Modules.analise = (() => {
   // ================================================
 
   async function loadTemplatesFor(processType) {
-    const template = getTemplateForProcessType(processType);
-    return template ? [template] : [];
+    const candidates = new Set();
+    if (typeof processType === 'string' && processType.trim()) {
+      getChecklistTypeVariants(processType).forEach(value => candidates.add(value));
+    }
+    if (!candidates.size) return [];
+
+    const candidateList = Array.from(candidates);
+
+    let query = sb
+      .from('checklist_templates')
+      .select('id,name,type,version,items')
+      .not('approved_at', 'is', null)
+      .order('name')
+      .order('version', { ascending: false });
+
+    query = candidateList.length === 1
+      ? query.eq('type', candidateList[0])
+      : query.in('type', candidateList);
+
+    const { data, error } = await query;
+    if (error) return [];
+    const uniq = [];
+    const seen = new Set();
+    (data || []).forEach(t => {
+      if (!seen.has(t.name)) { seen.add(t.name); uniq.push(t); }
+    });
+    return uniq;
   }
 
   function getChecklistValidationState() {
@@ -709,14 +646,13 @@ window.Modules.analise = (() => {
     if (!guardDocumentalWrite()) return;
     const nup = el('adNUP').value.trim();
     const rawType = el('adTipo')?.value || '';
-    const processType = getCanonicalProcessType(rawType);
+    const processType = normalizeProcessType(rawType);
     if (!nup) return Utils.setMsg('adMsg', 'Informe um NUP.', true);
-    if (!processType) return Utils.setMsg('adMsg', 'Selecione um checklist aprovado.', true);
+    if (!processType) return Utils.setMsg('adMsg', 'Selecione o tipo da checklist.', true);
 
     const { data: proc } = await sb.from('processes').select('id,type').eq('nup', nup).maybeSingle();
     if (proc) {
-      const existingType = getCanonicalProcessType(proc.type || '') || (proc.type || '').trim();
-      if (existingType && existingType !== processType) {
+      if (normalizeProcessType(proc.type) !== processType) {
         alert('Já existe processo com este NUP e tipo diferente. Verifique as informações.');
         return;
       }
@@ -737,10 +673,6 @@ window.Modules.analise = (() => {
 
     const list = await loadTemplatesFor(processType);
     const template = list[0] || null;
-    if (!template) {
-      Utils.setMsg('adMsg', 'Checklist selecionada não possui versão aprovada.', true);
-      return;
-    }
     renderChecklist(template);
     if (template && currentProcessId) {
       const draft = await loadChecklistDraft(currentProcessId, template.id);
@@ -847,17 +779,8 @@ window.Modules.analise = (() => {
     el('adNUP').value = '';
     const tipoField = el('adTipo');
     if (tipoField) {
-      const defaultType = getDefaultProcessType();
-      if (defaultType) {
-        tipoField.value = defaultType;
-        tipoField.disabled = false;
-      } else {
-        tipoField.value = '';
-        tipoField.disabled = true;
-      }
+      tipoField.value = DEFAULT_PROCESS_TYPE;
     }
-    const btnIniciar = el('btnIniciarAD');
-    if (btnIniciar) btnIniciar.disabled = !CHECKLIST_TYPE_ORDER.length;
     Utils.setMsg('adMsg', '');
     currentProcessId = null;
     currentTemplate = null;
@@ -1138,14 +1061,11 @@ window.Modules.analise = (() => {
     const btnLimparChecklist = el('btnLimparChecklist');
     const btnFinalizarChecklist = el('adBtnFinalizarChecklist');
 
-    if (btnIniciar) {
-      btnIniciar.disabled = !CHECKLIST_TYPE_ORDER.length;
-      btnIniciar.addEventListener('click', ev => {
-        ev.preventDefault();
-        if (!guardDocumentalWrite()) return;
-        iniciarChecklist();
-      });
-    }
+    if (btnIniciar) btnIniciar.addEventListener('click', ev => {
+      ev.preventDefault();
+      if (!guardDocumentalWrite()) return;
+      iniciarChecklist();
+    });
     if (btnLimparAD) btnLimparAD.addEventListener('click', async ev => {
       ev.preventDefault();
       if (!guardDocumentalWrite()) return;
@@ -1184,8 +1104,7 @@ window.Modules.analise = (() => {
     clearChecklist();
     await Promise.all([
       loadIndicador(),
-      loadApprovedChecklists(),
-      refreshChecklistTypeOptions()
+      loadApprovedChecklists()
     ]);
   }
 
