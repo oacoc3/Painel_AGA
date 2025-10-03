@@ -7,8 +7,6 @@
   --line: #d1d5db;
   --brand: #4b6f91;
   --warn: #b20;
-  --friday: #f3b63d;
-  --weekend: #d54d4d;
   --card: #fff;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --sans: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
@@ -306,32 +304,18 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .hourly-engagement-chart .bar-chart-item { gap: 4px; }
 .hourly-engagement-chart .bar-chart-value { font-size: 11px; }
 .hourly-engagement-chart .bar-chart-label { font-size: 10px; letter-spacing: 0; }
-
-.hourly-engagement-chart .bar-chart-bar-wrapper.hourly-bar-wrapper {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 3px;
-  padding: 4px 2px;
-}
-
-.hourly-engagement-chart .bar-chart-bar-wrapper.hourly-bar-wrapper .bar-chart-bar {
-  flex: 1 1 0;
-  width: auto;
-}
-
-.hourly-engagement-chart .bar-chart-bar.mon-thu { background: var(--brand); }
-.hourly-engagement-chart .bar-chart-bar.friday { background: var(--friday); }
-.hourly-engagement-chart .bar-chart-bar.weekend { background: var(--weekend); }
-.hourly-engagement-chart .bar-chart-item.off-hours .bar-chart-label { color: var(--weekend); }
+/* ====== Início das ADIÇÕES do patch (off-hours + resumo) ====== */
+.hourly-engagement-chart .bar-chart-bar.off-hours { background: var(--warn); }
+.hourly-engagement-chart .bar-chart-item.off-hours .bar-chart-label { color: var(--warn); }
 
 .hourly-engagement-summary {
   margin-top: 12px;
-  padding: 12px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
   background: rgba(75, 111, 145, 0.08);
 }
@@ -343,42 +327,12 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   color: var(--ink-soft);
 }
 
-.hourly-engagement-summary-items {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-}
-
-.hourly-engagement-summary-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  border: 1px solid rgba(31, 41, 55, 0.1);
-  border-radius: 6px;
-  background: #fff;
-}
-
-.hourly-engagement-summary-item-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
-.hourly-engagement-summary-item-value {
+.hourly-engagement-summary-value {
   font-family: var(--mono);
-  font-size: 18px;
+  font-size: 20px;
   color: var(--ink);
 }
-
-.hourly-engagement-summary-item-detail {
-  font-size: 11px;
-  color: var(--ink-soft);
-}
-
-.hourly-engagement-summary-item.mon-thu .hourly-engagement-summary-item-label { color: var(--brand); }
-.hourly-engagement-summary-item.friday .hourly-engagement-summary-item-label { color: var(--friday); }
-.hourly-engagement-summary-item.weekend .hourly-engagement-summary-item-label { color: var(--weekend); }
+/* ====== Fim das ADIÇÕES do patch ====== */
 
 .chart-placeholder { margin: 0; font-size: 12px; text-align: center; }
 .tabs { display: flex; flex-direction: column; gap: 8px; }
