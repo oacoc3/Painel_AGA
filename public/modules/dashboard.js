@@ -54,21 +54,18 @@ window.Modules.dashboard = (() => {
     {
       key: 'monThu',
       label: 'Segunda à quinta',
-      unifiedColorClass: 'blue',
       defaultBarClass: 'blue',
       offHours: hour => hour < 8 || hour >= 16
     },
     {
       key: 'friday',
       label: 'Sexta',
-      unifiedColorClass: 'yellow',
       defaultBarClass: 'blue',
       offHours: hour => hour < 8 || hour >= 12
     },
     {
       key: 'weekend',
       label: 'Sábados e domingos',
-      unifiedColorClass: 'red',
       defaultBarClass: 'red',
       offHours: () => true
     }
@@ -79,8 +76,9 @@ window.Modules.dashboard = (() => {
     return acc;
   }, {});
 
-  const HOURLY_VIEW_DEFAULT = 'unified';
-  const HOURLY_VIEW_VALUES = new Set([HOURLY_VIEW_DEFAULT, ...HOURLY_GROUPS.map(group => group.key)]);
+  // (alterado pelo patch) agora a visão padrão é o primeiro grupo existente
+  const HOURLY_VIEW_DEFAULT = HOURLY_GROUPS.length ? HOURLY_GROUPS[0].key : null;
+  const HOURLY_VIEW_VALUES = new Set(HOURLY_GROUPS.map(group => group.key));
   const HOURLY_VIEW_SELECT_ID = 'hourlyEngagementViewSelect';
   // <<< Patch novo
 
@@ -516,69 +514,7 @@ window.Modules.dashboard = (() => {
     return { groups, totals, overallTotal, offHoursByGroup };
   }
 
-  function renderUnifiedHourlyView(container, data) {
-    const { overallTotal } = data;
-    const bars = document.createElement('div');
-    bars.className = 'bar-chart-bars';
-    bars.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
-
-    const allPercents = [];
-    HOURLY_GROUPS.forEach(group => {
-      const counts = data.groups[group.key] || [];
-      counts.forEach(value => {
-        const percent = overallTotal ? (value / overallTotal) * 100 : 0;
-        allPercents.push(percent);
-      });
-    });
-
-    const maxPercent = allPercents.reduce((max, value) => (value > max ? value : max), 0);
-
-    for (let hour = 0; hour < 24; hour++) {
-      const item = document.createElement('div');
-      item.className = 'bar-chart-item multi';
-
-      const wrapper = document.createElement('div');
-      wrapper.className = 'bar-chart-bar-wrapper multi';
-
-      const cells = document.createElement('div');
-      cells.className = 'hourly-multi-cells';
-
-      HOURLY_GROUPS.forEach(group => {
-        const cell = document.createElement('div');
-        cell.className = 'hourly-multi-cell';
-
-        const count = data.groups[group.key]?.[hour] || 0;
-        const percent = overallTotal ? (count / overallTotal) * 100 : 0;
-
-        const valueNode = document.createElement('span');
-        valueNode.className = `bar-chart-value ${group.unifiedColorClass}`;
-        valueNode.textContent = `${PERCENTAGE_FORMATTER.format(percent)}%`;
-
-        const bar = document.createElement('div');
-        bar.className = `bar-chart-bar ${group.unifiedColorClass}`;
-        let heightPercent = maxPercent ? (percent / maxPercent) * 100 : 0;
-        if (percent > 0 && heightPercent < 8) heightPercent = 8;
-        bar.style.height = `${heightPercent}%`;
-        bar.title = `${group.label} — ${String(hour).padStart(2, '0')}h: ${count} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
-
-        cell.appendChild(valueNode);
-        cell.appendChild(bar);
-        cells.appendChild(cell);
-      });
-
-      wrapper.appendChild(cells);
-      item.appendChild(wrapper);
-
-      const label = document.createElement('span');
-      label.className = 'bar-chart-label black';
-      label.textContent = `${String(hour).padStart(2, '0')}h`;
-      item.appendChild(label);
-
-      bars.appendChild(item);
-    }
-
-    container.appendChild(bars);
-  }
+  // (removido pelo patch) renderUnifiedHourlyView
 
   function renderSingleHourlyView(container, data, group) {
     const { overallTotal } = data;
@@ -670,13 +606,10 @@ window.Modules.dashboard = (() => {
 
     container.innerHTML = '';
     const view = getSelectedHourlyView();
-
-    if (view === 'unified') {
-      renderUnifiedHourlyView(container, data);
-    } else if (HOURLY_GROUP_MAP[view]) {
+    if (view && HOURLY_GROUP_MAP[view]) {
       renderSingleHourlyView(container, data, HOURLY_GROUP_MAP[view]);
-    } else {
-      renderUnifiedHourlyView(container, data);
+    } else if (HOURLY_VIEW_DEFAULT && HOURLY_GROUP_MAP[HOURLY_VIEW_DEFAULT]) {
+      renderSingleHourlyView(container, data, HOURLY_GROUP_MAP[HOURLY_VIEW_DEFAULT]);
     }
 
     appendHourlySummary(container, data);
