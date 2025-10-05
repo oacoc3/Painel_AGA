@@ -27,6 +27,31 @@ window.Modules.analise = (() => {
     ['AD/HEL - Documental', ['AD/HEL - Documental', 'AD/HEL']]
   ]);
 
+  const CHECKLIST_TYPE_ALIAS = (() => {
+    const normalize = (value) => (
+      typeof value === 'string'
+        ? value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+        : ''
+    );
+    const map = new Map();
+    CHECKLIST_TYPE_VARIANTS.forEach((variants, canonical) => {
+      const canonicalKey = normalize(canonical);
+      if (canonicalKey) map.set(canonicalKey, canonical);
+      variants.forEach(variant => {
+        const key = normalize(variant);
+        if (key) map.set(key, canonical);
+      });
+    });
+    return { map, normalize };
+  })();
+
+  const getCanonicalChecklistType = (value) => {
+    if (typeof value !== 'string') return '';
+    const key = CHECKLIST_TYPE_ALIAS.normalize(value);
+    if (!key) return '';
+    return CHECKLIST_TYPE_ALIAS.map.get(key) || '';
+  };
+
   const CHECKLIST_TO_PROCESS_TYPES = (() => {
     const map = new Map();
     PROCESS_TYPE_TO_CHECKLIST.forEach((checklists, type) => {
@@ -37,6 +62,12 @@ window.Modules.analise = (() => {
     });
     return map;
   })();
+
+  const getProcessTypesForChecklist = (value) => {
+    const canonical = getCanonicalChecklistType(value) || (typeof value === 'string' ? value.trim() : '');
+    const set = canonical ? CHECKLIST_TO_PROCESS_TYPES.get(canonical) : null;
+    return set ? Array.from(set) : [];
+  };
 
   const TYPE_ALIAS_MAP = (() => {
     const map = new Map();
@@ -654,6 +685,21 @@ window.Modules.analise = (() => {
       return Utils.setMsg('adMsg', 'Selecione uma checklist aprovada.', true);
     }
 
+    const rawChecklistType = (() => {
+      const rawType = typeof templateSummary?.type === 'string' ? templateSummary.type.trim() : '';
+      if (rawType) return rawType;
+      if (typeof templateSummary?.name === 'string') {
+        const name = templateSummary.name.trim();
+        if (!name) return '';
+        const dashIndex = name.indexOf('—');
+        if (dashIndex > -1) return name.slice(0, dashIndex).trim();
+        return name;
+      }
+      return '';
+    })();
+    const canonicalChecklistType = getCanonicalChecklistType(rawChecklistType);
+    const allowedProcessTypes = getProcessTypesForChecklist(canonicalChecklistType || rawChecklistType);
+
     let processType = '';
     if (templateSummary?.process_type) {
       processType = normalizeProcessType(templateSummary.process_type);
@@ -661,24 +707,39 @@ window.Modules.analise = (() => {
     if (!processType) {
       processType = deriveProcessTypeFromTemplate(templateSummary);
     }
-    if (!processType) {
-      return Utils.setMsg('adMsg', 'Não foi possível identificar o tipo da checklist selecionada.', true);
+    if (processType && allowedProcessTypes.length && !allowedProcessTypes.includes(processType)) {
+      processType = '';
     }
-
-    const template = await loadTemplateById(templateSummary.id);
-    if (!template) {
-      return Utils.setMsg('adMsg', 'Checklist selecionada não encontrada ou não aprovada.', true);
-    }
-    template.name = template.name || templateSummary.name || '';
 
     const { data: proc } = await sb.from('processes').select('id,type').eq('nup', nup).maybeSingle();
     if (proc) {
-      if (normalizeProcessType(proc.type) !== processType) {
-        alert('Já existe processo com este NUP e tipo diferente. Verifique as informações.');
+      const normalizedProcType = normalizeProcessType(proc.type);
+      if (!normalizedProcType) {
+        return Utils.setMsg('adMsg', 'Não foi possível identificar o tipo do processo existente.', true);
+      }
+      if (allowedProcessTypes.length && normalizedProcType && !allowedProcessTypes.includes(normalizedProcType)) {
+        alert('Já existe processo com este NUP, mas o tipo não é compatível com a checklist selecionada.');
         return;
+      }
+      if (!processType) processType = normalizedProcType;
+      if (!processType) {
+        return Utils.setMsg('adMsg', 'Não foi possível identificar o tipo da checklist selecionada.', true);
       }
       currentProcessId = proc.id;
     } else {
+      if (!processType) {
+        if (allowedProcessTypes.length === 1) {
+          processType = allowedProcessTypes[0];
+        } else if (allowedProcessTypes.length > 1) {
+          const msg = 'Checklist selecionada é utilizada em mais de um tipo de processo. Cadastre o processo na tela de Processos antes de continuar.';
+          Utils.setMsg('adMsg', msg, true);
+          window.alert(msg);
+          return;
+        }
+      }
+      if (!processType) {
+        return Utils.setMsg('adMsg', 'Não foi possível identificar o tipo da checklist selecionada.', true);
+      }
       const u = await getUser();
       if (!u) return Utils.setMsg('adMsg', 'Sessão expirada.', true);
       const { data, error } = await sb.from('processes')
@@ -691,6 +752,12 @@ window.Modules.analise = (() => {
         await window.Modules.processos.reloadLists();
       }
     }
+
+    const template = await loadTemplateById(templateSummary.id);
+    if (!template) {
+      return Utils.setMsg('adMsg', 'Checklist selecionada não encontrada ou não aprovada.', true);
+    }
+    template.name = template.name || templateSummary.name || '';
 
     renderChecklist(template);
     if (template && currentProcessId) {
