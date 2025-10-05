@@ -343,7 +343,7 @@ window.Modules.analise = (() => {
     }
 
     const frag = document.createDocumentFragment();
-
+   
     const title = document.createElement('h3');
     title.className = 'ck-template-title';
     title.textContent = template.name || 'Checklist';

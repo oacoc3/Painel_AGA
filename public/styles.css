@@ -642,6 +642,7 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 footer { padding: 8px 12px; background: #faf9f7; }
 
 /* Checklists */
+
 .ck-template-title {
   margin: 0 0 20px;
   padding: 12px 16px;

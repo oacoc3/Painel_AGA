@@ -12,7 +12,8 @@ window.Modules.dashboard = (() => {
     'DECEA',
     'AGD-RESP',
     'AGD-LEIT',
-    'ICA-EXTR'
+    'ICA-EXTR',
+    'APROV'
   ]);
   const SPEED_STATUS_ORDER = [
     'ANADOC',
