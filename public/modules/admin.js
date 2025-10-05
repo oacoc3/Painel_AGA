@@ -20,7 +20,7 @@ window.Modules.admin = (() => {
     processos: 'Processos',
     prazos: 'Prazos',
     modelos: 'Modelos',
-    analise: 'Documental',
+    analise: 'Checklists',
     adhel: 'AD/HEL',
     pessoal: 'Pessoal',
     admin: 'Administração',
