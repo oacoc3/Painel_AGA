@@ -359,6 +359,9 @@ window.Modules.dashboard = (() => {
 
     Object.values(metricEls).forEach(node => {
       if (node) node.textContent = '—';
+      const metricContainer = node?.closest ? node.closest('.metric') : null;
+      if (metricContainer) metricContainer.removeAttribute('title');
+      else if (node) node.removeAttribute('title');
     });
 
     const select = el('entryYearSelect');
@@ -375,7 +378,40 @@ window.Modules.dashboard = (() => {
       sigadaerPref: 0
     };
 
-    Object.values(cachedStatusHistory || {}).forEach(list => {
+    const tooltipData = {
+      anadoc: [],
+      anatecPre: [],
+      anatec: [],
+      notifications: [],
+      sigadaerJjaer: [],
+      sigadaerAgu: [],
+      sigadaerPref: []
+    };
+
+    const processMap = new Map();
+    (cachedProcesses || []).forEach(proc => {
+      if (proc && proc.id != null) {
+        processMap.set(String(proc.id), proc);
+      }
+    });
+
+    const addTooltipEntry = (key, { nup, dateValue, numbers }) => {
+      if (!tooltipData[key]) return;
+      let parsedDate = null;
+      if (dateValue) {
+        const dt = dateValue instanceof Date ? dateValue : new Date(dateValue);
+        if (dt && !Number.isNaN(+dt)) parsedDate = dt;
+      }
+      const normalizedNumbers = Array.isArray(numbers) ? numbers.filter(n => n != null) : [];
+      tooltipData[key].push({
+        nup: typeof nup === 'string' && nup.trim() ? nup.trim() : null,
+        dateValue,
+        parsedDate,
+        numbers: normalizedNumbers
+      });
+    };
+
+    Object.entries(cachedStatusHistory || {}).forEach(([procId, list]) => {
       if (!Array.isArray(list)) return;
       for (let i = 0; i < list.length; i++) {
         const cur = list[i];
@@ -388,42 +424,116 @@ window.Modules.dashboard = (() => {
         const startDate = new Date(cur.start);
         if (Number.isNaN(+startDate) || startDate.getFullYear() !== year) continue;
 
-        if (cur.status === 'ANADOC') counters.anadoc += 1;
-        if (cur.status === 'ANATEC-PRE') counters.anatecPre += 1;
-        if (cur.status === 'ANATEC') counters.anatec += 1;
+        const procInfo = processMap.get(String(procId));
+        const nup = procInfo?.nup || null;
+
+        if (cur.status === 'ANADOC') {
+          counters.anadoc += 1;
+          addTooltipEntry('anadoc', { nup, dateValue: startDate });
+        }
+        if (cur.status === 'ANATEC-PRE') {
+          counters.anatecPre += 1;
+          addTooltipEntry('anatecPre', { nup, dateValue: startDate });
+        }
+        if (cur.status === 'ANATEC') {
+          counters.anatec += 1;
+          addTooltipEntry('anatec', { nup, dateValue: startDate });
+        }
       }
     });
 
     // Notificações: contam pela data efetiva do pedido
     (cachedNotifications || []).forEach(notification => {
       if (!notification) return;
-      const { requested_at: requestedAt } = notification;
+      const { requested_at: requestedAt, process_id: processId } = notification;
       if (!requestedAt) return;
 
       const requestedDate = new Date(requestedAt);
       if (!Number.isNaN(+requestedDate) && requestedDate.getFullYear() === year) {
         counters.notifications += 1;
+        const procInfo = processId != null ? processMap.get(String(processId)) : null;
+        addTooltipEntry('notifications', {
+          nup: procInfo?.nup || null,
+          dateValue: requestedDate
+        });
       }
     });
 
     // SIGADAER: contam quando EXPEDIDO, pela data de expedição (expedit_at)
     (cachedSigadaer || []).forEach(sigadaer => {
       if (!sigadaer) return;
-      const { type, status, expedit_at: expeditAt } = sigadaer;
+      const { type, status, expedit_at: expeditAt, numbers, process_id: processId } = sigadaer;
       if (!expeditAt || status !== 'EXPEDIDO') return;
 
       const expeditDate = new Date(expeditAt);
       if (Number.isNaN(+expeditDate) || expeditDate.getFullYear() !== year) return;
 
       const normalizedType = typeof type === 'string' ? type.toUpperCase() : '';
-      if (normalizedType === 'JJAER') counters.sigadaerJjaer += 1;
-      if (normalizedType === 'AGU') counters.sigadaerAgu += 1;
-      if (normalizedType === 'PREF') counters.sigadaerPref += 1; // incluído
+      const procInfo = processId != null ? processMap.get(String(processId)) : null;
+      const entry = {
+        nup: procInfo?.nup || null,
+        dateValue: expeditDate,
+        numbers
+      };
+
+      if (normalizedType === 'JJAER') {
+        counters.sigadaerJjaer += 1;
+        addTooltipEntry('sigadaerJjaer', entry);
+      }
+      if (normalizedType === 'AGU') {
+        counters.sigadaerAgu += 1;
+        addTooltipEntry('sigadaerAgu', entry);
+      }
+      if (normalizedType === 'PREF') {
+        counters.sigadaerPref += 1; // incluído
+        addTooltipEntry('sigadaerPref', entry);
+      }
     });
 
     Object.entries(metricEls).forEach(([key, node]) => {
       if (!node) return;
       node.textContent = YEARLY_COUNTER_FORMATTER.format(counters[key] || 0);
+      const entries = Array.isArray(tooltipData[key]) ? tooltipData[key].slice() : [];
+      entries.sort((a, b) => {
+        const tsA = a.parsedDate ? a.parsedDate.getTime() : (a.dateValue ? new Date(a.dateValue).getTime() : NaN);
+        const tsB = b.parsedDate ? b.parsedDate.getTime() : (b.dateValue ? new Date(b.dateValue).getTime() : NaN);
+        if (Number.isNaN(tsA) && Number.isNaN(tsB)) return 0;
+        if (Number.isNaN(tsA)) return 1;
+        if (Number.isNaN(tsB)) return -1;
+        return tsB - tsA;
+      });
+
+      const tooltipLines = entries.map(entry => {
+        const parts = [];
+        parts.push(entry.nup ? `NUP ${entry.nup}` : 'NUP não informado');
+        if (entry.numbers && entry.numbers.length) {
+          const formattedNumbers = entry.numbers
+            .map(num => {
+              if (num == null) return null;
+              const str = String(num).trim();
+              if (!str) return null;
+              const numeric = Number(str);
+              if (Number.isFinite(numeric)) return String(numeric).padStart(6, '0');
+              return str;
+            })
+            .filter(Boolean)
+            .join(', ');
+          if (formattedNumbers) parts.push(`SIGADAER ${formattedNumbers}`);
+        }
+        const formattedDate = entry.parsedDate
+          ? Utils.fmtDateTime(entry.parsedDate)
+          : Utils.fmtDateTime(entry.dateValue);
+        if (formattedDate) parts.push(formattedDate);
+        return parts.join(' — ');
+      });
+
+      const tooltipText = tooltipLines.length
+        ? tooltipLines.join('\n')
+        : 'Nenhum evento contabilizado no ano selecionado.';
+
+      const metricContainer = node.closest ? node.closest('.metric') : null;
+      if (metricContainer) metricContainer.title = tooltipText;
+      else node.title = tooltipText;
     });
   }
 
@@ -644,7 +754,7 @@ window.Modules.dashboard = (() => {
 
     const { data: procs } = await sb
       .from('processes')
-      .select('id,status,status_since,first_entry_date');
+      .select('id,nup,status,status_since,first_entry_date');
 
     cachedProcesses = procs || [];
     const hasYears = updateYearOptions();
@@ -653,12 +763,12 @@ window.Modules.dashboard = (() => {
 
     const { data: notifications } = await sb
       .from('notifications')
-      .select('requested_at, read_at');
+      .select('process_id, requested_at, read_at');
     cachedNotifications = notifications || [];
 
     const { data: sigadaer } = await sb
       .from('sigadaer')
-      .select('type, status, requested_at, expedit_at');
+      .select('process_id, numbers, type, status, requested_at, expedit_at');
     cachedSigadaer = sigadaer || [];
 
     // >>> Patch: incluir received_at para calcular médias
