@@ -248,6 +248,36 @@
     return cleared;
   }
 
+  // ---- Novo: reforço de signOut local + limpeza de storage Supabase ----
+  async function forceSupabaseSignOut(client) {
+    if (!client?.auth?.signOut) {
+      return false;
+    }
+
+    let changed = false;
+
+    try {
+      const { error } = await client.auth.signOut({ scope: 'local' });
+      if (error) {
+        console.warn('[mpa] SignOut local forçado falhou:', error);
+      } else {
+        changed = true;
+      }
+    } catch (err) {
+      console.warn('[mpa] Erro ao executar signOut local forçado:', err);
+    }
+
+    if (clearSupabaseStoredSession(client)) {
+      changed = true;
+    }
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    } catch (_) {}
+
+    return changed;
+  }
+
   // Trata o logout e atualiza a UI antes de redirecionar
   async function handleLogout() {
     let stayOnLogin = false;
@@ -279,20 +309,10 @@
     if (primarySignOutError) {
       console.warn('[mpa] Falha no signOut padrão, tentando fallback local:', primarySignOutError);
       let fallbackSucceeded = false;
-      if (client?.auth?.signOut) {
-        try {
-          const { error: localError } = await client.auth.signOut({ scope: 'local' });
-          if (localError) {
-            console.warn('[mpa] SignOut local também falhou:', localError);
-          } else {
-            fallbackSucceeded = true;
-          }
-        } catch (err) {
-          console.warn('[mpa] Erro ao tentar signOut local:', err);
-        }
-      }
-      if (!fallbackSucceeded) {
-        fallbackSucceeded = clearSupabaseStoredSession(client);
+      try {
+        fallbackSucceeded = await forceSupabaseSignOut(client);
+      } catch (err) {
+        console.warn('[mpa] Erro inesperado ao reforçar signOut local:', err);
       }
       if (!fallbackSucceeded) {
         console.warn('[mpa] Não foi possível limpar sessão local do Supabase.');
@@ -301,28 +321,46 @@
 
     let finalSession = null;
     let sessionCheckFailed = false;
-    try {
-      finalSession = await getSession();
-      if (finalSession?.user) {
+
+    const refreshSessionStatus = async () => {
+      try {
+        const session = await getSession();
+        finalSession = session;
+        sessionCleared = !session?.user;
+        sessionCheckFailed = false;
+      } catch (err) {
+        sessionCheckFailed = true;
         sessionCleared = false;
-      } else {
-        sessionCleared = true;
+        console.error('[mpa] Falha ao verificar sessão após logout:', err);
       }
-    } catch (err) {
-      sessionCheckFailed = true;
-      sessionCleared = false;
-      console.error('[mpa] Falha ao verificar sessão após logout:', err);
+    };
+
+    await refreshSessionStatus();
+
+    const maxForcedAttempts = 3;
+    let attempt = 0;
+
+    while (!sessionCheckFailed && finalSession?.user && attempt < maxForcedAttempts) {
+      attempt += 1;
+      console.warn(`[mpa] Sessão Supabase ainda ativa; reforçando logout (tentativa ${attempt}/${maxForcedAttempts}).`);
+      try {
+        await forceSupabaseSignOut(client);
+      } catch (err) {
+        console.warn('[mpa] Falha inesperada durante tentativa adicional de logout:', err);
+      }
+      await refreshSessionStatus();
+      if (!sessionCheckFailed && finalSession?.user) {
+        console.warn(`[mpa] Sessão Supabase permanece após tentativa ${attempt}.`);
+      }
     }
 
     if (!sessionCheckFailed) {
       state.session = finalSession;
     }
 
-    if (!sessionCleared) {
+    if (!sessionCheckFailed && finalSession?.user) {
       shouldReload = false;
-      if (!sessionCheckFailed && finalSession?.user) {
-        console.error('[mpa] Sessão Supabase permanece ativa após tentativa de logout.');
-      }
+      console.error('[mpa] Sessão Supabase permanece ativa após tentativas de logout forçado.');
       try {
         window.alert('Não foi possível encerrar a sessão. A página não será recarregada.');
       } catch (err) {
@@ -536,6 +574,13 @@
         }
       } catch (err) {
         console.error('[mpa] Erro ao tratar evento de autenticação:', err);
+      }
+      try {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || (event === 'INITIAL_SESSION' && session?.user?.id)) {
+          window.Modules?.analise?.syncDraftBackup?.();
+        }
+      } catch (err) {
+        console.warn('[mpa] Falha ao sincronizar rascunho local após evento auth:', err);
       }
       try {
         await ensureAuthAndUI();

@@ -5,12 +5,206 @@ window.Modules.analise = (() => {
   let currentProcessId = null;
   let currentDraftId = null;
 
+  const LOCAL_STORAGE_PREFIX = 'agaChecklistDraft:';
+  const memoryDraftBackups = new Map();
+  let sessionExpiredWarningShown = false;
+  let sessionExpiredMsgOnScreen = false;
+  let localBackupRestoreNotified = false;
+  let syncingLocalDraft = false;
+
+  const SESSION_EXPIRED_MESSAGE = 'Sessão expirada. As respostas da checklist foram salvas neste computador. Faça login novamente e aguarde o salvamento automático antes de finalizar.';
+  const LOCAL_RESTORE_MESSAGE = 'As respostas salvas anteriormente foram recuperadas deste computador. Faça login novamente e aguarde o salvamento automático antes de finalizar.';
+
   const CLIPBOARD_ICON = window.Modules?.processos?.CLIPBOARD_ICON
     || '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a 2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="m10 16 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
   // ==== Utilitários do patch (resultado da checklist e flag extra) ====
   const CHECKLIST_PDF = window.Modules?.checklistPDF || {};
   const EXTRA_NC_CODE = CHECKLIST_PDF.EXTRA_NON_CONFORMITY_CODE || '__ck_extra_nc__';
+
+  // ======= Utilitários de backup local de rascunho (patch) =======
+  function getLocalStorageSafe() {
+    try {
+      return window.localStorage || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function getLocalDraftKey(processId, templateId) {
+    if (!processId || !templateId) return null;
+    return `${LOCAL_STORAGE_PREFIX}${processId}:${templateId}`;
+  }
+
+  function rememberDraftInMemory(key, record) {
+    if (!key) return null;
+    if (record) {
+      memoryDraftBackups.set(key, record);
+    } else {
+      memoryDraftBackups.delete(key);
+    }
+    return record || null;
+  }
+
+  function readLocalDraft(processId = currentProcessId, templateId = currentTemplate?.id) {
+    const key = getLocalDraftKey(processId, templateId);
+    if (!key) return null;
+    const storage = getLocalStorageSafe();
+    if (storage) {
+      let raw = null;
+      try {
+        raw = storage.getItem(key);
+      } catch (err) {
+        console.warn('[Checklist] Falha ao ler rascunho local do armazenamento.', err);
+      }
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          rememberDraftInMemory(key, parsed);
+          return parsed;
+        } catch (err) {
+          console.warn('[Checklist] Rascunho local inválido. Limpando entrada.', err);
+          try { storage.removeItem(key); } catch (_) {}
+          rememberDraftInMemory(key, null);
+        }
+      }
+    }
+    return memoryDraftBackups.get(key) || null;
+  }
+
+  function storeLocalDraftSnapshot(snapshot = {}, { processId = currentProcessId, templateId = currentTemplate?.id, markUnsynced = true } = {}) {
+    const key = getLocalDraftKey(processId, templateId);
+    if (!key) return null;
+    const record = {
+      process_id: processId,
+      template_id: templateId,
+      draft_id: snapshot.draft_id ?? snapshot.draftId ?? currentDraftId ?? null,
+      answers: Array.isArray(snapshot.answers) ? snapshot.answers : [],
+      extra_obs: snapshot.extra_obs ?? null,
+      filled_by: snapshot.filled_by ?? null,
+      unsynced: markUnsynced ? true : (typeof snapshot.unsynced === 'boolean' ? snapshot.unsynced : false),
+      lastError: snapshot.lastError ?? null,
+      updatedAt: snapshot.updatedAt || new Date().toISOString()
+    };
+    const storage = getLocalStorageSafe();
+    if (storage) {
+      try {
+        storage.setItem(key, JSON.stringify(record));
+      } catch (err) {
+        console.warn('[Checklist] Falha ao gravar rascunho local.', err);
+      }
+    }
+    rememberDraftInMemory(key, record);
+    return record;
+  }
+
+  function updateLocalDraftSnapshot(updates = {}, { processId = currentProcessId, templateId = currentTemplate?.id } = {}) {
+    const key = getLocalDraftKey(processId, templateId);
+    if (!key) return null;
+    const current = readLocalDraft(processId, templateId);
+    if (!current) return null;
+    const record = {
+      ...current,
+      ...updates
+    };
+    if (!('updatedAt' in updates)) {
+      record.updatedAt = current.updatedAt || new Date().toISOString();
+    }
+    if (updates.answers && !Array.isArray(updates.answers)) {
+      record.answers = Array.isArray(current.answers) ? current.answers : [];
+    }
+    const storage = getLocalStorageSafe();
+    if (storage) {
+      try {
+        storage.setItem(key, JSON.stringify(record));
+      } catch (err) {
+        console.warn('[Checklist] Falha ao atualizar rascunho local.', err);
+      }
+    }
+    rememberDraftInMemory(key, record);
+    return record;
+  }
+
+  function clearLocalDraftSnapshot(processId = currentProcessId, templateId = currentTemplate?.id) {
+    const key = getLocalDraftKey(processId, templateId);
+    if (!key) return;
+    const storage = getLocalStorageSafe();
+    if (storage) {
+      try { storage.removeItem(key); } catch (err) {
+        console.warn('[Checklist] Falha ao limpar rascunho local.', err);
+      }
+    }
+    rememberDraftInMemory(key, null);
+  }
+
+  function convertLocalBackupToDraft(localBackup) {
+    if (!localBackup) return null;
+    return {
+      id: localBackup.draft_id || null,
+      answers: Array.isArray(localBackup.answers) ? localBackup.answers : [],
+      extra_obs: localBackup.extra_obs ?? null,
+      filled_by: localBackup.filled_by ?? null,
+      __fromLocalBackup: true,
+      __unsynced: !!localBackup.unsynced,
+      __localUpdatedAt: localBackup.updatedAt || null
+    };
+  }
+
+  function notifySessionExpiredOnce() {
+    if (sessionExpiredWarningShown) return;
+    sessionExpiredWarningShown = true;
+    sessionExpiredMsgOnScreen = true;
+    Utils.setMsg('adMsg', SESSION_EXPIRED_MESSAGE, true);
+    try {
+      window.alert(SESSION_EXPIRED_MESSAGE);
+    } catch (_) {}
+  }
+
+  function resetSessionExpiredWarning() {
+    sessionExpiredWarningShown = false;
+    if (sessionExpiredMsgOnScreen) {
+      const msgBox = document.getElementById('adMsg');
+      if (msgBox && (msgBox.textContent || '').trim() === SESSION_EXPIRED_MESSAGE) {
+        Utils.setMsg('adMsg', '');
+      }
+      sessionExpiredMsgOnScreen = false;
+    }
+  }
+
+  function notifyLocalBackupRestore() {
+    Utils.setMsg('adMsg', LOCAL_RESTORE_MESSAGE, true);
+    if (localBackupRestoreNotified) return;
+    localBackupRestoreNotified = true;
+    try {
+      window.alert(LOCAL_RESTORE_MESSAGE);
+    } catch (_) {}
+  }
+
+  function resetLocalBackupRestoreNotice() {
+    if (localBackupRestoreNotified) {
+      const msgBox = document.getElementById('adMsg');
+      if (msgBox && (msgBox.textContent || '').trim() === LOCAL_RESTORE_MESSAGE) {
+        Utils.setMsg('adMsg', '');
+      }
+    }
+    localBackupRestoreNotified = false;
+  }
+
+  async function syncLocalDraftIfPossible(processId = currentProcessId, templateId = currentTemplate?.id) {
+    if (syncingLocalDraft) return;
+    const local = readLocalDraft(processId, templateId);
+    if (!local || !local.unsynced) return;
+    const user = await getUser();
+    if (!user) return;
+    if (processId !== currentProcessId || templateId !== currentTemplate?.id) return;
+    syncingLocalDraft = true;
+    try {
+      await saveChecklistDraft();
+    } finally {
+      syncingLocalDraft = false;
+    }
+  }
+  // ================================================================
 
   // ==== Normalização de tipos de processo x tipos de checklist (patch) ====
   const PROCESS_TYPE_TO_CHECKLIST = new Map([
@@ -364,7 +558,7 @@ window.Modules.analise = (() => {
     }
 
     const frag = document.createDocumentFragment();
-   
+
     const title = document.createElement('h3');
     title.className = 'ck-template-title';
     title.textContent = template.name || 'Checklist';
@@ -551,21 +745,51 @@ window.Modules.analise = (() => {
   async function loadChecklistDraft(processId, templateId) {
     currentDraftId = null;
     if (!processId || !templateId) return null;
+
+    let remoteDraft = null;
     try {
       const { data, error } = await sb
         .from('checklist_responses')
-        .select('id,answers,extra_obs')
+        .select('id,answers,extra_obs,filled_by')
         .eq('process_id', processId)
         .eq('template_id', templateId)
         .eq('status', 'draft')
         .maybeSingle();
       if (error) throw error;
-      if (data?.id) currentDraftId = data.id;
-      return data || null;
+      if (data?.id) {
+        currentDraftId = data.id;
+        remoteDraft = { ...data, __fromLocalBackup: false, __unsynced: false, __localUpdatedAt: null };
+      }
     } catch (err) {
       console.error('Falha ao carregar rascunho da checklist.', err);
-      return null;
     }
+
+    const localBackup = readLocalDraft(processId, templateId);
+
+    if (remoteDraft) {
+      storeLocalDraftSnapshot({
+        draft_id: remoteDraft.id || null,
+        answers: Array.isArray(remoteDraft.answers) ? remoteDraft.answers : [],
+        extra_obs: remoteDraft.extra_obs ?? null,
+        filled_by: remoteDraft.filled_by ?? null,
+        unsynced: false,
+        lastError: null
+      }, { processId, templateId, markUnsynced: false });
+      resetLocalBackupRestoreNotice();
+      resetSessionExpiredWarning();
+      return remoteDraft;
+    }
+
+    if (localBackup) {
+      const draft = convertLocalBackupToDraft(localBackup);
+      if (draft?.id) currentDraftId = draft.id;
+      if (localBackup.unsynced) {
+        window.setTimeout(() => { syncLocalDraftIfPossible(processId, templateId); }, 0);
+      }
+      return draft;
+    }
+
+    return null;
   }
 
   async function saveChecklistDraft() {
@@ -597,13 +821,38 @@ window.Modules.analise = (() => {
 
     const extraField = el('adOutrasObs');
     const extra = extraField ? extraField.value.trim() : '';
+    const extraValue = extra ? extra : null;
+
+    const baseSnapshot = {
+      draft_id: currentDraftId,
+      answers,
+      extra_obs: extraValue,
+      filled_by: null,
+      unsynced: true,
+      lastError: null
+    };
+    storeLocalDraftSnapshot(baseSnapshot, { markUnsynced: true });
 
     const u = await getUser();
-    if (!u) return;
+    if (!u) {
+      updateLocalDraftSnapshot({
+        unsynced: true,
+        lastError: 'Sessão expirada.'
+      });
+      notifySessionExpiredOnce();
+      return;
+    }
+
+    storeLocalDraftSnapshot({
+      ...baseSnapshot,
+      filled_by: u.id,
+      unsynced: true,
+      lastError: null
+    }, { markUnsynced: true });
 
     const payload = {
       answers,
-      extra_obs: extra ? extra : null,
+      extra_obs: extraValue,
       filled_by: u.id
     };
 
@@ -644,8 +893,22 @@ window.Modules.analise = (() => {
       }
     } catch (err) {
       console.error('Falha ao salvar rascunho da checklist.', err);
+      updateLocalDraftSnapshot({
+        draft_id: currentDraftId || null,
+        filled_by: u.id,
+        unsynced: true,
+        lastError: err?.message || 'Falha ao salvar rascunho da checklist.'
+      });
     }
     if (saved) {
+      updateLocalDraftSnapshot({
+        draft_id: currentDraftId || null,
+        filled_by: u.id,
+        unsynced: false,
+        lastError: null
+      });
+      resetSessionExpiredWarning();
+      resetLocalBackupRestoreNotice();
       showDraftSavedPopup();
       if (historyDetails) {
         try {
@@ -664,8 +927,14 @@ window.Modules.analise = (() => {
 
   function applyDraftToUI(draft) {
     if (!draft) {
+      resetLocalBackupRestoreNotice();
       updateSaveState();
       return;
+    }
+    if (draft.__fromLocalBackup && draft.__unsynced) {
+      notifyLocalBackupRestore();
+    } else {
+      resetLocalBackupRestoreNotice();
     }
     const answers = Array.isArray(draft.answers) ? draft.answers : [];
     const map = new Map();
@@ -702,6 +971,8 @@ window.Modules.analise = (() => {
 
   async function discardDraft(processId = currentProcessId, templateId = currentTemplate?.id) {
     if (!processId || !templateId) {
+      clearLocalDraftSnapshot(processId, templateId);
+      resetLocalBackupRestoreNotice();
       currentDraftId = null;
       return;
     }
@@ -717,6 +988,8 @@ window.Modules.analise = (() => {
       console.error('Falha ao limpar rascunho da checklist.', err);
     }
     currentDraftId = null;
+    clearLocalDraftSnapshot(processId, templateId);
+    resetLocalBackupRestoreNotice();
   }
 
   async function iniciarChecklist(templateSummary) {
@@ -830,6 +1103,19 @@ window.Modules.analise = (() => {
       return;
     }
 
+    if (draft.__fromLocalBackup && draft.__unsynced) {
+      Utils.setMsg('adMsg', LOCAL_RESTORE_MESSAGE, true);
+      window.alert(LOCAL_RESTORE_MESSAGE);
+      return;
+    }
+
+    if (!draft.id) {
+      const msg = 'Rascunho inválido. Aguarde o salvamento automático e tente novamente.';
+      Utils.setMsg('adMsg', msg, true);
+      window.alert(msg);
+      return;
+    }
+
     const draftState = getDraftValidationState(draft, currentTemplate);
     if (!draftState.ready) {
       const msg = draftState.reason || 'Rascunho incompleto.';
@@ -891,7 +1177,6 @@ window.Modules.analise = (() => {
         'Checklist finalizado',
         {
           checklist_name: currentTemplate?.name || null,
-          template_id: currentTemplate?.id || null,
           status: 'final',
           filled_at: filledAt,
           result_summary: checklistResult?.summary || null,
@@ -1266,5 +1551,5 @@ window.Modules.analise = (() => {
     ]);
   }
 
-  return { init, load };
+  return { init, load, syncDraftBackup: () => syncLocalDraftIfPossible() };
 })();
