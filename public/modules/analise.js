@@ -165,6 +165,27 @@ window.Modules.analise = (() => {
 
   const scheduleDraftSave = debounce(() => { saveChecklistDraft(); }, 600);
 
+  // ===== Registro de histórico (patch) =====
+  function getHistoryUserName(user) {
+    if (!user) return '';
+    const metadataName = user.user_metadata && user.user_metadata.name;
+    return metadataName || user.email || user.id || '';
+  }
+
+  async function insertChecklistHistoryRecord(processId, action, details, user) {
+    if (!processId || !user?.id || !action) return;
+    const payload = {
+      process_id: processId,
+      action,
+      details: details || null,
+      user_id: user.id,
+      user_name: getHistoryUserName(user)
+    };
+    const { error } = await sb.from('history').insert(payload);
+    if (error) throw error;
+  }
+  // =========================================
+
   // ===== Toast “Rascunho salvo!” (patch) =====
   let draftPopupDialog = null;
   let draftPopupTimer = null;
@@ -587,6 +608,7 @@ window.Modules.analise = (() => {
     };
 
     let saved = false;
+    let historyDetails = null;
     try {
       if (currentDraftId) {
         const { error } = await sb
@@ -597,19 +619,27 @@ window.Modules.analise = (() => {
         if (error) throw error;
         saved = true;
       } else {
+        const startedAtIso = new Date().toISOString();
         const { data, error } = await sb
           .from('checklist_responses')
           .insert({
             process_id: currentProcessId,
             template_id: currentTemplate.id,
-            started_at: new Date().toISOString(),
+            started_at: startedAtIso,
             status: 'draft',
             ...payload
           })
-          .select('id')
+          .select('id,started_at')
           .single();
         if (error) throw error;
         currentDraftId = data?.id || null;
+        const startedAt = data?.started_at || startedAtIso;
+        historyDetails = {
+          checklist_name: currentTemplate?.name || null,
+          template_id: currentTemplate?.id || null,
+          status: 'draft',
+          started_at: startedAt
+        };
         saved = true;
       }
     } catch (err) {
@@ -617,6 +647,18 @@ window.Modules.analise = (() => {
     }
     if (saved) {
       showDraftSavedPopup();
+      if (historyDetails) {
+        try {
+          await insertChecklistHistoryRecord(
+            currentProcessId,
+            'Checklist iniciado',
+            historyDetails,
+            u
+          );
+        } catch (historyErr) {
+          console.error('Falha ao registrar histórico do início da checklist.', historyErr);
+        }
+      }
     }
   }
 
@@ -832,6 +874,7 @@ window.Modules.analise = (() => {
     }
 
     const filledAt = saved?.filled_at || nowIso;
+    const checklistResult = evaluateChecklistResult(draft);
 
     await sb.from('audit_log').insert({
       user_id: u.id,
@@ -841,6 +884,24 @@ window.Modules.analise = (() => {
       entity_id: saved?.id,
       details: { process_id: currentProcessId, checklist_name: currentTemplate.name, filled_at: filledAt }
     });
+
+    try {
+      await insertChecklistHistoryRecord(
+        currentProcessId,
+        'Checklist finalizado',
+        {
+          checklist_name: currentTemplate?.name || null,
+          template_id: currentTemplate?.id || null,
+          status: 'final',
+          filled_at: filledAt,
+          result_summary: checklistResult?.summary || null,
+          has_non_conformity: !!checklistResult?.hasNonConformity
+        },
+        u
+      );
+    } catch (historyErr) {
+      console.error('Falha ao registrar histórico da finalização da checklist.', historyErr);
+    }
 
     await discardDraft(currentProcessId, currentTemplate.id);
     Utils.setMsg('adMsg', 'Checklist finalizada.');
