@@ -21,7 +21,6 @@ window.Modules.analise = (() => {
     ['Exploração', ['AD/HEL - Documental']]
   ]);
   const SUPPORTED_PROCESS_TYPES = Array.from(PROCESS_TYPE_TO_CHECKLIST.keys());
-  const DEFAULT_PROCESS_TYPE = 'OPEA';
 
   const CHECKLIST_TYPE_VARIANTS = new Map([
     ['OPEA - Documental', ['OPEA - Documental', 'OPEA']],
@@ -74,23 +73,38 @@ window.Modules.analise = (() => {
     return SUPPORTED_PROCESS_TYPES.includes(trimmed) ? trimmed : '';
   };
 
-  const getChecklistTypeVariants = (value) => {
-    const normalized = normalizeProcessType(value);
-    if (!normalized || !PROCESS_TYPE_TO_CHECKLIST.has(normalized)) return [];
-    const variants = new Set();
-    const checklists = PROCESS_TYPE_TO_CHECKLIST.get(normalized) || [];
-    checklists.forEach(checklist => {
-      variants.add(checklist);
-      (CHECKLIST_TYPE_VARIANTS.get(checklist) || []).forEach(alias => variants.add(alias));
-    });
-    return Array.from(variants);
-  };
-
   const normalizeValue = (value) => (
     typeof value === 'string'
       ? value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
       : ''
   );
+
+  const deriveProcessTypeFromTemplate = (template) => {
+    if (!template) return '';
+    if (template?.process_type) {
+      const direct = normalizeProcessType(template.process_type);
+      if (direct) return direct;
+    }
+    const candidates = [];
+    const rawName = typeof template.name === 'string' ? template.name.trim() : '';
+    if (rawName) {
+      const dashIndex = rawName.indexOf('—');
+      if (dashIndex > -1) {
+        candidates.push(rawName.slice(0, dashIndex).trim());
+      }
+      const hyphenIndex = rawName.indexOf('-');
+      if (hyphenIndex > -1) {
+        candidates.push(rawName.slice(0, hyphenIndex).trim());
+      }
+    }
+    const canonicalType = typeof template.type === 'string' ? template.type.trim() : '';
+    if (canonicalType) candidates.push(canonicalType);
+    for (const value of candidates) {
+      const normalized = normalizeProcessType(value);
+      if (normalized) return normalized;
+    }
+    return '';
+  };
 
   function evaluateChecklistResult(source) {
     if (typeof CHECKLIST_PDF.getChecklistResult === 'function') {
@@ -167,34 +181,24 @@ window.Modules.analise = (() => {
   }
   // ================================================
 
-  async function loadTemplatesFor(processType) {
-    const candidates = new Set();
-    if (typeof processType === 'string' && processType.trim()) {
-      getChecklistTypeVariants(processType).forEach(value => candidates.add(value));
+  async function loadTemplateById(templateId) {
+    if (!templateId) return null;
+    try {
+      const { data, error } = await sb
+        .from('checklist_templates')
+        .select('id,name,type,version,items')
+        .eq('id', templateId)
+        .not('approved_at', 'is', null)
+        .single();
+      if (error) throw error;
+      return {
+        ...data,
+        items: Array.isArray(data?.items) ? data.items : []
+      };
+    } catch (err) {
+      console.error('Falha ao carregar checklist aprovada.', err);
+      return null;
     }
-    if (!candidates.size) return [];
-
-    const candidateList = Array.from(candidates);
-
-    let query = sb
-      .from('checklist_templates')
-      .select('id,name,type,version,items')
-      .not('approved_at', 'is', null)
-      .order('name')
-      .order('version', { ascending: false });
-
-    query = candidateList.length === 1
-      ? query.eq('type', candidateList[0])
-      : query.in('type', candidateList);
-
-    const { data, error } = await query;
-    if (error) return [];
-    const uniq = [];
-    const seen = new Set();
-    (data || []).forEach(t => {
-      if (!seen.has(t.name)) { seen.add(t.name); uniq.push(t); }
-    });
-    return uniq;
   }
 
   function getChecklistValidationState() {
@@ -363,7 +367,7 @@ window.Modules.analise = (() => {
               });
               wrap.dataset.value = v;
             } else {
-              const selected = Array.from(optionsList.querySelectorAll('input[type="checkbox"]')).find(ch => ch.checked);
+              const selected = Array.from(optionsList.querySelectorAll('input[type="checkbox"]').values()).find(ch => ch.checked);
               wrap.dataset.value = selected ? selected.value : '';
             }
             wrap.classList.toggle('ck-has-nc', wrap.dataset.value === 'Não conforme');
@@ -642,13 +646,30 @@ window.Modules.analise = (() => {
     currentDraftId = null;
   }
 
-  async function iniciarChecklist() {
+  async function iniciarChecklist(templateSummary) {
     if (!guardDocumentalWrite()) return;
     const nup = el('adNUP').value.trim();
-    const rawType = el('adTipo')?.value || '';
-    const processType = normalizeProcessType(rawType);
     if (!nup) return Utils.setMsg('adMsg', 'Informe um NUP.', true);
-    if (!processType) return Utils.setMsg('adMsg', 'Selecione o tipo da checklist.', true);
+    if (!templateSummary || !templateSummary.id) {
+      return Utils.setMsg('adMsg', 'Selecione uma checklist aprovada.', true);
+    }
+
+    let processType = '';
+    if (templateSummary?.process_type) {
+      processType = normalizeProcessType(templateSummary.process_type);
+    }
+    if (!processType) {
+      processType = deriveProcessTypeFromTemplate(templateSummary);
+    }
+    if (!processType) {
+      return Utils.setMsg('adMsg', 'Não foi possível identificar o tipo da checklist selecionada.', true);
+    }
+
+    const template = await loadTemplateById(templateSummary.id);
+    if (!template) {
+      return Utils.setMsg('adMsg', 'Checklist selecionada não encontrada ou não aprovada.', true);
+    }
+    template.name = template.name || templateSummary.name || '';
 
     const { data: proc } = await sb.from('processes').select('id,type').eq('nup', nup).maybeSingle();
     if (proc) {
@@ -671,8 +692,6 @@ window.Modules.analise = (() => {
       }
     }
 
-    const list = await loadTemplatesFor(processType);
-    const template = list[0] || null;
     renderChecklist(template);
     if (template && currentProcessId) {
       const draft = await loadChecklistDraft(currentProcessId, template.id);
@@ -777,10 +796,6 @@ window.Modules.analise = (() => {
   async function clearForm() {
     await discardDraft();
     el('adNUP').value = '';
-    const tipoField = el('adTipo');
-    if (tipoField) {
-      tipoField.value = DEFAULT_PROCESS_TYPE;
-    }
     Utils.setMsg('adMsg', '');
     currentProcessId = null;
     currentTemplate = null;
@@ -848,7 +863,8 @@ window.Modules.analise = (() => {
             type: row.type || '',
             version: row.version,
             approved_at: row.approved_at,
-            approved_by_name: row.profiles?.name || ''
+            approved_by_name: row.profiles?.name || '',
+            process_type: deriveProcessTypeFromTemplate(row)
           }))
         : [];
       const latestRows = [];
@@ -874,9 +890,9 @@ window.Modules.analise = (() => {
           value: r => (r.approved_at ? Utils.fmtDateTime(r.approved_at) : '')
         },
         {
-          label: 'PDF',
+          label: 'Ações',
           align: 'center',
-          render: r => createApprovedChecklistPdfButton(r.id)
+          render: r => createApprovedChecklistActions(r)
         }
       ], latestRows);
     } catch (err) {
@@ -884,11 +900,31 @@ window.Modules.analise = (() => {
     }
   }
 
-  function createApprovedChecklistPdfButton(templateId) {
+  function createApprovedChecklistActions(row) {
+    const wrap = document.createElement('div');
+    wrap.className = 'ad-approved-actions';
+    const fillBtn = document.createElement('button');
+    fillBtn.type = 'button';
+    fillBtn.textContent = 'Preencher';
+    if (!row?.id) {
+      fillBtn.disabled = true;
+    } else {
+      fillBtn.addEventListener('click', () => iniciarChecklist(row));
+    }
+    wrap.appendChild(fillBtn);
+    wrap.appendChild(createApprovedChecklistViewButton(row?.id));
+    return wrap;
+  }
+
+  function createApprovedChecklistViewButton(templateId) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.textContent = 'PDF';
-    btn.addEventListener('click', () => abrirChecklistTemplatePDF(templateId));
+    btn.textContent = 'Ver';
+    if (!templateId) {
+      btn.disabled = true;
+    } else {
+      btn.addEventListener('click', () => abrirChecklistTemplatePDF(templateId));
+    }
     return btn;
   }
 
@@ -1056,16 +1092,10 @@ window.Modules.analise = (() => {
   // ===== Fim do patch =====
 
   function bind() {
-    const btnIniciar = el('btnIniciarAD');
     const btnLimparAD = el('btnLimparAD');
     const btnLimparChecklist = el('btnLimparChecklist');
     const btnFinalizarChecklist = el('adBtnFinalizarChecklist');
 
-    if (btnIniciar) btnIniciar.addEventListener('click', ev => {
-      ev.preventDefault();
-      if (!guardDocumentalWrite()) return;
-      iniciarChecklist();
-    });
     if (btnLimparAD) btnLimparAD.addEventListener('click', async ev => {
       ev.preventDefault();
       if (!guardDocumentalWrite()) return;
