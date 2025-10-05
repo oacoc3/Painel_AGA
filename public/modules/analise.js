@@ -1095,6 +1095,26 @@ window.Modules.analise = (() => {
     Utils.setMsg('adMsg', 'Finalizando checklist...');
     await saveChecklistDraft();
 
+    // Evita finalizar a checklist caso o último salvamento local ainda não tenha
+    // sido sincronizado com o servidor, prevenindo a perda das respostas que
+    // acabaram de ser preenchidas.
+    const localSnapshot = readLocalDraft(currentProcessId, currentTemplate.id);
+    if (localSnapshot?.unsynced) {
+      let msg = localSnapshot.lastError || 'As respostas da checklist ainda não foram sincronizadas.';
+      if (msg === 'Sessão expirada.') {
+        msg = SESSION_EXPIRED_MESSAGE;
+      }
+      if (msg === SESSION_EXPIRED_MESSAGE) {
+        sessionExpiredWarningShown = true;
+        sessionExpiredMsgOnScreen = true;
+      }
+      Utils.setMsg('adMsg', msg, true);
+      try {
+        window.alert(msg);
+      } catch (_) {}
+      return;
+    }
+
     const draft = await loadChecklistDraft(currentProcessId, currentTemplate.id);
     if (!draft) {
       const msg = 'Nenhum rascunho encontrado. Aguarde o salvamento automático e tente novamente.';
