@@ -636,7 +636,6 @@ window.Modules.analise = (() => {
         const startedAt = data?.started_at || startedAtIso;
         historyDetails = {
           checklist_name: currentTemplate?.name || null,
-          template_id: currentTemplate?.id || null,
           status: 'draft',
           started_at: startedAt
         };
@@ -891,7 +890,6 @@ window.Modules.analise = (() => {
         'Checklist finalizado',
         {
           checklist_name: currentTemplate?.name || null,
-          template_id: currentTemplate?.id || null,
           status: 'final',
           filled_at: filledAt,
           result_summary: checklistResult?.summary || null,
