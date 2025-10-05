@@ -511,20 +511,34 @@ window.Modules.dashboard = (() => {
       ), 0);
     });
 
-    return { groups, totals, overallTotal, offHoursByGroup };
+    let overallMaxPercent = 0;
+    if (overallTotal > 0) {
+      HOURLY_GROUPS.forEach(group => {
+        const list = groups[group.key] || [];
+        for (let hour = 0; hour < list.length; hour += 1) {
+          const value = list[hour] || 0;
+          const percent = (value / overallTotal) * 100;
+          if (percent > overallMaxPercent) overallMaxPercent = percent;
+        }
+      });
+    }
+
+    return { groups, totals, overallTotal, offHoursByGroup, overallMaxPercent };
   }
 
   // (removido pelo patch) renderUnifiedHourlyView
 
   function renderSingleHourlyView(container, data, group) {
-    const { overallTotal } = data;
+    const { overallTotal, overallMaxPercent } = data;
     const bars = document.createElement('div');
     bars.className = 'bar-chart-bars';
     bars.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
 
     const counts = data.groups[group.key] || [];
     const percents = counts.map(value => (overallTotal ? (value / overallTotal) * 100 : 0));
-    const maxPercent = percents.reduce((max, value) => (value > max ? value : max), 0);
+    const effectiveMaxPercent = (typeof overallMaxPercent === 'number' && overallMaxPercent > 0)
+      ? overallMaxPercent
+      : percents.reduce((max, value) => (value > max ? value : max), 0);
 
     counts.forEach((value, hour) => {
       const percent = percents[hour] || 0;
@@ -545,7 +559,7 @@ window.Modules.dashboard = (() => {
 
       const bar = document.createElement('div');
       bar.className = `bar-chart-bar ${barColorClass}`;
-      let heightPercent = maxPercent ? (percent / maxPercent) * 100 : 0;
+      let heightPercent = effectiveMaxPercent ? (percent / effectiveMaxPercent) * 100 : 0;
       if (percent > 0 && heightPercent < 8) heightPercent = 8;
       bar.style.height = `${heightPercent}%`;
       bar.title = `${group.label} — ${String(hour).padStart(2, '0')}h: ${value} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
