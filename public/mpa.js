@@ -576,6 +576,13 @@
         console.error('[mpa] Erro ao tratar evento de autenticação:', err);
       }
       try {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || (event === 'INITIAL_SESSION' && session?.user?.id)) {
+          window.Modules?.analise?.syncDraftBackup?.();
+        }
+      } catch (err) {
+        console.warn('[mpa] Falha ao sincronizar rascunho local após evento auth:', err);
+      }
+      try {
         await ensureAuthAndUI();
       } catch (err) {
         console.error('[mpa] Falha ao atualizar UI após evento auth:', err);
