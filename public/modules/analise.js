@@ -626,7 +626,7 @@ window.Modules.analise = (() => {
       Utils.renderTable(box, [
         { key: 'type', label: 'Tipo' },
         { key: 'version', label: 'Versão', align: 'center' },
-        { key: 'approved_by_name', label: 'Aprovada por' },
+      //  { key: 'approved_by_name', label: 'Aprovada por' },
         {
           key: 'approved_at',
           label: 'Aprovada em',
