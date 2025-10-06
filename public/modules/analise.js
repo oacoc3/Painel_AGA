@@ -117,7 +117,11 @@ window.Modules.analise = (() => {
   }
 
   function nupSanitize(v) {
-    return (v || '').replace(/\D+/g, '').replace(/(\d{6})(\d{4})(\d{2})/, '$1/$2-$3').slice(0, 13);
+    const digits = (v || '').replace(/\D+/g, '').slice(0, 12);
+    let formatted = digits.slice(0, 6);
+    if (digits.length > 6) formatted += '/' + digits.slice(6, 10);
+    if (digits.length > 10) formatted += '-' + digits.slice(10, 12);
+    return formatted;
   }
 
   function setInputValue(id, v) {
