@@ -44,6 +44,7 @@ window.Modules.analise = (() => {
       return false;
     }
   }
+
   function startLockHeartbeat() {
     if (lockHeartbeatTimer) return;
     lockHeartbeatTimer = setInterval(async () => {
@@ -58,6 +59,7 @@ window.Modules.analise = (() => {
       } catch (_) {}
     }, LOCK_RENEW_EVERY_MS);
   }
+
   async function releaseLock() {
     const sb = getSupabaseClient();
     if (!sb) return;
@@ -69,6 +71,7 @@ window.Modules.analise = (() => {
     } catch (_) {}
   }
   function stopLockHeartbeat() { clearInterval(lockHeartbeatTimer); lockHeartbeatTimer = null; }
+
   function startSessionHeartbeat() {
     if (sessionHeartbeatTimer) return;
     sessionHeartbeatTimer = setInterval(async () => {
@@ -666,17 +669,55 @@ window.Modules.analise = (() => {
         box.innerHTML = '<div class="msg">Nenhuma checklist aprovada.</div>';
         return;
       }
+
+      // ==== PATCH: resolver "Aprovada por" com lookup em profiles ====
+      const approverIds = Array.from(new Set(
+        latestRows
+          .map(row => row?.approved_by)
+          .filter(Boolean)
+      ));
+
+      const approverMap = new Map();
+      if (approverIds.length) {
+        try {
+          const { data: profiles, error: profilesError } = await sb
+            .from('profiles')
+            .select('id,name,email')
+            .in('id', approverIds);
+          if (profilesError) {
+            console.warn('[Análise] Falha ao carregar aprovadores das checklists:', profilesError);
+          } else {
+            (profiles || []).forEach(profile => {
+              if (profile?.id) approverMap.set(profile.id, profile);
+            });
+          }
+        } catch (profilesErr) {
+          console.warn('[Análise] Erro inesperado ao carregar aprovadores das checklists:', profilesErr);
+        }
+      }
+
+      const tableRows = latestRows.map(row => {
+        const profile = row?.approved_by ? approverMap.get(row.approved_by) : null;
+        const displayName = profile?.name || profile?.email || row?.approved_by || '—';
+        return { ...row, approved_by_display: displayName };
+      });
+      // ==== FIM DO PATCH ====
+
       Utils.renderTable(box, [
         { key: 'type', label: 'Tipo' },
         { key: 'version', label: 'Versão', align: 'center' },
-        { key: 'approved_by', label: 'Aprovada por' },
+        {
+          key: 'approved_by_display',
+          label: 'Aprovada por',
+          value: r => r.approved_by_display || r.approved_by || '—'
+        },
         {
           key: 'approved_at',
           label: 'Aprovada em',
           value: r => (r.approved_at ? Utils.fmtDateTime(r.approved_at) : '')
         },
         { label: 'Ações', align: 'center', render: r => createApprovedChecklistActions(r) }
-      ], latestRows);
+      ], tableRows);
     } catch (err) {
       console.error('Falha ao listar checklists aprovadas.', err);
       el('adApprovedList').innerHTML = '<div class="msg error">Falha ao carregar as checklists aprovadas.</div>';
