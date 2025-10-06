@@ -604,7 +604,7 @@ window.Modules.analise = (() => {
 
       const { data, error } = await sb
         .from('checklist_templates')
-        .select('id,name,type,version,approved_by, approved_at')
+        .select('id,name,type,version, approved_at')
         .not('approved_at', 'is', null)
         .order('approved_at', { ascending: false });
 
