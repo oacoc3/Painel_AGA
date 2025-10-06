@@ -96,7 +96,7 @@ window.Modules.analise = (() => {
   const CLIPBOARD_ICON = window.Modules?.processos?.CLIPBOARD_ICON
     || '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a 2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>';
 
-  const Utils = window.Modules?.utils || {};
+  const Utils = window.Modules?.utils || window.Utils || {};
 
   function getSupabaseClient() {
     return (typeof window.sb !== 'undefined' ? window.sb : null)
