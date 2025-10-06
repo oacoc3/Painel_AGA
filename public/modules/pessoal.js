@@ -5,11 +5,83 @@ window.Modules.pessoal = (() => {
   const state = {
     profiles: [],
     profileMap: new Map(),
+    // >>> Patch: novos estados para produtividade semanal
+    productivityWeekData: new Map(),
+    productivityWeeks: [],
+    productivitySelectedWeek: null,
+    productivityProfiles: []
+    // <<< Patch
   };
 
   // Novos valores (patch)
   const REV_OACO_HISTORY_ACTION = 'Status REV-OACO registrado'; // Ação registrada no histórico
   const ANALISTA_OACO_ROLE = 'Analista OACO'; // Papel padrão se vier apenas no histórico
+
+  // >>> Patch: helpers de papel/semana/contagem
+  function isAnalistaOacoRole(role) {
+    return String(role || '').trim().toLowerCase() === ANALISTA_OACO_ROLE.toLowerCase();
+  }
+
+  // Segunda-feira como início da semana
+  function getWeekStart(dateInput) {
+    if (!dateInput) return null;
+    const src = dateInput instanceof Date ? new Date(dateInput.getTime()) : new Date(dateInput);
+    if (!src || Number.isNaN(+src)) return null;
+    const result = new Date(src.getTime());
+    const day = result.getDay(); // 0 (domingo) .. 6 (sábado)
+    const diff = (day + 6) % 7; // desloca para segunda=0
+    result.setHours(0, 0, 0, 0);
+    result.setDate(result.getDate() - diff);
+    return result;
+  }
+
+  function formatWeekKey(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function ensureWeekEntry(map, dateInput) {
+    const start = getWeekStart(dateInput);
+    if (!start) return null;
+    const key = formatWeekKey(start);
+    let entry = map.get(key);
+    if (!entry) {
+      const end = new Date(start.getTime());
+      end.setDate(end.getDate() + 6);
+      entry = {
+        key,
+        start,
+        end,
+        docNoReview: new Map(),
+        docWithReview: new Map(),
+        notifNoReview: new Map(),
+        notifWithReview: new Map(),
+        label: ''
+      };
+      map.set(key, entry);
+    }
+    return entry;
+  }
+
+  function formatWeekLabel(entry) {
+    if (!entry) return '';
+    if (!entry.label) {
+      const startLabel = Utils.fmtDate(entry.start);
+      const endLabel = Utils.fmtDate(entry.end);
+      entry.label = startLabel && endLabel
+        ? `${startLabel} – ${endLabel}`
+        : (startLabel || endLabel || '');
+    }
+    return entry.label;
+  }
+
+  function incrementProductivity(map, profileId) {
+    if (!map || !profileId) return;
+    map.set(profileId, (map.get(profileId) || 0) + 1);
+  }
+  // <<< Patch
 
   function updateProfileMap(profile) {
     if (!profile || !profile.id) return;
@@ -209,45 +281,129 @@ window.Modules.pessoal = (() => {
     }
   }
 
+  // >>> Patch: filtros/tabela por semana
+  function renderProductivityWeekFilters() {
+    const container = el('productivityWeekFilters');
+    if (!container) return;
+    container.innerHTML = '';
+    const weeks = state.productivityWeeks || [];
+    if (!weeks.length) {
+      container.classList.add('hidden');
+      return;
+    }
+    container.classList.remove('hidden');
+    weeks.forEach(week => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = formatWeekLabel(week);
+      btn.dataset.weekKey = week.key;
+      const isActive = state.productivitySelectedWeek === week.key;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      btn.addEventListener('click', () => setProductivityWeek(week.key));
+      container.appendChild(btn);
+    });
+  }
+
+  function renderProductivityTable() {
+    const msgId = 'productivityMsg';
+    const tableId = 'productivityList';
+    const weekKey = state.productivitySelectedWeek;
+
+    if (!state.productivityProfiles.length) {
+      Utils.renderTable(tableId, PRODUCTIVITY_COLUMNS, []);
+      Utils.setMsg(msgId, 'Nenhum Analista OACO cadastrado.');
+      return;
+    }
+
+    const entry = weekKey ? state.productivityWeekData.get(weekKey) : null;
+    const rows = state.productivityProfiles.map(profile => ({
+      id: profile.id,
+      name: profile.name || '',
+      email: profile.email || '',
+      role: profile.role || '',
+      deleted_at: profile.deleted_at || null,
+      doc_no_review: entry?.docNoReview?.get(profile.id) || 0,
+      doc_with_review: entry?.docWithReview?.get(profile.id) || 0,
+      notif_no_review: entry?.notifNoReview?.get(profile.id) || 0,
+      notif_with_review: entry?.notifWithReview?.get(profile.id) || 0
+    }));
+
+    const hasData = rows.some(row =>
+      row.doc_no_review || row.doc_with_review || row.notif_no_review || row.notif_with_review
+    );
+
+    Utils.renderTable(tableId, PRODUCTIVITY_COLUMNS, rows);
+
+    if (!entry) {
+      Utils.setMsg(msgId, 'Nenhum dado de produtividade encontrado.');
+    } else {
+      Utils.setMsg(msgId, hasData ? '' : 'Nenhum registro de produtividade na semana selecionada.');
+    }
+  }
+
+  function setProductivityWeek(weekKey) {
+    if (!weekKey || state.productivitySelectedWeek === weekKey) return;
+    if (!state.productivityWeekData.has(weekKey)) return;
+    state.productivitySelectedWeek = weekKey;
+    renderProductivityWeekFilters();
+    renderProductivityTable();
+  }
+  // <<< Patch
+
   async function loadProductivity() {
     const msgId = 'productivityMsg';
     const tableId = 'productivityList';
+    const weekBox = el('productivityWeekFilters');
+
     Utils.setMsg(msgId, 'Carregando dados...');
+    Utils.renderTable(tableId, PRODUCTIVITY_COLUMNS, []);
+    if (weekBox) {
+      weekBox.innerHTML = '';
+      weekBox.classList.add('hidden');
+    }
+
     try {
       const profiles = await ensureProfiles();
       registerProfiles(profiles);
 
-      // Estruturas de contagem (patch)
-      const docNoReview = new Map();
-      const docWithReview = new Map();
-      const notifNoReview = new Map();
-      const notifWithReview = new Map();
+      const weekData = new Map();
 
-      const baseProfiles = profiles.filter(p => p?.id);
+      // Considera somente Analista OACO dos perfis cadastrados
+      const baseProfiles = (profiles || [])
+        .filter(profile => profile?.id && isAnalistaOacoRole(profile.role));
       const profileById = new Map(baseProfiles.map(profile => [profile.id, profile]));
       const extraProfiles = new Map(); // Perfis que aparecem apenas no histórico
 
-      const increment = (map, key) => {
-        if (!key) return;
-        map.set(key, (map.get(key) || 0) + 1);
-      };
-
       const registerHistoryProfile = (info) => {
-        if (!info?.analyst_id) return;
+        if (!info?.analyst_id) return null;
+        const normalizedRole = info.analyst_role || ANALISTA_OACO_ROLE;
         const profileInfo = {
           id: info.analyst_id,
           name: info.analyst_name || '',
           email: info.analyst_email || '',
-          role: info.analyst_role || ANALISTA_OACO_ROLE,
+          role: normalizedRole,
           deleted_at: null
         };
         updateProfileMap(profileInfo);
-        if (!profileById.has(profileInfo.id)) {
+        if (!isAnalistaOacoRole(profileInfo.role)) return null;
+
+        if (profileById.has(profileInfo.id)) {
+          const current = profileById.get(profileInfo.id) || {};
+          profileById.set(profileInfo.id, {
+            ...current,
+            name: current.name || profileInfo.name,
+            email: current.email || profileInfo.email,
+            role: current.role || profileInfo.role,
+            deleted_at: current.deleted_at ?? profileInfo.deleted_at
+          });
+        } else {
           extraProfiles.set(profileInfo.id, profileInfo);
         }
+        return profileInfo;
       };
 
-      // Busca histórico de ações "REV-OACO" (patch)
+      // Busca histórico de ações "REV-OACO"
       const { data: historyData, error: historyError } = await sb
         .from('history')
         .select('details')
@@ -257,47 +413,64 @@ window.Modules.pessoal = (() => {
       (historyData || []).forEach(row => {
         const details = normalizeHistoryDetails(row?.details);
         if (!details) return;
+
         const doc = details.document_analysis;
         const notif = details.notification;
 
         if (doc?.analyst_id) {
-          registerHistoryProfile(doc);
-          increment(doc?.needs_review ? docWithReview : docNoReview, doc.analyst_id);
+          const profileInfo = registerHistoryProfile(doc);
+          const dateSource = doc?.performed_at || details.status_since;
+          const entry = ensureWeekEntry(weekData, dateSource);
+          if (profileInfo && entry) {
+            incrementProductivity(doc?.needs_review ? entry.docWithReview : entry.docNoReview, profileInfo.id);
+          }
         }
+
         if (notif?.analyst_id) {
-          registerHistoryProfile(notif);
-          increment(notif?.needs_review ? notifWithReview : notifNoReview, notif.analyst_id);
+          const profileInfo = registerHistoryProfile(notif);
+          const dateSource = notif?.performed_at || details.status_since;
+          const entry = ensureWeekEntry(weekData, dateSource);
+          if (profileInfo && entry) {
+            incrementProductivity(notif?.needs_review ? entry.notifWithReview : entry.notifNoReview, profileInfo.id);
+          }
         }
       });
 
-      // Une perfis do banco com os (eventuais) perfis vindos do histórico
-      const combinedProfiles = new Map(profileById);
+      // Une os perfis que vieram apenas do histórico
       extraProfiles.forEach((profile, id) => {
-        combinedProfiles.set(id, profile);
+        if (!profileById.has(id)) profileById.set(id, profile);
       });
 
-      const rows = Array.from(combinedProfiles.values())
-        .map(profile => ({
-          id: profile.id,
-          name: profile.name || '',
-          email: profile.email || '',
-          role: profile.role || '',
-          deleted_at: profile.deleted_at || null,
-          doc_no_review: docNoReview.get(profile.id) || 0,
-          doc_with_review: docWithReview.get(profile.id) || 0,
-          notif_no_review: notifNoReview.get(profile.id) || 0,
-          notif_with_review: notifWithReview.get(profile.id) || 0
-        }))
+      const combinedProfiles = Array.from(profileById.values())
         .sort((a, b) => {
           const aKey = (a.name || a.email || '').toLocaleLowerCase('pt-BR');
           const bKey = (b.name || b.email || '').toLocaleLowerCase('pt-BR');
           return aKey.localeCompare(bKey, 'pt-BR');
         });
 
-      Utils.renderTable(tableId, PRODUCTIVITY_COLUMNS, rows);
-      Utils.setMsg(msgId, rows.length ? '' : 'Nenhum dado de produtividade encontrado.');
+      state.productivityProfiles = combinedProfiles;
+      state.productivityWeekData = weekData;
+
+      const weeks = Array.from(weekData.values())
+        .sort((a, b) => b.start.getTime() - a.start.getTime());
+      state.productivityWeeks = weeks;
+
+      if (!weeks.length || !state.productivitySelectedWeek || !weekData.has(state.productivitySelectedWeek)) {
+        state.productivitySelectedWeek = weeks.length ? weeks[0].key : null;
+      }
+
+      renderProductivityWeekFilters();
+      renderProductivityTable();
     } catch (err) {
       console.error('[pessoal] Falha ao carregar produtividade:', err);
+      state.productivityProfiles = [];
+      state.productivityWeekData = new Map();
+      state.productivityWeeks = [];
+      state.productivitySelectedWeek = null;
+      if (weekBox) {
+        weekBox.innerHTML = '';
+        weekBox.classList.add('hidden');
+      }
       Utils.renderTable(tableId, PRODUCTIVITY_COLUMNS, []);
       Utils.setMsg(msgId, err?.message || 'Falha ao carregar dados.', true);
     }
