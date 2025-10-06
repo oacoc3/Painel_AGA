@@ -604,7 +604,7 @@ window.Modules.analise = (() => {
 
       const { data, error } = await sb
         .from('checklist_templates')
-        .select('id,name,type,version, approved_at')
+        .select('id,name,type,version, approved_by, approved_at')
         .not('approved_at', 'is', null)
         .order('approved_at', { ascending: false });
 
@@ -626,7 +626,7 @@ window.Modules.analise = (() => {
       Utils.renderTable(box, [
         { key: 'type', label: 'Tipo' },
         { key: 'version', label: 'Versão', align: 'center' },
-      //  { key: 'approved_by_name', label: 'Aprovada por' },
+        { key: 'approved_by', label: 'Aprovada por' },
         {
           key: 'approved_at',
           label: 'Aprovada em',
