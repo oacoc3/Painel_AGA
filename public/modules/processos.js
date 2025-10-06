@@ -658,12 +658,18 @@ window.Modules.processos = (() => {
           <label>Responsável pela análise documental
             <select id="stRevDocAnalyst"></select>
           </label>
+          <label>Realização da análise documental
+            <input type="datetime-local" id="stRevDocPerformedAt">
+          </label>
           <label>
             <input type="checkbox" id="stRevDocReview">
             Revisar análise
           </label>
           <label>Elaborador(a) da notificação
             <select id="stRevNotifAnalyst"></select>
+          </label>
+          <label>Realização da confecção de notificação
+            <input type="datetime-local" id="stRevNotifPerformedAt">
           </label>
           <label>
             <input type="checkbox" id="stRevNotifReview">
@@ -682,7 +688,9 @@ window.Modules.processos = (() => {
     if (dt && curDate) dt.value = U.toDateTimeLocalValue(curDate);
     const extrasBox = dlg.querySelector('#stRevExtras');
     const docSelect = extrasBox?.querySelector('#stRevDocAnalyst');
+    const docPerformedInput = extrasBox?.querySelector('#stRevDocPerformedAt');
     const notifSelect = extrasBox?.querySelector('#stRevNotifAnalyst');
+    const notifPerformedInput = extrasBox?.querySelector('#stRevNotifPerformedAt');
     const docReviewCheck = extrasBox?.querySelector('#stRevDocReview');
     const notifReviewCheck = extrasBox?.querySelector('#stRevNotifReview');
 
@@ -692,17 +700,34 @@ window.Modules.processos = (() => {
       if (show) {
         extrasBox.classList.remove('hidden');
         docSelect?.setAttribute('required', 'true');
+        docPerformedInput?.setAttribute('required', 'true');
         notifSelect?.setAttribute('required', 'true');
+        notifPerformedInput?.setAttribute('required', 'true');
+        const baseVal = dt?.value || U.toDateTimeLocalValue(new Date());
+        if (baseVal) {
+          if (docPerformedInput && !docPerformedInput.value) docPerformedInput.value = baseVal;
+          if (notifPerformedInput && !notifPerformedInput.value) notifPerformedInput.value = baseVal;
+        }
         ensureRevOacoAnalystOptions(dlg);
       } else {
         extrasBox.classList.add('hidden');
         docSelect?.removeAttribute('required');
+        docPerformedInput?.removeAttribute('required');
         notifSelect?.removeAttribute('required');
+        notifPerformedInput?.removeAttribute('required');
       }
     };
 
     sel?.addEventListener('change', toggleRevExtras);
     toggleRevExtras();
+
+    dt?.addEventListener('change', () => {
+      if (!extrasBox || extrasBox.classList.contains('hidden')) return;
+      const baseVal = dt.value || '';
+      if (!baseVal) return;
+      if (docPerformedInput && !docPerformedInput.value) docPerformedInput.value = baseVal;
+      if (notifPerformedInput && !notifPerformedInput.value) notifPerformedInput.value = baseVal;
+    });
 
     dlg.addEventListener('close', () => dlg.remove());
     dlg.querySelector('#stFechar')?.addEventListener('click', (ev) => {
@@ -720,6 +745,8 @@ window.Modules.processos = (() => {
       }
       const newStatus = sel?.value || 'ANATEC-PRE';
       const statusSince = new Date(dtValue).toISOString();
+      let docPerformedIso = null;
+      let notifPerformedIso = null;
       if (newStatus === 'REV-OACO') {
         if (docSelect?.dataset.loading === 'true' || notifSelect?.dataset.loading === 'true') {
           alert('Aguarde o carregamento da lista de Analistas OACO.');
@@ -745,9 +772,40 @@ window.Modules.processos = (() => {
           notifSelect?.reportValidity?.();
           return;
         }
+        const docPerformedVal = docPerformedInput?.value || '';
+        if (!docPerformedVal) {
+          alert('Informe a data/hora da realização da análise documental.');
+          docPerformedInput?.focus();
+          docPerformedInput?.reportValidity?.();
+          return;
+        }
+        const notifPerformedVal = notifPerformedInput?.value || '';
+        if (!notifPerformedVal) {
+          alert('Informe a data/hora da realização da confecção de notificação.');
+          notifPerformedInput?.focus();
+          notifPerformedInput?.reportValidity?.();
+          return;
+        }
+        const docPerformedDate = new Date(docPerformedVal);
+        if (Number.isNaN(+docPerformedDate)) {
+          alert('Data/hora inválida para a realização da análise documental.');
+          docPerformedInput?.focus();
+          docPerformedInput?.reportValidity?.();
+          return;
+        }
+        const notifPerformedDate = new Date(notifPerformedVal);
+        if (Number.isNaN(+notifPerformedDate)) {
+          alert('Data/hora inválida para a realização da confecção de notificação.');
+          notifPerformedInput?.focus();
+          notifPerformedInput?.reportValidity?.();
+          return;
+        }
+        docPerformedIso = docPerformedDate.toISOString();
+        notifPerformedIso = notifPerformedDate.toISOString();
       }
       const payload = {
-
+        status: newStatus,
+        status_since: statusSince
       };
       let historyDetails = null;
       if (newStatus === 'REV-OACO') {
@@ -766,7 +824,8 @@ window.Modules.processos = (() => {
                 analyst_name: docProfile?.name || docLabel,
                 analyst_email: docProfile?.email || '',
                 analyst_role: docProfile?.role || ANALISTA_OACO_ROLE,
-                needs_review: !!docReviewCheck?.checked
+                 needs_review: !!docReviewCheck?.checked,
+                performed_at: docPerformedIso
               }
             : null,
           notification: notifId
@@ -775,7 +834,8 @@ window.Modules.processos = (() => {
                 analyst_name: notifProfile?.name || notifLabel,
                 analyst_email: notifProfile?.email || '',
                 analyst_role: notifProfile?.role || ANALISTA_OACO_ROLE,
-                needs_review: !!notifReviewCheck?.checked
+                needs_review: !!notifReviewCheck?.checked,
+                performed_at: notifPerformedIso
               }
             : null
         };
