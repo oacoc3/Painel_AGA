@@ -7,6 +7,10 @@ window.Modules.pessoal = (() => {
     profileMap: new Map(),
   };
 
+  // Novos valores (patch)
+  const REV_OACO_HISTORY_ACTION = 'Status REV-OACO registrado'; // Ação registrada no histórico
+  const ANALISTA_OACO_ROLE = 'Analista OACO'; // Papel padrão se vier apenas no histórico
+
   function updateProfileMap(profile) {
     if (!profile || !profile.id) return;
     const current = state.profileMap.get(profile.id) || {};
@@ -78,9 +82,23 @@ window.Modules.pessoal = (() => {
     return wrap;
   }
 
+  // Novo helper (patch): normaliza "details" do histórico
+  function normalizeHistoryDetails(details) {
+    if (!details) return null;
+    if (typeof details === 'object') return details;
+    if (typeof details === 'string') {
+      try { return JSON.parse(details); } catch (_) { return null; }
+    }
+    return null;
+  }
+
+  // Colunas de produtividade atualizadas (patch)
   const PRODUCTIVITY_COLUMNS = [
     { label: 'Usuário', render: row => renderUserCell(row) },
-    { key: 'count', label: 'Checklists finalizadas', align: 'center' }
+    { key: 'doc_no_review', label: 'Análises documentais sem necessidade de revisão', align: 'center' },
+    { key: 'doc_with_review', label: 'Análises documentais com necessidade de revisão', align: 'center' },
+    { key: 'notif_no_review', label: 'Notificações sem necessidade de revisão', align: 'center' },
+    { key: 'notif_with_review', label: 'Notificações com necessidade de revisão', align: 'center' }
   ];
 
   const AVAILABILITY_COLUMNS = [
@@ -198,32 +216,77 @@ window.Modules.pessoal = (() => {
     try {
       const profiles = await ensureProfiles();
       registerProfiles(profiles);
-      const counts = new Map();
 
-      if (profiles.length) {
-        // >>> Correção: sem .group() e sem "count:id"; contamos no JS.
-        const { data, error } = await sb
-          .from('checklist_responses')
-          .select('filled_by', { head: false })
-          .eq('status', 'final')
-          .not('filled_by', 'is', null);
-        if (error) throw error;
+      // Estruturas de contagem (patch)
+      const docNoReview = new Map();
+      const docWithReview = new Map();
+      const notifNoReview = new Map();
+      const notifWithReview = new Map();
 
-        (data || []).forEach(row => {
-          if (!row?.filled_by) return;
-          counts.set(row.filled_by, (counts.get(row.filled_by) || 0) + 1);
-        });
-      }
+      const baseProfiles = profiles.filter(p => p?.id);
+      const profileById = new Map(baseProfiles.map(profile => [profile.id, profile]));
+      const extraProfiles = new Map(); // Perfis que aparecem apenas no histórico
 
-      const rows = profiles
-        .filter(p => p?.id)
+      const increment = (map, key) => {
+        if (!key) return;
+        map.set(key, (map.get(key) || 0) + 1);
+      };
+
+      const registerHistoryProfile = (info) => {
+        if (!info?.analyst_id) return;
+        const profileInfo = {
+          id: info.analyst_id,
+          name: info.analyst_name || '',
+          email: info.analyst_email || '',
+          role: info.analyst_role || ANALISTA_OACO_ROLE,
+          deleted_at: null
+        };
+        updateProfileMap(profileInfo);
+        if (!profileById.has(profileInfo.id)) {
+          extraProfiles.set(profileInfo.id, profileInfo);
+        }
+      };
+
+      // Busca histórico de ações "REV-OACO" (patch)
+      const { data: historyData, error: historyError } = await sb
+        .from('history')
+        .select('details')
+        .eq('action', REV_OACO_HISTORY_ACTION);
+      if (historyError) throw historyError;
+
+      (historyData || []).forEach(row => {
+        const details = normalizeHistoryDetails(row?.details);
+        if (!details) return;
+        const doc = details.document_analysis;
+        const notif = details.notification;
+
+        if (doc?.analyst_id) {
+          registerHistoryProfile(doc);
+          increment(doc?.needs_review ? docWithReview : docNoReview, doc.analyst_id);
+        }
+        if (notif?.analyst_id) {
+          registerHistoryProfile(notif);
+          increment(notif?.needs_review ? notifWithReview : notifNoReview, notif.analyst_id);
+        }
+      });
+
+      // Une perfis do banco com os (eventuais) perfis vindos do histórico
+      const combinedProfiles = new Map(profileById);
+      extraProfiles.forEach((profile, id) => {
+        combinedProfiles.set(id, profile);
+      });
+
+      const rows = Array.from(combinedProfiles.values())
         .map(profile => ({
           id: profile.id,
           name: profile.name || '',
           email: profile.email || '',
           role: profile.role || '',
           deleted_at: profile.deleted_at || null,
-          count: counts.get(profile.id) || 0
+          doc_no_review: docNoReview.get(profile.id) || 0,
+          doc_with_review: docWithReview.get(profile.id) || 0,
+          notif_no_review: notifNoReview.get(profile.id) || 0,
+          notif_with_review: notifWithReview.get(profile.id) || 0
         }))
         .sort((a, b) => {
           const aKey = (a.name || a.email || '').toLocaleLowerCase('pt-BR');
@@ -231,9 +294,8 @@ window.Modules.pessoal = (() => {
           return aKey.localeCompare(bKey, 'pt-BR');
         });
 
-      // Mantido seu padrão de chamada:
       Utils.renderTable(tableId, PRODUCTIVITY_COLUMNS, rows);
-      Utils.setMsg(msgId, rows.length ? '' : 'Nenhum usuário encontrado.');
+      Utils.setMsg(msgId, rows.length ? '' : 'Nenhum dado de produtividade encontrado.');
     } catch (err) {
       console.error('[pessoal] Falha ao carregar produtividade:', err);
       Utils.renderTable(tableId, PRODUCTIVITY_COLUMNS, []);
@@ -248,7 +310,7 @@ window.Modules.pessoal = (() => {
     try {
       const { data, error } = await sb
         .from('user_unavailabilities')
-        // >>> Correção: remover deleted_at dos relacionamentos
+        // Mantém relacionamentos sem deleted_at
         .select('id,profile_id,description,starts_at,ends_at,created_at,created_by, profile:profile_id (id,name,email,role), creator:created_by (id,name,email,role)')
         .order('starts_at', { ascending: false });
       if (error) throw error;
