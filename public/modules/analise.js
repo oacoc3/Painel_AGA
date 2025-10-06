@@ -18,9 +18,13 @@ window.Modules.analise = (() => {
   const LOCK_TTL_SECONDS = 30 * 60;
   const LOCK_RENEW_EVERY_MS = 5 * 60 * 1000;
   const SESSION_HEARTBEAT_MS = 2 * 60 * 1000;
+  let approvedListRetryCount = 0;
+  const APPROVED_LIST_MAX_RETRIES = 10;
+  const APPROVED_LIST_RETRY_DELAY_MS = 500;
 
   async function acquireLock() {
-    if (!currentProcessId || !currentTemplate) return false;
+    const sb = getSupabaseClient();
+    if (!currentProcessId || !currentTemplate || !sb) return false;
     try {
       const { data, error } = await sb.rpc('rpc_acquire_checklist_lock', {
         p_process_id: currentProcessId,
@@ -44,6 +48,8 @@ window.Modules.analise = (() => {
     if (lockHeartbeatTimer) return;
     lockHeartbeatTimer = setInterval(async () => {
       try {
+        const sb = getSupabaseClient();
+        if (!sb) return;
         await sb.rpc('rpc_renew_checklist_lock', {
           p_process_id: currentProcessId,
           p_template_id: currentTemplate.id,
@@ -53,6 +59,8 @@ window.Modules.analise = (() => {
     }, LOCK_RENEW_EVERY_MS);
   }
   async function releaseLock() {
+    const sb = getSupabaseClient();
+    if (!sb) return;
     try {
       await sb.rpc('rpc_release_checklist_lock', {
         p_process_id: currentProcessId,
@@ -64,7 +72,11 @@ window.Modules.analise = (() => {
   function startSessionHeartbeat() {
     if (sessionHeartbeatTimer) return;
     sessionHeartbeatTimer = setInterval(async () => {
-      try { await sb.auth.getSession(); } catch (_) {}
+      try {
+        const sb = getSupabaseClient();
+        if (!sb) return;
+        await sb.auth.getSession();
+      } catch (_) {}
     }, SESSION_HEARTBEAT_MS);
   }
   function stopSessionHeartbeat() { clearInterval(sessionHeartbeatTimer); sessionHeartbeatTimer = null; }
@@ -85,11 +97,13 @@ window.Modules.analise = (() => {
     || '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a 2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>';
 
   const Utils = window.Modules?.utils || {};
-  const sb =
-    (typeof window.sb !== 'undefined' ? window.sb : null)
-    || (typeof window.supabaseClient !== 'undefined' ? window.supabaseClient : null)
-    || (window.supabase && window.supabase._client)
-    || null;
+
+  function getSupabaseClient() {
+    return (typeof window.sb !== 'undefined' ? window.sb : null)
+      || (typeof window.supabaseClient !== 'undefined' ? window.supabaseClient : null)
+      || (window.supabase && window.supabase._client)
+      || null;
+  }
 
   const el = id => document.getElementById(id);
   const $$ = s => Array.from(document.querySelectorAll(s));
@@ -114,6 +128,7 @@ window.Modules.analise = (() => {
   }
 
   function getSessionUser() {
+    const sb = getSupabaseClient();
     return sb?.auth?.getSession().then(({ data }) => data?.session?.user || null);
   }
 
@@ -186,6 +201,8 @@ window.Modules.analise = (() => {
   async function loadTemplateById(templateId) {
     if (!templateId) return null;
     try {
+      const sb = getSupabaseClient();
+      if (!sb) throw new Error('Cliente Supabase indisponível.');
       const { data, error } = await sb
         .from('checklist_templates')
         .select('id,name,type,version,items')
@@ -422,6 +439,8 @@ window.Modules.analise = (() => {
     const extraValue = extraField ? extraField.value.trim() : '';
 
     try {
+      const sb = getSupabaseClient();
+      if (!sb) throw new Error('Cliente Supabase indisponível.');
       const { data, error } = await sb.rpc('rpc_upsert_checklist_draft', {
         p_process_id: currentProcessId,
         p_template_id: currentTemplate.id,
@@ -485,6 +504,8 @@ window.Modules.analise = (() => {
     const win = existingWindow || window.open('', '_blank');
     if (win) win.opener = null;
     try {
+      const sb = getSupabaseClient();
+      if (!sb) throw new Error('Cliente Supabase indisponível.');
       const { data, error } = await sb
         .from('checklist_responses')
         .select('answers,extra_obs,started_at,filled_at,filled_by:profiles(name),processes(nup),checklist_templates(name,type,version,items)')
@@ -520,6 +541,8 @@ window.Modules.analise = (() => {
   async function loadChecklistDraft(processId, templateId) {
     if (!processId || !templateId) return null;
     try {
+      const sb = getSupabaseClient();
+      if (!sb) throw new Error('Cliente Supabase indisponível.');
       const { data, error } = await sb
         .from('checklist_responses')
         .select('*')
@@ -568,6 +591,8 @@ window.Modules.analise = (() => {
     const extraValue = extraField ? extraField.value.trim() : '';
 
     try {
+      const sb = getSupabaseClient();
+      if (!sb) throw new Error('Cliente Supabase indisponível.');
       const { data, error } = await sb.rpc('rpc_finalize_checklist', {
         p_process_id: currentProcessId,
         p_template_id: currentTemplate.id,
@@ -606,11 +631,19 @@ window.Modules.analise = (() => {
       const box = el('adApprovedList');
       box.innerHTML = '<div class="muted">Carregando…</div>';
 
+      const sb = getSupabaseClient();
       if (!sb || typeof sb.from !== 'function') {
         console.error('[Análise] Cliente Supabase não encontrado.');
-        box.innerHTML = '<div class="msg error">Falha ao carregar as checklists aprovadas.</div>';
+        approvedListRetryCount += 1;
+        if (approvedListRetryCount <= APPROVED_LIST_MAX_RETRIES) {
+          box.innerHTML = '<div class="muted">Conectando ao banco de dados…</div>';
+          setTimeout(loadApprovedChecklists, APPROVED_LIST_RETRY_DELAY_MS);
+        } else {
+          box.innerHTML = '<div class="msg error">Falha ao carregar as checklists aprovadas.</div>';
+        }
         return;
       }
+      approvedListRetryCount = 0;
 
       const { data, error } = await sb
         .from('checklist_templates')
@@ -663,6 +696,12 @@ window.Modules.analise = (() => {
     if (!u) {
       notifySessionExpiredOnce();
       return;
+    }
+
+    const sb = getSupabaseClient();
+    if (!sb) {
+      console.error('Cliente Supabase indisponível ao abrir checklist aprovada.');
+      return Utils.setMsg('adMsg', 'Não foi possível conectar ao banco de dados.', true);
     }
 
     // Abre ou cria o processo e carrega o template aprovado
