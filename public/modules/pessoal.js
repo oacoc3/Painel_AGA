@@ -531,18 +531,36 @@ window.Modules.pessoal = (() => {
       const weeks = buildContinuousWeeks(weekData);
       state.productivityWeeks = weeks;
 
+      // >>> Patch aplicado: escolher semana atual quando existir; senão, última semana disponível
       if (weeks.length) {
         let selectedKey = state.productivitySelectedWeek;
-        if (!selectedKey || !weekData.has(selectedKey)) {
-          selectedKey = weeks[0].key;
+        const currentWeekStart = getWeekStart(new Date());
+        const currentWeekKey = currentWeekStart ? formatWeekKey(currentWeekStart) : null;
+
+        if (!selectedKey || !weeks.some(week => week.key === selectedKey)) {
+          const currentIndex = currentWeekKey
+            ? weeks.findIndex(week => week.key === currentWeekKey)
+            : -1;
+          if (currentIndex !== -1) {
+            selectedKey = weeks[currentIndex].key;
+          } else {
+            selectedKey = weeks[weeks.length - 1].key;
+          }
         }
-        const index = Math.max(0, weeks.findIndex(week => week.key === selectedKey));
-        state.productivityWeekIndex = index;
-        state.productivitySelectedWeek = weeks[index]?.key || null;
+
+        let index = weeks.findIndex(week => week.key === selectedKey);
+        if (index === -1 && currentWeekKey) {
+          index = weeks.findIndex(week => week.key === currentWeekKey);
+        }
+        if (index === -1) index = weeks.length - 1;
+
+        state.productivityWeekIndex = Math.max(0, index);
+        state.productivitySelectedWeek = weeks[state.productivityWeekIndex]?.key || null;
       } else {
         state.productivityWeekIndex = 0;
         state.productivitySelectedWeek = null;
       }
+      // <<< Patch aplicado
 
       renderProductivityWeekFilters();
       renderProductivityTable();
@@ -553,12 +571,13 @@ window.Modules.pessoal = (() => {
       state.productivityWeeks = [];
       state.productivitySelectedWeek = null;
       state.productivityWeekIndex = 0;
+      const weekBox = el('productivityWeekFilters');
       if (weekBox) {
         weekBox.innerHTML = '';
         weekBox.classList.add('hidden');
       }
-      Utils.renderTable(tableId, PRODUCTIVITY_COLUMNS, []);
-      Utils.setMsg(msgId, err?.message || 'Falha ao carregar dados.', true);
+      Utils.renderTable('productivityList', PRODUCTIVITY_COLUMNS, []);
+      Utils.setMsg('productivityMsg', err?.message || 'Falha ao carregar dados.', true);
     }
   }
 
