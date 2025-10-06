@@ -50,8 +50,28 @@
       <section id="viewAdhel" class="view">
         <div class="columns">
           <div class="card">
-            <h2>AD/HEL</h2>
-            <p class="muted">Em desenvolvimento.</p>
+            <h2>AD/HEL <small class="muted">(registros: <span id="adhelCount">0</span>)</small></h2>
+
+            <!-- Tabela de listagem: o módulo adhel.js apenas preenche o tbody abaixo -->
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>OACI</th>
+                    <th>CIAD</th>
+                    <th>Nome</th>
+                    <th>Município</th>
+                    <th>UF</th>
+                    <th>Tipo</th>
+                  </tr>
+                </thead>
+                <tbody id="adhelTableBody">
+                  <!-- Linhas injetadas por Modules.adhel -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Observação: nenhum estilo foi alterado; apenas adicionamos a estrutura mínima da tabela. -->
           </div>
         </div>
       </section>
@@ -66,5 +86,14 @@
 
   <!-- Preenche build no cabeçalho e rodapé -->
   <script defer src="./build-info-client.js"></script>
+
+  <!-- Inicialização do módulo (sem alterar visual) -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window?.Modules?.adhel?.init) {
+        window.Modules.adhel.init();
+      }
+    });
+  </script>
 </body>
 </html>
