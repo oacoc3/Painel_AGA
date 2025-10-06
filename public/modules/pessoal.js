@@ -9,6 +9,7 @@ window.Modules.pessoal = (() => {
     productivityWeekData: new Map(),
     productivityWeeks: [],
     productivitySelectedWeek: null,
+    productivityWeekIndex: 0,
     productivityProfiles: []
     // <<< Patch
   };
@@ -16,6 +17,8 @@ window.Modules.pessoal = (() => {
   // Novos valores (patch)
   const REV_OACO_HISTORY_ACTION = 'Status REV-OACO registrado'; // Ação registrada no histórico
   const ANALISTA_OACO_ROLE = 'Analista OACO'; // Papel padrão se vier apenas no histórico
+  const PRODUCTIVITY_FIRST_WEEK_ISO = '2025-10-06';
+  const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 
   // >>> Patch: helpers de papel/semana/contagem
   function isAnalistaOacoRole(role) {
@@ -33,6 +36,10 @@ window.Modules.pessoal = (() => {
     result.setHours(0, 0, 0, 0);
     result.setDate(result.getDate() - diff);
     return result;
+  }
+
+  function getProductivityFirstWeekStart() {
+    return getWeekStart(PRODUCTIVITY_FIRST_WEEK_ISO);
   }
 
   function formatWeekKey(date) {
@@ -80,6 +87,34 @@ window.Modules.pessoal = (() => {
   function incrementProductivity(map, profileId) {
     if (!map || !profileId) return;
     map.set(profileId, (map.get(profileId) || 0) + 1);
+  }
+
+  function buildContinuousWeeks(weekData) {
+    const map = weekData instanceof Map ? weekData : new Map();
+    const baseline = getProductivityFirstWeekStart();
+    if (!baseline) return [];
+
+    const baselineEntry = ensureWeekEntry(map, baseline);
+    let maxStartTime = baselineEntry?.start?.getTime() ?? baseline.getTime();
+
+    map.forEach(entry => {
+      if (!entry?.start) return;
+      const entryTime = entry.start.getTime();
+      if (entryTime > maxStartTime) maxStartTime = entryTime;
+    });
+
+    const currentWeek = getWeekStart(new Date());
+    if (currentWeek && currentWeek.getTime() > maxStartTime) {
+      maxStartTime = currentWeek.getTime();
+    }
+
+    const weeks = [];
+    for (let time = baseline.getTime(); time <= maxStartTime; time += MS_PER_WEEK) {
+      const entry = ensureWeekEntry(map, new Date(time));
+      if (entry) weeks.push(entry);
+    }
+
+    return weeks;
   }
   // <<< Patch
 
@@ -291,18 +326,48 @@ window.Modules.pessoal = (() => {
       container.classList.add('hidden');
       return;
     }
+
+    const maxIndex = weeks.length - 1;
+    let currentIndex = state.productivityWeekIndex ?? 0;
+    if (currentIndex < 0) currentIndex = 0;
+    if (currentIndex > maxIndex) currentIndex = maxIndex;
+    state.productivityWeekIndex = currentIndex;
+    const currentWeek = weeks[currentIndex];
+    state.productivitySelectedWeek = currentWeek?.key || null;
+
     container.classList.remove('hidden');
-    weeks.forEach(week => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = formatWeekLabel(week);
-      btn.dataset.weekKey = week.key;
-      const isActive = state.productivitySelectedWeek === week.key;
-      btn.classList.toggle('active', isActive);
-      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-      btn.addEventListener('click', () => setProductivityWeek(week.key));
-      container.appendChild(btn);
-    });
+    container.setAttribute('role', 'navigation');
+
+    const prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.textContent = '‹ Semana anterior';
+    prevBtn.className = 'week-nav-btn';
+    prevBtn.disabled = currentIndex <= 0;
+    prevBtn.addEventListener('click', () => setProductivityWeekIndex(currentIndex - 1));
+    container.appendChild(prevBtn);
+
+    const info = document.createElement('div');
+    info.className = 'week-selector-info';
+
+    const label = document.createElement('strong');
+    label.className = 'week-selector-label';
+    label.textContent = formatWeekLabel(currentWeek);
+    info.appendChild(label);
+
+    const counter = document.createElement('span');
+    counter.className = 'week-selector-count muted';
+    counter.textContent = `${currentIndex + 1} de ${weeks.length}`;
+    info.appendChild(counter);
+
+    container.appendChild(info);
+
+    const nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.textContent = 'Semana seguinte ›';
+    nextBtn.className = 'week-nav-btn';
+    nextBtn.disabled = currentIndex >= maxIndex;
+    nextBtn.addEventListener('click', () => setProductivityWeekIndex(currentIndex + 1));
+    container.appendChild(nextBtn);
   }
 
   function renderProductivityTable() {
@@ -342,12 +407,24 @@ window.Modules.pessoal = (() => {
     }
   }
 
-  function setProductivityWeek(weekKey) {
-    if (!weekKey || state.productivitySelectedWeek === weekKey) return;
-    if (!state.productivityWeekData.has(weekKey)) return;
-    state.productivitySelectedWeek = weekKey;
+  function setProductivityWeekIndex(nextIndex) {
+    const weeks = state.productivityWeeks || [];
+    if (!weeks.length) return;
+    const maxIndex = weeks.length - 1;
+    const clampedIndex = Math.max(0, Math.min(nextIndex, maxIndex));
+    if (state.productivityWeekIndex === clampedIndex) return;
+    state.productivityWeekIndex = clampedIndex;
+    state.productivitySelectedWeek = weeks[clampedIndex]?.key || null;
     renderProductivityWeekFilters();
     renderProductivityTable();
+  }
+
+  function setProductivityWeek(weekKey) {
+    if (!weekKey) return;
+    const weeks = state.productivityWeeks || [];
+    const index = weeks.findIndex(week => week.key === weekKey);
+    if (index === -1) return;
+    setProductivityWeekIndex(index);
   }
   // <<< Patch
 
@@ -451,12 +528,20 @@ window.Modules.pessoal = (() => {
       state.productivityProfiles = combinedProfiles;
       state.productivityWeekData = weekData;
 
-      const weeks = Array.from(weekData.values())
-        .sort((a, b) => b.start.getTime() - a.start.getTime());
+      const weeks = buildContinuousWeeks(weekData);
       state.productivityWeeks = weeks;
 
-      if (!weeks.length || !state.productivitySelectedWeek || !weekData.has(state.productivitySelectedWeek)) {
-        state.productivitySelectedWeek = weeks.length ? weeks[0].key : null;
+      if (weeks.length) {
+        let selectedKey = state.productivitySelectedWeek;
+        if (!selectedKey || !weekData.has(selectedKey)) {
+          selectedKey = weeks[0].key;
+        }
+        const index = Math.max(0, weeks.findIndex(week => week.key === selectedKey));
+        state.productivityWeekIndex = index;
+        state.productivitySelectedWeek = weeks[index]?.key || null;
+      } else {
+        state.productivityWeekIndex = 0;
+        state.productivitySelectedWeek = null;
       }
 
       renderProductivityWeekFilters();
@@ -467,6 +552,7 @@ window.Modules.pessoal = (() => {
       state.productivityWeekData = new Map();
       state.productivityWeeks = [];
       state.productivitySelectedWeek = null;
+      state.productivityWeekIndex = 0;
       if (weekBox) {
         weekBox.innerHTML = '';
         weekBox.classList.add('hidden');
