@@ -251,12 +251,23 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .week-selector button {
   flex: 0 0 auto;
   font-family: var(--mono);
+  white-space: nowrap; /* (patch) evita quebra do texto nos botões de semana */
 }
 
-.week-selector button.active {
-  background: var(--brand);
-  border-color: var(--brand);
-  color: #fff;
+/* (patch) novos auxiliares de info do seletor de semana */
+.week-selector-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.week-selector-label {
+  font-family: var(--mono);
+}
+
+.week-selector-count {
+  font-size: 12px;
 }
 
 .analysis-col { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
