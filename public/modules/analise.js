@@ -622,16 +622,72 @@ window.Modules.analise = (() => {
     // (mantido conforme seu arquivo; se não houver, ignora)
   }
 
+  // === PATCH: ações da checklist aprovada (Abrir + PDF) ===
   function createApprovedChecklistActions(row) {
     const container = document.createElement('div');
-    const btn = document.createElement('button');
-    btn.textContent = 'Abrir';
-    btn.addEventListener('click', async () => {
+    container.className = 'actions';
+
+    const btnOpen = document.createElement('button');
+    btnOpen.type = 'button';
+    btnOpen.textContent = 'Abrir';
+    btnOpen.addEventListener('click', async (ev) => {
+      ev.preventDefault();
       await openChecklistFromApproved(row);
     });
-    container.appendChild(btn);
+    container.appendChild(btnOpen);
+
+    const btnPdf = document.createElement('button');
+    btnPdf.type = 'button';
+    btnPdf.textContent = 'PDF';
+    btnPdf.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      await openApprovedChecklistPDF(row);
+    });
+    container.appendChild(btnPdf);
+
     return container;
   }
+
+  async function openApprovedChecklistPDF(templateSummary) {
+    const win = window.open('', '_blank');
+    if (win) win.opener = null;
+    try {
+      const templateId = templateSummary?.id;
+      if (!templateId) throw new Error('Checklist aprovada não encontrada.');
+
+      const template = await loadTemplateById(templateId);
+      if (!template) throw new Error('Checklist aprovada não encontrada.');
+
+      const render = window.Modules?.checklists?.pdf?.renderChecklistPDF
+        || window.Modules?.checklistPDF?.renderChecklistPDF;
+      if (typeof render !== 'function') {
+        throw new Error('Utilitário de PDF indisponível.');
+      }
+
+      const approvedAt = templateSummary?.approved_at
+        ? Utils.fmtDateTime(templateSummary.approved_at)
+        : '';
+      const approvedBy = templateSummary?.approved_by_display
+        || templateSummary?.approved_by
+        || '';
+
+      const response = {
+        checklist_templates: template
+      };
+
+      // Chamada conforme patch enviado (assinatura a 2 argumentos)
+      const url = render(response, {
+        mode: 'approved',
+        approvedAt: approvedAt || '—',
+        approvedBy: approvedBy || '—'
+      });
+      if (win) win.location.href = url;
+    } catch (err) {
+      if (win) win.close();
+      alert(err.message || String(err));
+    }
+  }
+  // === FIM DO PATCH ===
 
   async function loadApprovedChecklists() {
     try {
@@ -674,7 +730,7 @@ window.Modules.analise = (() => {
         return;
       }
 
-      // ==== PATCH: resolver "Aprovada por" com lookup em profiles ====
+      // ==== PATCH anterior (mantido): resolver "Aprovada por" com lookup em profiles ====
       const approverIds = Array.from(new Set(
         latestRows
           .map(row => row?.approved_by)
