@@ -1,99 +1,208 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <base href="/" />
-  <title>Painel DO-AGA</title>
-  <link rel="stylesheet" href="./styles.css" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
-  <!-- App config -->
-  <script src="./config.js" defer></script>
-  <!-- Supabase library -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
-  <!-- Inicialização do cliente Supabase -->
-  <script src="./supabaseClient.js" defer></script>
-  <!-- Sessão pronta antes de inicializar a página -->
-  <script src="./auth-ready.js" defer></script>
-  <script src="./utils.js" defer></script>
-  <!-- Guardas de segurança: não alteram visual -->
-  <script src="./safety-guards.js" defer></script>
-  <script src="./mpa.js" defer></script>
-  <script src="./modules/adhel.js" defer></script>
-</head>
-<body data-route="adhel">
-  <div id="app" class="vh">
-    <header class="bar">
-      <div class="brand">
-        <span class="logo">■</span>
-        <strong>Painel DO-AGA</strong>
-        <small class="build" id="buildInfo">build: carregando…</small>
-      </div>
-      <nav id="topNav" class="nav hidden">
-        <button data-route="dashboard">Início</button>
-        <button data-route="processos">Processos</button>
-        <button data-route="prazos">Prazos</button>
-        <button data-route="modelos">Modelos</button>
-        <button data-route="analise">Checklists</button>
-        <button data-route="adhel" class="active">AD/HEL</button>
-        <button data-route="pessoal">Pessoal</button>
-        <button data-route="admin" id="btnAdmin" class="hidden">Administração</button>
-      </nav>
-      <div id="userBox" class="user hidden">
-        <span id="userName"></span>
-        <small id="userRole" class="muted"></small>
-        <button id="btnLogout" class="danger" type="button">Sair</button>
-      </div>
-    </header>
+// public/modules/adhel.js
+// Módulo AD/HEL (somente leitura/listagem)
+// - Não altera visual (cores, layout etc.); apenas injeta <tr> em um <tbody id="adhelTableBody"> já existente.
+// - Lê a tabela public.adhel_airfields com os campos: id, tipo, oaci, ciad, name, municipio, uf
+// - Ordena por oaci (ASC) e, em seguida, ciad (ASC).
+// - Expõe API: init(), load(), refresh(), setFilter({ search, uf, tipo })
 
-    <main class="main">
-      <section id="viewAdhel" class="view">
-        <div class="columns">
-          <div class="card">
-            <h2>AD/HEL <small class="muted">(registros: <span id="adhelCount">0</span>)</small></h2>
+window.Modules = window.Modules || {};
+window.Modules.adhel = (() => {
+  // --------------------------
+  // Configurações e utilitários
+  // --------------------------
+  const STATE = {
+    isLoading: false,
+    data: [],
+    filters: {
+      search: '',   // busca por OACI, CIAD, Nome ou Município (contém)
+      uf: '',       // filtro exato por UF (2 letras)
+      tipo: ''      // filtro exato por tipo (por ex.: "Aeródromo", "Heliponto")
+    }
+  };
 
-            <!-- Tabela de listagem: o módulo adhel.js apenas preenche o tbody abaixo -->
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>OACI</th>
-                    <th>CIAD</th>
-                    <th>Nome</th>
-                    <th>Município</th>
-                    <th>UF</th>
-                    <th>Tipo</th>
-                  </tr>
-                </thead>
-                <tbody id="adhelTableBody">
-                  <!-- Linhas injetadas por Modules.adhel -->
-                </tbody>
-              </table>
-            </div>
+  // Seletores esperados (não criamos elementos novos para não mudar o visual):
+  // - Um <tbody id="adhelTableBody"> onde as linhas serão inseridas
+  // - (Opcional) Um elemento com id="adhelCount" para mostramos a quantidade (se existir)
+  const SELECTORS = {
+    tbodyId: 'adhelTableBody',
+    countId: 'adhelCount'
+  };
 
-            <!-- Observação: nenhum estilo foi alterado; apenas adicionamos a estrutura mínima da tabela. -->
-          </div>
-        </div>
-      </section>
-    </main>
+  function getSupabaseClient() {
+    // Procuramos o cliente conforme seu projeto (supabaseClient.js)
+    // Sem criar nada novo; se não achar, avisamos claramente e abortamos o carregamento.
+    const sb =
+      // projetos anteriores costumam expor window.sb
+      (typeof window.sb !== 'undefined' ? window.sb : null)
+      // em alguns casos, guardam em window.supabaseClient
+      || (typeof window.supabaseClient !== 'undefined' ? window.supabaseClient : null)
+      // fallback inseguro: se alguém exportou client como window.supabaseClient?.sb
+      || (window.supabase && window.supabase._client) || null;
 
-    <footer class="bar foot">
-      <span>Retro-UI</span>
-      <span>© DO-AGA</span>
-      <span id="footBuild"></span>
-    </footer>
-  </div>
+    if (!sb || typeof sb.from !== 'function') {
+      console.warn('[AD/HEL] Cliente Supabase não encontrado. Verifique se supabaseClient.js expõe window.sb.');
+      return null;
+    }
+    return sb;
+  }
 
-  <!-- Preenche build no cabeçalho e rodapé -->
-  <script defer src="./build-info-client.js"></script>
+  function getEl(id) {
+    return document.getElementById(id);
+  }
 
-  <!-- Inicialização do módulo (sem alterar visual) -->
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      if (window?.Modules?.adhel?.init) {
-        window.Modules.adhel.init();
+  function textOrDash(v) {
+    if (v === null || v === undefined || v === '') return '—';
+    return String(v);
+  }
+
+  function includesInsensitive(hay, needle) {
+    if (!needle) return true;
+    if (hay == null) return false;
+    return String(hay).toLowerCase().includes(String(needle).toLowerCase());
+  }
+
+  // --------------------------
+  // Consulta ao Supabase
+  // --------------------------
+  async function fetchAllFromDB() {
+    const sb = getSupabaseClient();
+    if (!sb) return [];
+
+    // SELECT padrão (sem alterar visual, apenas dados)
+    const baseSelect = 'id,tipo,oaci,ciad,name,municipio,uf';
+
+    // Como o conjunto é pequeno (~centenas), buscamos em uma tacada só com um limite alto.
+    // Ordenação oaci ASC, depois ciad ASC.
+    const { data, error } = await sb
+      .from('adhel_airfields')
+      .select(baseSelect)
+      .order('oaci', { ascending: true, nullsFirst: true })
+      .order('ciad', { ascending: true, nullsFirst: true })
+      .limit(5000); // margem
+
+    if (error) {
+      console.error('[AD/HEL] Erro ao consultar adhel_airfields:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  // --------------------------
+  // Filtro (em memória, sem alterar UI)
+  // --------------------------
+  function applyFilters(rows) {
+    const { search, uf, tipo } = STATE.filters;
+    return rows.filter(r => {
+      // UF e Tipo: filtros exatos se fornecidos
+      if (uf && String(r.uf || '').toUpperCase() !== String(uf).toUpperCase()) return false;
+      if (tipo && String(r.tipo || '') !== String(tipo)) return false;
+
+      // Busca livre: em OACI, CIAD, Nome e Município (contém, case-insensitive)
+      if (search) {
+        const ok =
+          includesInsensitive(r.oaci, search) ||
+          includesInsensitive(r.ciad, search) ||
+          includesInsensitive(r.name, search) ||
+          includesInsensitive(r.municipio, search);
+        if (!ok) return false;
       }
+      return true;
     });
-  </script>
-</body>
-</html>
+  }
+
+  // --------------------------
+  // Renderização (apenas TR/TD no tbody existente)
+  // --------------------------
+  function renderTable(rows) {
+    const tbody = getEl(SELECTORS.tbodyId);
+    if (!tbody) {
+      // Não criamos nada novo para não alterar visual.
+      console.warn(`[AD/HEL] <tbody id="${SELECTORS.tbodyId}"> não encontrado. O módulo não alterará o layout.`);
+      return;
+    }
+
+    // Limpa conteúdo atual
+    while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+    // Monta as linhas (colunas: OACI, CIAD, Nome, Município, UF, Tipo)
+    const frag = document.createDocumentFragment();
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+
+      const tdOaci = document.createElement('td');
+      tdOaci.textContent = textOrDash(r.oaci);
+      tr.appendChild(tdOaci);
+
+      const tdCiad = document.createElement('td');
+      tdCiad.textContent = textOrDash(r.ciad);
+      tr.appendChild(tdCiad);
+
+      const tdName = document.createElement('td');
+      tdName.textContent = textOrDash(r.name);
+      tr.appendChild(tdName);
+
+      const tdMunicipio = document.createElement('td');
+      tdMunicipio.textContent = textOrDash(r.municipio);
+      tr.appendChild(tdMunicipio);
+
+      const tdUf = document.createElement('td');
+      tdUf.textContent = textOrDash(r.uf);
+      tr.appendChild(tdUf);
+
+      const tdTipo = document.createElement('td');
+      tdTipo.textContent = textOrDash(r.tipo);
+      tr.appendChild(tdTipo);
+
+      frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+
+    // (Opcional) contador, se existir
+    const countEl = getEl(SELECTORS.countId);
+    if (countEl) {
+      countEl.textContent = String(rows.length);
+    }
+  }
+
+  // --------------------------
+  // Fluxo público
+  // --------------------------
+  async function load() {
+    if (STATE.isLoading) return;
+    STATE.isLoading = true;
+    try {
+      const all = await fetchAllFromDB();
+      STATE.data = Array.isArray(all) ? all : [];
+      const filtered = applyFilters(STATE.data);
+      renderTable(filtered);
+    } finally {
+      STATE.isLoading = false;
+    }
+  }
+
+  function refresh() {
+    // Re-aplica filtros ao dataset já carregado (não reconsulta)
+    const filtered = applyFilters(STATE.data);
+    renderTable(filtered);
+  }
+
+  function setFilter({ search, uf, tipo } = {}) {
+    if (typeof search !== 'undefined') STATE.filters.search = search || '';
+    if (typeof uf !== 'undefined') STATE.filters.uf = uf || '';
+    if (typeof tipo !== 'undefined') STATE.filters.tipo = tipo || '';
+    refresh();
+  }
+
+  async function init() {
+    // Não criamos elementos; apenas usamos o que já existe.
+    await load();
+  }
+
+  // API pública
+  return {
+    init,
+    load,
+    refresh,
+    setFilter
+  };
+})();
