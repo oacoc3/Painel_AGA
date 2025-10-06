@@ -762,9 +762,12 @@ window.Modules.analise = (() => {
     }
 
     if (!pData) {
+      const payload = { nup };
+      if (u?.id) payload.created_by = u.id;
+
       const { data, error } = await sb
         .from('processes')
-        .insert({ nup: nup })
+        .insert(payload)
         .select('id')
         .single();
       if (error) {
