@@ -97,6 +97,105 @@ window.Modules.processos = (() => {
     ['COMGAP', 90]
   ]);
 
+
+  const ANALISTA_OACO_ROLE = 'Analista OACO';
+  let ANALISTA_OACO_CACHE = null;
+  let ANALISTA_OACO_PROMISE = null;
+  const ANALISTA_OACO_MAP = new Map();
+
+  function formatAnalistaOacoLabel(profile) {
+    if (!profile) return '';
+    const name = profile.name || '';
+    const email = profile.email || '';
+    if (name && email && email !== name) return `${name} — ${email}`;
+    return name || email || '';
+  }
+
+  async function fetchAnalistaOacoProfiles() {
+    if (ANALISTA_OACO_CACHE) return ANALISTA_OACO_CACHE;
+    if (ANALISTA_OACO_PROMISE) return ANALISTA_OACO_PROMISE;
+    ANALISTA_OACO_PROMISE = (async () => {
+      try {
+        const { data, error } = await sb.rpc('admin_list_profiles');
+        if (error) throw error;
+        const list = (data || [])
+          .filter(item => String(item?.role || '').toLowerCase() === ANALISTA_OACO_ROLE.toLowerCase())
+          .map(item => ({
+            id: item.id,
+            name: item.name || '',
+            email: item.email || '',
+            role: item.role || ''
+          }))
+          .sort((a, b) => {
+            const aKey = (a.name || a.email || '').toLocaleLowerCase('pt-BR');
+            const bKey = (b.name || b.email || '').toLocaleLowerCase('pt-BR');
+            return aKey.localeCompare(bKey, 'pt-BR');
+          });
+        ANALISTA_OACO_MAP.clear();
+        list.forEach(profile => {
+          if (profile?.id) ANALISTA_OACO_MAP.set(profile.id, profile);
+        });
+        ANALISTA_OACO_CACHE = list;
+        return list;
+      } catch (err) {
+        console.error('[processos] Falha ao carregar Analistas OACO:', err);
+        ANALISTA_OACO_CACHE = [];
+        throw err;
+      } finally {
+        ANALISTA_OACO_PROMISE = null;
+      }
+    })();
+    return ANALISTA_OACO_PROMISE;
+  }
+
+  async function ensureRevOacoAnalystOptions(dlg) {
+    if (!dlg) return;
+    const extras = dlg.querySelector('#stRevExtras');
+    if (!extras) return;
+    const selects = [
+      extras.querySelector('#stRevDocAnalyst'),
+      extras.querySelector('#stRevNotifAnalyst')
+    ].filter(Boolean);
+    if (!selects.length) return;
+    const alreadyReady = selects.every(select => select.dataset.ready === 'true');
+    const currentlyLoading = selects.some(select => select.dataset.loading === 'true');
+    if (alreadyReady || currentlyLoading) return;
+    selects.forEach(select => {
+      select.dataset.loading = 'true';
+      select.innerHTML = '<option value="">Carregando analistas…</option>';
+      select.disabled = true;
+    });
+    try {
+      const list = await fetchAnalistaOacoProfiles();
+      if (list.length) {
+        const options = ['<option value="">Selecione…</option>']
+          .concat(list.map(item => `<option value="${item.id}">${formatAnalistaOacoLabel(item)}</option>`))
+          .join('');
+        selects.forEach(select => {
+          select.dataset.loading = 'false';
+          select.dataset.ready = 'true';
+          select.disabled = false;
+          select.innerHTML = options;
+        });
+      } else {
+        selects.forEach(select => {
+          select.dataset.loading = 'false';
+          select.dataset.ready = 'true';
+          select.disabled = true;
+          select.innerHTML = '<option value="">Nenhum Analista OACO cadastrado</option>';
+        });
+      }
+    } catch (err) {
+      selects.forEach(select => {
+        select.dataset.loading = 'false';
+        delete select.dataset.ready;
+        select.disabled = true;
+        select.innerHTML = '<option value="">Falha ao carregar analistas</option>';
+      });
+      console.error('[processos] Não foi possível preparar lista de Analistas OACO:', err);
+    }
+  }
+
   // Cache de municípios (IBGE)
   let MUNICIPALITY_CACHE = null;
   let MUNICIPALITY_FETCH_PROMISE = null;
@@ -554,6 +653,23 @@ window.Modules.processos = (() => {
           <select id="stNovo">${STATUS_OPTIONS}</select>
         </label>
         <label>Desde <input type="datetime-local" id="stDesde" required></label>
+        <fieldset id="stRevExtras" class="hidden">
+          <legend>Revisão OACO</legend>
+          <label>Responsável pela análise documental
+            <select id="stRevDocAnalyst"></select>
+          </label>
+          <label>
+            <input type="checkbox" id="stRevDocReview">
+            Revisar análise
+          </label>
+          <label>Elaborador(a) da notificação
+            <select id="stRevNotifAnalyst"></select>
+          </label>
+          <label>
+            <input type="checkbox" id="stRevNotifReview">
+            Revisar notificação
+          </label>
+        </fieldset>
         <menu>
           <button type="button" id="stFechar">Fechar</button>
           <button id="stSalvar" type="button">Salvar</button>
@@ -564,6 +680,30 @@ window.Modules.processos = (() => {
     if (sel) sel.value = PROCESS_STATUSES.includes(curStatus) ? curStatus : 'ANATEC-PRE';
     const dt = dlg.querySelector('#stDesde');
     if (dt && curDate) dt.value = U.toDateTimeLocalValue(curDate);
+    const extrasBox = dlg.querySelector('#stRevExtras');
+    const docSelect = extrasBox?.querySelector('#stRevDocAnalyst');
+    const notifSelect = extrasBox?.querySelector('#stRevNotifAnalyst');
+    const docReviewCheck = extrasBox?.querySelector('#stRevDocReview');
+    const notifReviewCheck = extrasBox?.querySelector('#stRevNotifReview');
+
+    const toggleRevExtras = () => {
+      if (!extrasBox) return;
+      const show = (sel?.value || '') === 'REV-OACO';
+      if (show) {
+        extrasBox.classList.remove('hidden');
+        docSelect?.setAttribute('required', 'true');
+        notifSelect?.setAttribute('required', 'true');
+        ensureRevOacoAnalystOptions(dlg);
+      } else {
+        extrasBox.classList.add('hidden');
+        docSelect?.removeAttribute('required');
+        notifSelect?.removeAttribute('required');
+      }
+    };
+
+    sel?.addEventListener('change', toggleRevExtras);
+    toggleRevExtras();
+
     dlg.addEventListener('close', () => dlg.remove());
     dlg.querySelector('#stFechar')?.addEventListener('click', (ev) => {
       ev.preventDefault();
@@ -578,13 +718,79 @@ window.Modules.processos = (() => {
         dt?.reportValidity?.();
         return;
       }
+      const newStatus = sel?.value || 'ANATEC-PRE';
+      const statusSince = new Date(dtValue).toISOString();
+      if (newStatus === 'REV-OACO') {
+        if (docSelect?.dataset.loading === 'true' || notifSelect?.dataset.loading === 'true') {
+          alert('Aguarde o carregamento da lista de Analistas OACO.');
+          return;
+        }
+        if (!docSelect?.dataset.ready || !notifSelect?.dataset.ready) {
+          alert('Não foi possível carregar a lista de Analistas OACO.');
+          return;
+        }
+        if (docSelect?.disabled || notifSelect?.disabled) {
+          alert('Nenhum Analista OACO cadastrado. Atualize os cadastros antes de registrar o status.');
+          return;
+        }
+        if (!docSelect?.value) {
+          alert('Selecione o responsável pela análise documental.');
+          docSelect?.focus();
+          docSelect?.reportValidity?.();
+          return;
+        }
+        if (!notifSelect?.value) {
+          alert('Selecione o(a) elaborador(a) da notificação.');
+          notifSelect?.focus();
+          notifSelect?.reportValidity?.();
+          return;
+        }
+      }
       const payload = {
-        status: sel?.value || 'ANATEC-PRE',
-        status_since: new Date(dtValue).toISOString()
+
       };
+      let historyDetails = null;
+      if (newStatus === 'REV-OACO') {
+        const docId = docSelect?.value || '';
+        const notifId = notifSelect?.value || '';
+        const docProfile = docId ? (ANALISTA_OACO_MAP.get(docId) || {}) : null;
+        const notifProfile = notifId ? (ANALISTA_OACO_MAP.get(notifId) || {}) : null;
+        const docLabel = docSelect?.selectedOptions?.[0]?.textContent?.trim() || '';
+        const notifLabel = notifSelect?.selectedOptions?.[0]?.textContent?.trim() || '';
+        historyDetails = {
+          status: 'REV-OACO',
+          status_since: statusSince,
+          document_analysis: docId
+            ? {
+                analyst_id: docId,
+                analyst_name: docProfile?.name || docLabel,
+                analyst_email: docProfile?.email || '',
+                analyst_role: docProfile?.role || ANALISTA_OACO_ROLE,
+                needs_review: !!docReviewCheck?.checked
+              }
+            : null,
+          notification: notifId
+            ? {
+                analyst_id: notifId,
+                analyst_name: notifProfile?.name || notifLabel,
+                analyst_email: notifProfile?.email || '',
+                analyst_role: notifProfile?.role || ANALISTA_OACO_ROLE,
+                needs_review: !!notifReviewCheck?.checked
+              }
+            : null
+        };
+      }
       try {
         const { error } = await sb.from('processes').update(payload).eq('id', id);
         if (error) throw error;
+        if (historyDetails) {
+          try {
+            const actingUser = await getUser();
+            await insertProcessHistoryRecord(id, 'Status REV-OACO registrado', historyDetails, actingUser);
+          } catch (historyErr) {
+            console.error('Falha ao registrar histórico do status REV-OACO', historyErr);
+          }
+        }
         dlg.close();
         await loadProcessList();
       } catch (e) {
