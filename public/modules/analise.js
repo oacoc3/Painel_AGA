@@ -117,7 +117,7 @@ window.Modules.analise = (() => {
   }
 
   function nupSanitize(v) {
-    return (v || '').replace(/\D+/g, '').replace(/(\d{6})(\d{4})(\d{2})/, '$1/$2-$3').slice(0, 12);
+    return (v || '').replace(/\D+/g, '').replace(/(\d{6})(\d{4})(\d{2})/, '$1/$2-$3').slice(0, 14);
   }
 
   function setInputValue(id, v) {
