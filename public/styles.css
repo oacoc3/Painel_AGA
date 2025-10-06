@@ -241,6 +241,24 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   width: 100%;
 }
 
+.week-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.week-selector button {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+}
+
+.week-selector button.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
 .analysis-col { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
 
 /* Grade de 3 colunas (base) */
