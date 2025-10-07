@@ -3,7 +3,7 @@
 // - Não altera visual (cores, layout etc.); apenas injeta <tr> em um <tbody id="adhelTableBody"> já existente.
 // - Lê a tabela public.adhel_airfields com os campos: id, tipo, oaci, ciad, name, municipio, uf
 // - Ordena por oaci (ASC) e, em seguida, ciad (ASC).
-// - Expõe API: init(), load(), refresh(), setFilter({ search, uf, tipo })
+// - Expõe API: init(), load(), refresh(), setFilter({ nup, oaci, ciad, name })
 
 window.Modules = window.Modules || {};
 window.Modules.adhel = (() => {
@@ -14,18 +14,33 @@ window.Modules.adhel = (() => {
     isLoading: false,
     data: [],
     filters: {
-      search: '',   // busca por OACI, CIAD, Nome ou Município (contém)
-      uf: '',       // filtro exato por UF (2 letras)
-      tipo: ''      // filtro exato por tipo (por ex.: "Aeródromo", "Heliponto")
-    }
+      nup: '',
+      oaci: '',
+      ciad: '',
+      name: ''
+    },
+    page: 1,
+    pageSize: 50
   };
 
   // Seletores esperados (não criamos elementos novos para não mudar o visual):
   // - Um <tbody id="adhelTableBody"> onde as linhas serão inseridas
-  // - (Opcional) Um elemento com id="adhelCount" para mostramos a quantidade (se existir)
+  // - (Opcional) Um elemento com id="adhelCount" para mostrarmos a quantidade (se existir)
+  // - (Opcional) Um contêiner com id="adhelList" para exibirmos a paginação
   const SELECTORS = {
     tbodyId: 'adhelTableBody',
-    countId: 'adhelCount'
+    countId: 'adhelCount',
+    listId: 'adhelList'
+  };
+
+  const FORM_IDS = {
+    formId: 'adhelSearchForm',
+    nup: 'adhelSearchNup',
+    oaci: 'adhelSearchOaci',
+    ciad: 'adhelSearchCiad',
+    name: 'adhelSearchName',
+    submit: 'adhelSearchSubmit',
+    clear: 'adhelSearchClear'
   };
 
   function getSupabaseClient() {
@@ -69,11 +84,11 @@ window.Modules.adhel = (() => {
     if (!sb) return [];
 
     // SELECT padrão (sem alterar visual, apenas dados)
-    const baseSelect = 'id,tipo,oaci,ciad,name,municipio,uf';
+    const baseSelect = 'id,tipo,oaci,ciad,name,municipio,uf,nup';
 
     // Como o conjunto é pequeno (~centenas), buscamos em uma tacada só com um limite alto.
     // Ordenação oaci ASC, depois ciad ASC.
-    const { data, error } = await sb
+    let { data, error } = await sb
       .from('adhel_airfields')
       .select(baseSelect)
       .order('oaci', { ascending: true, nullsFirst: true })
@@ -81,8 +96,23 @@ window.Modules.adhel = (() => {
       .limit(5000); // margem
 
     if (error) {
-      console.error('[AD/HEL] Erro ao consultar adhel_airfields:', error);
-      return [];
+      const columnMissing = typeof error?.message === 'string' && /column\s+"?nup"?/i.test(error.message);
+      if (columnMissing) {
+        const fallback = await sb
+          .from('adhel_airfields')
+          .select('id,tipo,oaci,ciad,name,municipio,uf')
+          .order('oaci', { ascending: true, nullsFirst: true })
+          .order('ciad', { ascending: true, nullsFirst: true })
+          .limit(5000);
+        if (fallback.error) {
+          console.error('[AD/HEL] Erro ao consultar adhel_airfields (fallback):', fallback.error);
+          return [];
+        }
+        data = fallback.data;
+      } else {
+        console.error('[AD/HEL] Erro ao consultar adhel_airfields:', error);
+        return [];
+      }
     }
     return data || [];
   }
@@ -91,21 +121,12 @@ window.Modules.adhel = (() => {
   // Filtro (em memória, sem alterar UI)
   // --------------------------
   function applyFilters(rows) {
-    const { search, uf, tipo } = STATE.filters;
+    const { nup, oaci, ciad, name } = STATE.filters;
     return rows.filter(r => {
-      // UF e Tipo: filtros exatos se fornecidos
-      if (uf && String(r.uf || '').toUpperCase() !== String(uf).toUpperCase()) return false;
-      if (tipo && String(r.tipo || '') !== String(tipo)) return false;
-
-      // Busca livre: em OACI, CIAD, Nome e Município (contém, case-insensitive)
-      if (search) {
-        const ok =
-          includesInsensitive(r.oaci, search) ||
-          includesInsensitive(r.ciad, search) ||
-          includesInsensitive(r.name, search) ||
-          includesInsensitive(r.municipio, search);
-        if (!ok) return false;
-      }
+      if (nup && !includesInsensitive(r.nup, nup)) return false;
+      if (oaci && !includesInsensitive(r.oaci, oaci)) return false;
+      if (ciad && !includesInsensitive(r.ciad, ciad)) return false;
+      if (name && !includesInsensitive(r.name, name)) return false;
       return true;
     });
   }
@@ -121,13 +142,27 @@ window.Modules.adhel = (() => {
       return;
     }
 
+    const totalRows = Array.isArray(rows) ? rows.length : 0;
+    const pageSize = Math.max(1, Number(STATE.pageSize) || 50);
+    const pagesTotal = Math.max(1, Math.ceil(totalRows / pageSize));
+    const safePage = Math.min(Math.max(1, STATE.page || 1), pagesTotal);
+    if (safePage !== STATE.page) {
+      STATE.page = safePage;
+    }
+    const start = (STATE.page - 1) * pageSize;
+    const visibleRows = rows.slice(start, start + pageSize);
+
     // Limpa conteúdo atual
     while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
 
-    // Monta as linhas (colunas: OACI, CIAD, Nome, Município, UF, Tipo)
+    // Monta as linhas (colunas: NUP, OACI, CIAD, Nome, Município, UF, Tipo)
     const frag = document.createDocumentFragment();
-    for (const r of rows) {
+    for (const r of visibleRows) {
       const tr = document.createElement('tr');
+
+      const tdNup = document.createElement('td');
+      tdNup.textContent = textOrDash(r.nup);
+      tr.appendChild(tdNup);
 
       const tdOaci = document.createElement('td');
       tdOaci.textContent = textOrDash(r.oaci);
@@ -160,8 +195,48 @@ window.Modules.adhel = (() => {
     // (Opcional) contador, se existir
     const countEl = getEl(SELECTORS.countId);
     if (countEl) {
-      countEl.textContent = String(rows.length);
+      countEl.textContent = String(totalRows);
     }
+
+    renderPagination({ page: STATE.page, pagesTotal, count: totalRows });
+  }
+
+  function renderPagination({ page, pagesTotal, count }) {
+    const listBox = getEl(SELECTORS.listId);
+    if (!listBox) return;
+
+    let pager = listBox.querySelector('.pager');
+    if (!pager) {
+      pager = document.createElement('div');
+      pager.className = 'pager';
+      listBox.insertBefore(pager, listBox.firstChild);
+    }
+
+    const disablePrev = page <= 1;
+    const disableNext = page >= pagesTotal;
+    pager.innerHTML = `
+      <div class="row" style="display:flex;gap:.5rem;align-items:center;justify-content:flex-end;margin-bottom:.5rem;">
+        <button type="button" id="adhelFirstPage" ${disablePrev ? 'disabled' : ''}>&laquo;</button>
+        <button type="button" id="adhelPrevPage" ${disablePrev ? 'disabled' : ''}>&lsaquo;</button>
+        <span id="adhelPagerInfo">${page} / ${pagesTotal} (${count} itens)</span>
+        <button type="button" id="adhelNextPage" ${disableNext ? 'disabled' : ''}>&rsaquo;</button>
+        <button type="button" id="adhelLastPage" ${disableNext ? 'disabled' : ''}>&raquo;</button>
+      </div>`;
+
+    pager.querySelector('#adhelFirstPage')?.addEventListener('click', () => setPage(1));
+    pager.querySelector('#adhelPrevPage')?.addEventListener('click', () => setPage(page - 1));
+    pager.querySelector('#adhelNextPage')?.addEventListener('click', () => setPage(page + 1));
+    pager.querySelector('#adhelLastPage')?.addEventListener('click', () => setPage(pagesTotal));
+  }
+
+  function setPage(page) {
+    const pageSize = Math.max(1, Number(STATE.pageSize) || 50);
+    const totalRows = applyFilters(STATE.data).length;
+    const pagesTotal = Math.max(1, Math.ceil(totalRows / pageSize));
+    const nextPage = Math.min(Math.max(1, page), pagesTotal);
+    if (nextPage === STATE.page) return;
+    STATE.page = nextPage;
+    refresh();
   }
 
   // --------------------------
@@ -173,8 +248,8 @@ window.Modules.adhel = (() => {
     try {
       const all = await fetchAllFromDB();
       STATE.data = Array.isArray(all) ? all : [];
-      const filtered = applyFilters(STATE.data);
-      renderTable(filtered);
+      STATE.page = 1;
+      refresh();
     } finally {
       STATE.isLoading = false;
     }
@@ -186,15 +261,56 @@ window.Modules.adhel = (() => {
     renderTable(filtered);
   }
 
-  function setFilter({ search, uf, tipo } = {}) {
-    if (typeof search !== 'undefined') STATE.filters.search = search || '';
-    if (typeof uf !== 'undefined') STATE.filters.uf = uf || '';
-    if (typeof tipo !== 'undefined') STATE.filters.tipo = tipo || '';
+  function setFilter({ nup, oaci, ciad, name } = {}) {
+    if (typeof nup !== 'undefined') STATE.filters.nup = nup || '';
+    if (typeof oaci !== 'undefined') STATE.filters.oaci = oaci || '';
+    if (typeof ciad !== 'undefined') STATE.filters.ciad = ciad || '';
+    if (typeof name !== 'undefined') STATE.filters.name = name || '';
+    STATE.page = 1;
     refresh();
+  }
+
+  function bindSearchForm() {
+    const form = getEl(FORM_IDS.formId);
+    if (!form) return;
+
+    const nupInput = getEl(FORM_IDS.nup);
+    if (nupInput && window.Utils?.bindNUPMask) {
+      window.Utils.bindNUPMask(nupInput);
+    }
+
+    const handleSubmit = event => {
+      if (event) event.preventDefault();
+      setFilter({
+        nup: getInputValue(FORM_IDS.nup),
+        oaci: getInputValue(FORM_IDS.oaci),
+        ciad: getInputValue(FORM_IDS.ciad),
+        name: getInputValue(FORM_IDS.name)
+      });
+    };
+
+    form.addEventListener('submit', handleSubmit);
+    getEl(FORM_IDS.submit)?.addEventListener('click', handleSubmit);
+
+    getEl(FORM_IDS.clear)?.addEventListener('click', event => {
+      if (event) event.preventDefault();
+      ['nup', 'oaci', 'ciad', 'name'].forEach(key => {
+        const input = getEl(FORM_IDS[key]);
+        if (input) input.value = '';
+      });
+      setFilter({ nup: '', oaci: '', ciad: '', name: '' });
+    });
+  }
+
+  function getInputValue(id) {
+    const elInput = getEl(id);
+    if (!elInput) return '';
+    return (elInput.value || '').trim();
   }
 
   async function init() {
     // Não criamos elementos; apenas usamos o que já existe.
+    bindSearchForm();
     await load();
   }
 
