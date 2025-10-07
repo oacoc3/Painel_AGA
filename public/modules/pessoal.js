@@ -515,3 +515,398 @@ window.Modules.pessoal = (() => {
           return;
         }
         const { error } = await sb
+          .from('user_unavailabilities')
+          .update(payload)
+          .eq('id', editingId);
+        if (error) throw error;
+        Utils.setMsg(msgId, 'Indisponibilidade atualizada.');
+      } else {
+        const { error } = await sb.from('user_unavailabilities').insert(payload);
+        if (error) throw error;
+
+        try {
+          await window.AppAudit?.recordEvent?.('unavailability_created', 'pessoal', {
+            metadata: {
+              starts_at: payload.starts_at,
+              ends_at: payload.ends_at
+            }
+          });
+        } catch (auditErr) {
+          console.warn('[pessoal] Falha ao registrar auditoria de indisponibilidade:', auditErr);
+        }
+
+        Utils.setMsg(msgId, 'Indisponibilidade registrada.');
+      }
+      const dlg = el('unavailabilityDialog');
+      if (dlg?.open) dlg.close();
+      resetUnavailabilityForm({ restrictToSelf: !isAdminRole() && !!getCurrentProfileId() });
+      await loadUnavailability();
+    } catch (err) {
+      console.error('[pessoal] Falha ao salvar indisponibilidade:', err);
+      Utils.setMsg(msgId, err?.message || 'Falha ao salvar indisponibilidade.', true);
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  // >>> Patch: filtros/tabela por semana
+  function renderProductivityWeekFilters() {
+    const container = el('productivityWeekFilters');
+    if (!container) return;
+    container.innerHTML = '';
+    const weeks = state.productivityWeeks || [];
+    if (!weeks.length) {
+      container.classList.add('hidden');
+      return;
+    }
+
+    const maxIndex = weeks.length - 1;
+    let currentIndex = state.productivityWeekIndex ?? 0;
+    if (currentIndex < 0) currentIndex = 0;
+    if (currentIndex > maxIndex) currentIndex = maxIndex;
+    state.productivityWeekIndex = currentIndex;
+    const currentWeek = weeks[currentIndex];
+    state.productivitySelectedWeek = currentWeek?.key || null;
+
+    container.classList.remove('hidden');
+    container.setAttribute('role', 'navigation');
+
+    const prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.textContent = '‹ Semana anterior';
+    prevBtn.className = 'week-nav-btn';
+    prevBtn.disabled = currentIndex <= 0;
+    prevBtn.addEventListener('click', () => setProductivityWeekIndex(currentIndex - 1));
+    container.appendChild(prevBtn);
+
+    const info = document.createElement('div');
+    info.className = 'week-selector-info';
+
+    const label = document.createElement('strong');
+    label.className = 'week-selector-label';
+    label.textContent = formatWeekLabel(currentWeek);
+    info.appendChild(label);
+
+    const counter = document.createElement('span');
+    counter.className = 'week-selector-count muted';
+    counter.textContent = `${currentIndex + 1} de ${weeks.length}`;
+    info.appendChild(counter);
+
+    container.appendChild(info);
+
+    const nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.textContent = 'Semana seguinte ›';
+    nextBtn.className = 'week-nav-btn';
+    nextBtn.disabled = currentIndex >= maxIndex;
+    nextBtn.addEventListener('click', () => setProductivityWeekIndex(currentIndex + 1));
+    container.appendChild(nextBtn);
+  }
+
+  function renderProductivityTable() {
+    const msgId = 'productivityMsg';
+    const tableId = 'productivityList';
+    const weekKey = state.productivitySelectedWeek;
+
+    if (!state.productivityProfiles.length) {
+      Utils.renderTable(tableId, PRODUCTIVITY_COLUMNS, []);
+      Utils.setMsg(msgId, 'Nenhum Analista OACO cadastrado.');
+      return;
+    }
+
+    const entry = weekKey ? state.productivityWeekData.get(weekKey) : null;
+    const rows = state.productivityProfiles.map(profile => ({
+      id: profile.id,
+      name: profile.name || '',
+      email: profile.email || '',
+      role: profile.role || '',
+      deleted_at: profile.deleted_at || null,
+      doc_no_review: entry?.docNoReview?.get(profile.id) || 0,
+      doc_with_review: entry?.docWithReview?.get(profile.id) || 0,
+      notif_no_review: entry?.notifNoReview?.get(profile.id) || 0,
+      notif_with_review: entry?.notifWithReview?.get(profile.id) || 0
+    }));
+
+    const hasData = rows.some(row =>
+      row.doc_no_review || row.doc_with_review || row.notif_no_review || row.notif_with_review
+    );
+
+    Utils.renderTable(tableId, PRODUCTIVITY_COLUMNS, rows);
+
+    if (!entry) {
+      Utils.setMsg(msgId, 'Nenhum dado de produtividade encontrado.');
+    } else {
+      Utils.setMsg(msgId, hasData ? '' : 'Nenhum registro de produtividade na semana selecionada.');
+    }
+  }
+
+  function setProductivityWeekIndex(nextIndex) {
+    const weeks = state.productivityWeeks || [];
+    if (!weeks.length) return;
+    const maxIndex = weeks.length - 1;
+    const clampedIndex = Math.max(0, Math.min(nextIndex, maxIndex));
+    if (state.productivityWeekIndex === clampedIndex) return;
+    state.productivityWeekIndex = clampedIndex;
+    state.productivitySelectedWeek = weeks[clampedIndex]?.key || null;
+    renderProductivityWeekFilters();
+    renderProductivityTable();
+  }
+
+  function setProductivityWeek(weekKey) {
+    if (!weekKey) return;
+    const weeks = state.productivityWeeks || [];
+    const index = weeks.findIndex(week => week.key === weekKey);
+    if (index === -1) return;
+    setProductivityWeekIndex(index);
+  }
+  // <<< Patch
+
+  async function loadProductivity() {
+    const msgId = 'productivityMsg';
+    const tableId = 'productivityList';
+    const weekBox = el('productivityWeekFilters');
+
+    Utils.setMsg(msgId, 'Carregando dados...');
+    Utils.renderTable(tableId, PRODUCTIVITY_COLUMNS, []);
+    if (weekBox) {
+      weekBox.innerHTML = '';
+      weekBox.classList.add('hidden');
+    }
+
+    try {
+      const profiles = await ensureProfiles();
+      registerProfiles(profiles);
+
+      const weekData = new Map();
+
+      // Considera somente Analista OACO dos perfis cadastrados
+      const baseProfiles = (profiles || [])
+        .filter(profile => profile?.id && isAnalistaOacoRole(profile.role));
+      const profileById = new Map(baseProfiles.map(profile => [profile.id, profile]));
+      const extraProfiles = new Map(); // Perfis que aparecem apenas no histórico
+
+      const registerHistoryProfile = (info) => {
+        if (!info?.analyst_id) return null;
+        const normalizedRole = info.analyst_role || ANALISTA_OACO_ROLE;
+        const profileInfo = {
+          id: info.analyst_id,
+          name: info.analyst_name || '',
+          email: info.analyst_email || '',
+          role: normalizedRole,
+          deleted_at: null
+        };
+        updateProfileMap(profileInfo);
+        if (!isAnalistaOacoRole(profileInfo.role)) return null;
+
+        if (profileById.has(profileInfo.id)) {
+          const current = profileById.get(profileInfo.id) || {};
+          profileById.set(profileInfo.id, {
+            ...current,
+            name: current.name || profileInfo.name,
+            email: current.email || profileInfo.email,
+            role: current.role || profileInfo.role,
+            deleted_at: current.deleted_at ?? profileInfo.deleted_at
+          });
+        } else {
+          extraProfiles.set(profileInfo.id, profileInfo);
+        }
+        return profileInfo;
+      };
+
+      // Busca histórico de ações "REV-OACO"
+      const { data: historyData, error: historyError } = await sb
+        .from('history')
+        .select('details')
+        .eq('action', REV_OACO_HISTORY_ACTION);
+      if (historyError) throw historyError;
+
+      (historyData || []).forEach(row => {
+        const details = normalizeHistoryDetails(row?.details);
+        if (!details) return;
+
+        const doc = details.document_analysis;
+        const notif = details.notification;
+
+        if (doc?.analyst_id) {
+          const profileInfo = registerHistoryProfile(doc);
+          const dateSource = doc?.performed_at || details.status_since;
+          const entry = ensureWeekEntry(weekData, dateSource);
+          if (profileInfo && entry) {
+            incrementProductivity(doc?.needs_review ? entry.docWithReview : entry.docNoReview, profileInfo.id);
+          }
+        }
+
+        if (notif?.analyst_id) {
+          const profileInfo = registerHistoryProfile(notif);
+          const dateSource = notif?.performed_at || details.status_since;
+          const entry = ensureWeekEntry(weekData, dateSource);
+          if (profileInfo && entry) {
+            incrementProductivity(notif?.needs_review ? entry.notifWithReview : entry.notifNoReview, profileInfo.id);
+          }
+        }
+      });
+
+      // Une os perfis que vieram apenas do histórico
+      extraProfiles.forEach((profile, id) => {
+        if (!profileById.has(id)) profileById.set(id, profile);
+      });
+
+      const combinedProfiles = Array.from(profileById.values())
+        .sort((a, b) => {
+          const aKey = (a.name || a.email || '').toLocaleLowerCase('pt-BR');
+          const bKey = (b.name || b.email || '').toLocaleLowerCase('pt-BR');
+          return aKey.localeCompare(bKey, 'pt-BR');
+        });
+
+      state.productivityProfiles = combinedProfiles;
+      state.productivityWeekData = weekData;
+
+      const weeks = buildContinuousWeeks(weekData);
+      state.productivityWeeks = weeks;
+
+      // Escolhe semana atual quando existir; senão, última semana disponível
+      if (weeks.length) {
+        let selectedKey = state.productivitySelectedWeek;
+        const currentWeekStart = getWeekStart(new Date());
+        const currentWeekKey = currentWeekStart ? formatWeekKey(currentWeekStart) : null;
+
+        if (!selectedKey || !weeks.some(week => week.key === selectedKey)) {
+          const currentIndex = currentWeekKey
+            ? weeks.findIndex(week => week.key === currentWeekKey)
+            : -1;
+          if (currentIndex !== -1) {
+            selectedKey = weeks[currentIndex].key;
+          } else {
+            selectedKey = weeks[weeks.length - 1].key;
+          }
+        }
+
+        let index = weeks.findIndex(week => week.key === selectedKey);
+        if (index === -1 && currentWeekKey) {
+          index = weeks.findIndex(week => week.key === currentWeekKey);
+        }
+        if (index === -1) index = weeks.length - 1;
+
+        state.productivityWeekIndex = Math.max(0, index);
+        state.productivitySelectedWeek = weeks[state.productivityWeekIndex]?.key || null;
+      } else {
+        state.productivityWeekIndex = 0;
+        state.productivitySelectedWeek = null;
+      }
+
+      renderProductivityWeekFilters();
+      renderProductivityTable();
+    } catch (err) {
+      console.error('[pessoal] Falha ao carregar produtividade:', err);
+      state.productivityProfiles = [];
+      state.productivityWeekData = new Map();
+      state.productivityWeeks = [];
+      state.productivitySelectedWeek = null;
+      state.productivityWeekIndex = 0;
+      const weekBox = el('productivityWeekFilters');
+      if (weekBox) {
+        weekBox.innerHTML = '';
+        weekBox.classList.add('hidden');
+      }
+      Utils.renderTable('productivityList', PRODUCTIVITY_COLUMNS, []);
+      Utils.setMsg('productivityMsg', err?.message || 'Falha ao carregar dados.', true);
+    }
+  }
+
+  async function loadUnavailability() {
+    const msgId = 'availabilityMsg';
+    const tableId = 'availabilityList';
+    Utils.setMsg(msgId, 'Carregando indisponibilidades...');
+    try {
+      const { data, error } = await sb
+        .from('user_unavailabilities')
+        // Mantém relacionamentos sem deleted_at
+        .select('id,profile_id,description,starts_at,ends_at,created_at,created_by, profile:profile_id (id,name,email,role), creator:created_by (id,name,email,role)')
+        .order('starts_at', { ascending: false });
+      if (error) throw error;
+
+      const rows = (data || []).map(item => {
+        if (item.profile) registerProfiles([item.profile]);
+        if (item.creator) registerProfiles([{ ...item.creator, id: item.created_by }]);
+        const userInfo = item.profile || getProfileInfo(item.profile_id) || { id: item.profile_id };
+        const creatorInfo = item.creator
+          ? { id: item.created_by, ...item.creator }
+          : (item.created_by ? { id: item.created_by, ...(getProfileInfo(item.created_by) || {}) } : null);
+        return {
+          id: item.id,
+          profile_id: item.profile_id,
+          description: item.description || '',
+          starts_at: item.starts_at,
+          ends_at: item.ends_at,
+          created_at: item.created_at,
+          created_by: item.created_by,
+          user: userInfo,
+          creator: creatorInfo
+        };
+      });
+
+      Utils.renderTable(tableId, AVAILABILITY_COLUMNS, rows);
+      Utils.setMsg(msgId, rows.length ? '' : 'Nenhuma indisponibilidade registrada.');
+    } catch (err) {
+      console.error('[pessoal] Falha ao carregar indisponibilidades:', err);
+      Utils.renderTable(tableId, AVAILABILITY_COLUMNS, []);
+      Utils.setMsg(msgId, err?.message || 'Falha ao carregar indisponibilidades.', true);
+    }
+  }
+
+  function bindEvents() {
+    el('btnNewUnavailability')?.addEventListener('click', ev => {
+      ev.preventDefault();
+      openUnavailabilityDialog();
+    });
+    el('btnSaveUnavailability')?.addEventListener('click', ev => {
+      ev.preventDefault();
+      submitUnavailability();
+    });
+    const dlg = el('unavailabilityDialog');
+    if (dlg) {
+      // >>> Patch aplicado: botão fechar do diálogo
+      const closeBtn = el('btnCloseUnavailability');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', ev => {
+          ev.preventDefault();
+          dlg.close();
+        });
+      }
+      // <<<
+      dlg.addEventListener('cancel', ev => {
+        ev.preventDefault();
+        dlg.close();
+      });
+      dlg.addEventListener('close', () => {
+        const restrictToSelf = !isAdminRole() && !!getCurrentProfileId();
+        resetUnavailabilityForm({
+          restrictToSelf,
+          selectedProfileId: restrictToSelf ? getCurrentProfileId() : null
+        });
+        const title = dlg.querySelector('h3');
+        if (title) title.textContent = 'Registrar indisponibilidade';
+        Utils.setMsg('unavailabilityFormMsg', '');
+      });
+    }
+  }
+
+  function init() {
+    bindEvents();
+    const restrictToSelf = !isAdminRole() && !!getCurrentProfileId();
+    resetUnavailabilityForm({
+      restrictToSelf,
+      selectedProfileId: restrictToSelf ? getCurrentProfileId() : null
+    });
+  }
+
+  async function load() {
+    await ensureProfiles();
+    await Promise.allSettled([
+      loadProductivity(),
+      loadUnavailability()
+    ]);
+  }
+
+  return { init, load };
+})();
