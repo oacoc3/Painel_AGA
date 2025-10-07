@@ -28,8 +28,11 @@ window.Modules.analise = (() => {
   const EXTRA_NC_CODE = () => (window.Modules?.checklistPDF?.EXTRA_NON_CONFORMITY_CODE || '__ck_extra_nc__');
 
   function getSupabaseClient() {
-    try { return window.supabase || window.sb || window.getSupabaseClient && window.getSupabaseClient(); }
-    catch (_) { return window.supabase || window.sb; }
+    try {
+      return window.supabase || window.sb || (window.getSupabaseClient && window.getSupabaseClient());
+    } catch (_) {
+      return window.supabase || window.sb;
+    }
   }
 
   // === Lock/session heartbeats ===
@@ -38,9 +41,6 @@ window.Modules.analise = (() => {
   const LOCK_TTL_SECONDS = 30 * 60;
   const LOCK_RENEW_EVERY_MS = 5 * 60 * 1000;
   const SESSION_HEARTBEAT_MS = 2 * 60 * 1000;
-  let approvedListRetryCount = 0;
-  const APPROVED_LIST_MAX_RETRIES = 10;
-  const APPROVED_LIST_RETRY_DELAY_MS = 500;
 
   async function acquireLock() {
     const sb = getSupabaseClient();
@@ -95,7 +95,10 @@ window.Modules.analise = (() => {
     stopLockHeartbeat();
     lockHeartbeatTimer = setInterval(renewLock, LOCK_RENEW_EVERY_MS);
   }
-  function stopLockHeartbeat() { clearInterval(lockHeartbeatTimer); lockHeartbeatTimer = null; }
+  function stopLockHeartbeat() {
+    clearInterval(lockHeartbeatTimer);
+    lockHeartbeatTimer = null;
+  }
 
   function startSessionHeartbeat() {
     stopSessionHeartbeat();
@@ -107,7 +110,10 @@ window.Modules.analise = (() => {
       } catch (_) {}
     }, SESSION_HEARTBEAT_MS);
   }
-  function stopSessionHeartbeat() { clearInterval(sessionHeartbeatTimer); sessionHeartbeatTimer = null; }
+  function stopSessionHeartbeat() {
+    clearInterval(sessionHeartbeatTimer);
+    sessionHeartbeatTimer = null;
+  }
 
   function tornarSomenteLeitura(readonly) {
     const btnFinal = document.getElementById('adBtnFinalizarChecklist');
@@ -115,7 +121,7 @@ window.Modules.analise = (() => {
     if (btnFinal) btnFinal.disabled = !!readonly || !currentTemplate;
     if (btnLimpar) btnLimpar.disabled = !!readonly || !currentTemplate;
     document.querySelectorAll('#ckContainer input,#ckContainer select,#ckContainer textarea')
-      .forEach(el => readonly ? el.setAttribute('disabled','disabled') : el.removeAttribute('disabled'));
+      .forEach(el => (readonly ? el.setAttribute('disabled', 'disabled') : el.removeAttribute('disabled')));
   }
 
   const SESSION_EXPIRED_MESSAGE = 'Sessão expirada. As respostas não foram enviadas ao servidor. Entre novamente e aguarde o salvamento automático antes de finalizar.';
@@ -158,17 +164,23 @@ window.Modules.analise = (() => {
     try {
       const raw = localStorage.getItem(key);
       return raw ? JSON.parse(raw) : null;
-    } catch (_) { return null; }
+    } catch (_) {
+      return null;
+    }
   }
 
   function writeLocalDraft(processId, templateId, data) {
     const key = getDraftKey(processId, templateId);
-    try { localStorage.setItem(key, JSON.stringify(data || null)); } catch (_) {}
+    try {
+      localStorage.setItem(key, JSON.stringify(data || null));
+    } catch (_) {}
   }
 
   function removeLocalDraft(processId, templateId) {
     const key = getDraftKey(processId, templateId);
-    try { localStorage.removeItem(key); } catch (_) {}
+    try {
+      localStorage.removeItem(key);
+    } catch (_) {}
   }
 
   function patchTemplateProcessType(template) {
@@ -210,7 +222,7 @@ window.Modules.analise = (() => {
 
         const group = document.createElement('div');
         group.className = 'ck-group';
-        ['Conforme','Não conforme','Não se aplica'].forEach(v => {
+        ['Conforme', 'Não conforme', 'Não se aplica'].forEach(v => {
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'ck-option';
@@ -331,7 +343,7 @@ window.Modules.analise = (() => {
     // Preferência: o mais recente entre remoto e local
     if (data && local) {
       const tRemote = new Date(data.updated_at).getTime();
-      const tLocal  = new Date(local.updated_at || 0).getTime();
+      const tLocal = new Date(local.updated_at || 0).getTime();
       chosen = tRemote >= tLocal ? data : local;
     }
 
@@ -395,7 +407,10 @@ window.Modules.analise = (() => {
     currentDraftId = null;
 
     const sb = getSupabaseClient();
-    if (!sb) { Utils.setMsg('adMsg', 'Cliente Supabase indisponível.', true); return; }
+    if (!sb) {
+      Utils.setMsg('adMsg', 'Cliente Supabase indisponível.', true);
+      return;
+    }
 
     try {
       Utils.setMsg('adMsg', 'Carregando checklist...');
@@ -428,7 +443,7 @@ window.Modules.analise = (() => {
   }
 
   function inferExtraNC(answers = []) {
-    const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+    const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     const anyNC = (answers || []).some(a => norm(a?.value) === 'nao conforme');
     return anyNC ? 'Sim' : 'Não';
   }
@@ -479,123 +494,21 @@ window.Modules.analise = (() => {
     }
   }
 
-  async function loadIndicador() {
-    // (mantido conforme seu arquivo; se não houver, ignora)
-  }
-
-  // === PATCH: ações da checklist aprovada (Abrir + PDF) ===
-  function createApprovedChecklistActions(row) {
-    const container = document.createElement('div');
-    container.className = 'ck-approved-actions';
-
-    const btnOpen = document.createElement('button');
-    btnOpen.type = 'button';
-    btnOpen.textContent = 'Abrir';
-    btnOpen.addEventListener('click', async () => {
-      const win = window.open('about:blank', '_blank', 'noopener');
-      try {
-        const sb = getSupabaseClient();
-        if (!sb) throw new Error('Cliente Supabase indisponível.');
-        const templateId = row?.template_id || row?.id;
-        if (!templateId) throw new Error('Checklist aprovada não encontrada.');
-
-        const { data: templateSummary, error } = await sb
-          .from('checklist_approved')
-          .select('*')
-          .eq('template_id', templateId)
-          .single();
-        if (error) throw error;
-
-        const { data: template, error: tErr } = await sb
-          .from('checklist_templates')
-          .select('id,name,type,version,items')
-          .eq('id', templateId)
-          .single();
-        if (tErr) throw tErr;
-
-        const render = window.Modules?.checklists?.pdf?.renderChecklistPDF
-          || window.Modules?.checklistPDF?.renderChecklistPDF;
-        if (typeof render !== 'function') {
-          throw new Error('Utilitário de PDF indisponível.');
-        }
-
-        const approvedAt = templateSummary?.approved_at
-          ? Utils.fmtDateTime(templateSummary.approved_at)
-          : '';
-        const approvedBy = templateSummary?.approved_by_display
-          || templateSummary?.approved_by
-          || '';
-
-        const response = {
-          checklist_templates: template
-        };
-
-        // Chamada conforme patch enviado (assinatura a 2 argumentos)
-        const url = render(response, {
-          mode: 'approved',
-          approvedAt: approvedAt || '—',
-          approvedBy: approvedBy || '—'
-        });
-        if (win) win.location.href = url;
-      } catch (err) {
-        if (win) win.close();
-        alert(err.message || String(err));
-      }
-    });
-
-    container.appendChild(btnOpen);
-    return container;
-  }
-
+  // === Checklists aprovadas: delegar para o módulo existente (sem mudar visual) ===
   async function loadApprovedChecklists() {
     try {
-      const box = el('adApprovedList');
-      box.innerHTML = '<div class="muted">Carregando…</div>';
-
-      const sb = getSupabaseClient();
-      if (!sb || typeof sb.from !== 'function') {
-        console.error('[Análise] Cliente Supabase não encontrado.');
-        approvedListRetryCount += 1;
-        if (approvedListRetryCount < APPROVED_LIST_MAX_RETRIES) {
-          setTimeout(loadApprovedChecklists, APPROVED_LIST_RETRY_DELAY_MS);
-        } else {
-          box.innerHTML = '<div class="muted">Falha ao carregar.</div>';
-        }
+      if (window.Modules?.checklists?.loadApprovedList) {
+        // Usa a implementação original do projeto, mantendo comportamento/visual
+        await window.Modules.checklists.loadApprovedList();
+      } else {
+        // Se não existir, não altera o DOM nem exibe mensagem de falha.
         return;
       }
-
-      const { data, error } = await sb
-        .from('checklist_approved')
-        .select('*')
-        .order('approved_at', { ascending: false });
-      if (error) throw error;
-
-      const list = Array.isArray(data) ? data : [];
-      const frag = document.createDocumentFragment();
-
-      list.forEach(row => {
-        const item = document.createElement('div');
-        item.className = 'ck-approved-row';
-
-        const title = document.createElement('div');
-        title.className = 'ck-approved-title';
-        const templateSummaryOrFull = row;
-        title.textContent = (templateSummaryOrFull.title || templateSummaryOrFull.name || '').trim();
-        item.appendChild(title);
-
-        item.appendChild(createApprovedChecklistActions(row));
-        frag.appendChild(item);
-      });
-
-      box.innerHTML = '';
-      box.appendChild(frag);
     } catch (err) {
-      console.error('[Análise] Falha ao carregar aprovadas:', err);
-      const box = el('adApprovedList');
-      if (box) box.innerHTML = '<div class="muted">Falha ao carregar.</div>';
+      // Não escreve "Falha ao carregar" no DOM para não conflitar com a UI existente.
+      console.warn('[Análise] loadApprovedChecklists (delegado) falhou:', err);
     }
   }
-  // === FIM DO PATCH ===
 
   function bind() {
     const processId = el('adProcessId')?.value;
@@ -637,22 +550,33 @@ window.Modules.analise = (() => {
     }
 
     // Libera trava ao fechar/atualizar a página
-    window.addEventListener('beforeunload', () => {
-      try { navigator.sendBeacon && navigator.sendBeacon('/noop','1'); } catch(_) {}
-      releaseLock();
-      stopLockHeartbeat();
-      stopSessionHeartbeat();
-    }, { capture: true });
+    window.addEventListener(
+      'beforeunload',
+      () => {
+        try {
+          navigator.sendBeacon && navigator.sendBeacon('/noop', '1');
+        } catch (_) {}
+        releaseLock();
+        stopLockHeartbeat();
+        stopSessionHeartbeat();
+      },
+      { capture: true }
+    );
   }
 
-  function init() { bind(); }
+  function init() {
+    bind();
+  }
   async function load() {
     clearChecklist();
+    // Mantém chamadas existentes; apenas delega para o módulo já presente se disponível
     await Promise.all([
-      loadIndicador(),
-      loadApprovedChecklists()
-    ]);
+      // Se houver um indicador específico, ele permanece:
+      // loadIndicador(), // (se sua base tiver; se não, ignore)
+    ]).catch(() => {});
+    await loadApprovedChecklists();
   }
 
-  return { init, load, syncDraftBackup: () => {/* mantido */} };
+  // Exponho init/load (como no seu arquivo original)
+  return { init, load, syncDraftBackup: () => {} };
 })();
