@@ -12,6 +12,26 @@ window.Modules.analise = (() => {
   let localBackupRestoreNotified = false;
   let syncingLocalDraft = false;
 
+  // === Correlação "Tipo da checklist" -> "Tipo do processo" (definida pelo usuário) ===
+  const PROCESS_TYPE_BY_CHECKLIST = new Map([
+    ['OPEA - Documental', 'OPEA'],
+    ['PDIR - Documental', 'PDIR'],
+    ['Inscrição - Documental', 'Inscrição'],
+    ['Alteração - Documental', 'Alteração'],
+    ['Exploração - Documental', 'Exploração']
+  ]);
+
+  function deriveProcessTypeFromTemplate(templateSummaryOrFull) {
+    if (!templateSummaryOrFull) return null;
+    const title = String(templateSummaryOrFull.title || templateSummaryOrFull.name || '').trim();
+    if (title && PROCESS_TYPE_BY_CHECKLIST.has(title)) {
+      return PROCESS_TYPE_BY_CHECKLIST.get(title);
+    }
+    const t = (templateSummaryOrFull.type || '').toString().trim();
+    return t || null;
+  }
+
+
   // === Lock/session heartbeats (injetado) ===
   let lockHeartbeatTimer = null;
   let sessionHeartbeatTimer = null;
@@ -526,10 +546,7 @@ window.Modules.analise = (() => {
         throw new Error('Utilitário de PDF indisponível.');
       }
 
-      const url = render({
-        response: data,
-        mode: 'final'
-      });
+      const url = render(data, { mode: 'final' });
       if (win) win.location.href = url;
     } catch (err) {
       if (win) win.close();
@@ -818,7 +835,16 @@ window.Modules.analise = (() => {
     }
 
     if (!pData) {
-      const payload = { nup };
+      // Carrega template para derivar o tipo do processo antes de criar o processo
+      const template = await loadTemplateById(templateSummary.id);
+      if (!template) {
+        return Utils.setMsg('adMsg', 'Checklist selecionada não foi encontrada.', true);
+      }
+      const processType = deriveProcessTypeFromTemplate(template) || deriveProcessTypeFromTemplate(templateSummary);
+      if (!processType) {
+        return Utils.setMsg('adMsg', 'Não foi possível determinar o tipo do processo para esta checklist.', true);
+      }
+      const payload = { nup, type: processType };
       if (u?.id) payload.created_by = u.id;
 
       const { data, error } = await sb
@@ -835,6 +861,19 @@ window.Modules.analise = (() => {
         await window.Modules.processos.reloadLists();
       }
     } else {
+      // Confere coerência entre tipo do processo existente e o tipo esperado pelo template
+      const template = await loadTemplateById(templateSummary.id);
+      if (!template) {
+        return Utils.setMsg('adMsg', 'Checklist selecionada não foi encontrada.', true);
+      }
+      const expectedType = deriveProcessTypeFromTemplate(template) || deriveProcessTypeFromTemplate(templateSummary);
+      if (!expectedType) {
+        return Utils.setMsg('adMsg', 'Não foi possível determinar o tipo do processo para esta checklist.', true);
+      }
+      if (pData.type && pData.type !== expectedType) {
+        const msg = `O NUP informado pertence a um processo do tipo "${pData.type}", mas a checklist selecionada é do tipo "${expectedType}".`;
+        return Utils.setMsg('adMsg', msg, true);
+      }
       currentProcessId = pData.id;
     }
 
