@@ -1,0 +1,58 @@
+/* Estilos específicos do módulo AD/HEL */
+
+.split.adhel {
+  display: grid;
+  grid-template-columns: clamp(220px, 25vw, 320px) minmax(0, 1fr);
+  gap: 12px;
+  height: 100%;
+}
+
+.split.adhel > .card {
+  min-width: 0;
+}
+
+.split.adhel > .card:first-child {
+  overflow-y: auto;
+}
+
+.adhel-search-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.adhel-search-form .row {
+  grid-template-columns: 1fr;
+}
+
+.adhel-search-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+#adhelList {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#adhelList .pager {
+  margin-bottom: 8px;
+}
+
+#adhelList table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#adhelList th,
+#adhelList td {
+  white-space: nowrap;
+  text-align: left;
+}
+
+#adhelList td,
+#adhelList th {
+  padding: 6px 8px;
+}

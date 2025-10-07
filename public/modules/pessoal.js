@@ -15,8 +15,8 @@ window.Modules.pessoal = (() => {
   };
 
   // Novos valores (patch)
-  const REV_OACO_HISTORY_ACTION = 'Status REV-OACO registrado'; // Ação registrada no histórico
-  const ANALISTA_OACO_ROLE = 'Analista OACO'; // Papel padrão se vier apenas no histórico
+  const REV_OACO_HISTORY_ACTION = 'Status REV-OACO registrado'; // Ação registrada no histórico (REV-OACO = Revisão OACO, conforme sua nomenclatura)
+  const ANALISTA_OACO_ROLE = 'Analista OACO'; // Papel interno usado no seu sistema
   const PRODUCTIVITY_FIRST_WEEK_ISO = '2025-10-06';
   const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 
@@ -189,7 +189,83 @@ window.Modules.pessoal = (() => {
     return wrap;
   }
 
-  // Novo helper (patch): normaliza "details" do histórico
+  // Lista somente Analistas OACO (ativos por padrão)
+  function getAnalistaOacoProfiles({ includeInactive = false } = {}) {
+    const profiles = Array.isArray(state.profiles) ? state.profiles : [];
+    return profiles
+      .filter(profile => {
+        if (!profile?.id) return false;
+        if (!isAnalistaOacoRole(profile.role)) return false;
+        if (!includeInactive && profile.deleted_at) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const labelA = (a.name || a.email || '').toLocaleLowerCase('pt-BR');
+        const labelB = (b.name || b.email || '').toLocaleLowerCase('pt-BR');
+        return labelA.localeCompare(labelB, 'pt-BR');
+      });
+  }
+
+  // Preenche o <select id="unavailabilityProfile">
+  function renderUnavailabilityProfileOptions(selectedId = null) {
+    const select = el('unavailabilityProfile');
+    if (!select) return false;
+
+    const previousValue = selectedId != null ? String(selectedId) : select.value;
+    select.innerHTML = '';
+
+    const profiles = getAnalistaOacoProfiles();
+    if (!profiles.length) {
+      select.disabled = true;
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'Nenhum Analista OACO disponível';
+      option.disabled = true;
+      option.selected = true;
+      option.defaultSelected = true;
+      select.appendChild(option);
+      return false;
+    }
+
+    select.disabled = false;
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Selecione um Analista OACO';
+    placeholder.disabled = true;
+    placeholder.hidden = true;
+    placeholder.selected = true;
+    placeholder.defaultSelected = true;
+    select.appendChild(placeholder);
+
+    let matchValue = '';
+    const fragment = document.createDocumentFragment();
+    profiles.forEach(profile => {
+      const option = document.createElement('option');
+      option.value = String(profile.id);
+      const displayName = (profile.name || '').trim();
+      const email = (profile.email || '').trim();
+      if (displayName && email) {
+        option.textContent = `${displayName} (${email})`;
+      } else {
+        option.textContent = displayName || email || option.value;
+      }
+      if (previousValue && String(profile.id) === previousValue) {
+        matchValue = option.value;
+      }
+      fragment.appendChild(option);
+    });
+    select.appendChild(fragment);
+
+    if (matchValue) {
+      select.value = matchValue;
+    } else {
+      select.value = '';
+    }
+
+    return true;
+  }
+
+  // Normaliza "details" do histórico
   function normalizeHistoryDetails(details) {
     if (!details) return null;
     if (typeof details === 'object') return details;
@@ -199,7 +275,7 @@ window.Modules.pessoal = (() => {
     return null;
   }
 
-  // Colunas de produtividade atualizadas (patch)
+  // Colunas de produtividade
   const PRODUCTIVITY_COLUMNS = [
     { label: 'Usuário', render: row => renderUserCell(row) },
     { key: 'doc_no_review', label: 'Análises documentais sem necessidade de revisão', align: 'center' },
@@ -219,9 +295,16 @@ window.Modules.pessoal = (() => {
 
   function resetUnavailabilityForm() {
     const form = el('unavailabilityForm');
-    if (!form) return;
+    if (!form) return false;
+
+    const hasProfiles = renderUnavailabilityProfileOptions();
     form.reset();
     Utils.setMsg('unavailabilityFormMsg', '');
+
+    const profileField = el('unavailabilityProfile');
+    if (profileField) {
+      profileField.value = '';
+    }
     const startField = el('unavailabilityStart');
     const endField = el('unavailabilityEnd');
     const now = new Date();
@@ -230,12 +313,24 @@ window.Modules.pessoal = (() => {
       const later = new Date(now.getTime() + 60 * 60 * 1000);
       endField.value = Utils.toDateTimeLocalValue(later);
     }
+    const saveBtn = el('btnSaveUnavailability');
+    if (saveBtn) saveBtn.disabled = !hasProfiles;
+
+    return hasProfiles;
   }
 
-  function openUnavailabilityDialog() {
+  async function openUnavailabilityDialog() {
     const dlg = el('unavailabilityDialog');
     if (!dlg) return;
-    resetUnavailabilityForm();
+    try {
+      await ensureProfiles();
+    } catch (err) {
+      console.error('[pessoal] Falha ao carregar perfis antes do popup de indisponibilidade:', err);
+    }
+    const hasProfiles = resetUnavailabilityForm();
+    if (!hasProfiles) {
+      Utils.setMsg('unavailabilityFormMsg', 'Nenhum Analista OACO disponível para registrar indisponibilidade.', true);
+    }
     try {
       dlg.showModal();
     } catch (err) {
@@ -249,9 +344,16 @@ window.Modules.pessoal = (() => {
     const msgId = 'unavailabilityFormMsg';
     const saveBtn = el('btnSaveUnavailability');
     if (saveBtn) saveBtn.disabled = true;
+    const profileId = (el('unavailabilityProfile')?.value || '').trim();
     const description = (el('unavailabilityDescription')?.value || '').trim();
     const startRaw = el('unavailabilityStart')?.value || '';
     const endRaw = el('unavailabilityEnd')?.value || '';
+
+    if (!profileId) {
+      Utils.setMsg(msgId, 'Selecione um Analista OACO.', true);
+      if (saveBtn) saveBtn.disabled = false;
+      return;
+    }
 
     if (!description || !startRaw || !endRaw) {
       Utils.setMsg(msgId, 'Preencha todos os campos.', true);
@@ -282,7 +384,7 @@ window.Modules.pessoal = (() => {
     Utils.setMsg(msgId, 'Salvando indisponibilidade...');
 
     const payload = {
-      profile_id: user.id,
+      profile_id: profileId,
       description,
       starts_at: startDate.toISOString(),
       ends_at: endDate.toISOString()
@@ -531,7 +633,7 @@ window.Modules.pessoal = (() => {
       const weeks = buildContinuousWeeks(weekData);
       state.productivityWeeks = weeks;
 
-      // >>> Patch aplicado: escolher semana atual quando existir; senão, última semana disponível
+      // Escolhe semana atual quando existir; senão, última semana disponível
       if (weeks.length) {
         let selectedKey = state.productivitySelectedWeek;
         const currentWeekStart = getWeekStart(new Date());
@@ -560,7 +662,6 @@ window.Modules.pessoal = (() => {
         state.productivityWeekIndex = 0;
         state.productivitySelectedWeek = null;
       }
-      // <<< Patch aplicado
 
       renderProductivityWeekFilters();
       renderProductivityTable();

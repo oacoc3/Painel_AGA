@@ -6,6 +6,7 @@
   <base href="/" />
   <title>Painel DO-AGA</title>
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.adhel.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" />
   <!-- App config -->
   <script src="./config.js" defer></script>
@@ -48,15 +49,47 @@
 
     <main class="main">
       <section id="viewAdhel" class="view">
-        <div class="columns">
-          <div class="card">
+        <div class="split adhel">
+          <div class="card adhel-search">
+            <h2>Buscar AD/HEL</h2>
+
+            <form id="adhelSearchForm" class="adhel-search-form" data-ajax>
+              <div class="row">
+                <label class="grow">NUP
+                  <input id="adhelSearchNup" name="nup" placeholder="000000/0000-00" autocomplete="off" />
+                </label>
+              </div>
+              <div class="row">
+                <label class="grow">Código OACI
+                  <input id="adhelSearchOaci" name="oaci" maxlength="4" autocomplete="off" />
+                </label>
+              </div>
+              <div class="row">
+                <label class="grow">CIAD
+                  <input id="adhelSearchCiad" name="ciad" autocomplete="off" />
+                </label>
+              </div>
+              <div class="row">
+                <label class="grow">Nome
+                  <input id="adhelSearchName" name="name" autocomplete="off" />
+                </label>
+              </div>
+              <div class="row adhel-search-actions">
+                <button id="adhelSearchSubmit" type="submit">Buscar</button>
+                <button id="adhelSearchClear" type="button">Limpar</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card adhel-list">
             <h2>AD/HEL <small class="muted">(registros: <span id="adhelCount">0</span>)</small></h2>
 
             <!-- Tabela de listagem: o módulo adhel.js apenas preenche o tbody abaixo -->
-            <div class="table-wrap">
+            <div id="adhelList" class="table scrolly">
               <table>
                 <thead>
                   <tr>
+                    <th>NUP</th>
                     <th>OACI</th>
                     <th>CIAD</th>
                     <th>Nome</th>
@@ -70,8 +103,6 @@
                 </tbody>
               </table>
             </div>
-
-            <!-- Observação: nenhum estilo foi alterado; apenas adicionamos a estrutura mínima da tabela. -->
           </div>
         </div>
       </section>
