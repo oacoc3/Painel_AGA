@@ -10,9 +10,14 @@ window.Modules.pessoal = (() => {
     productivityWeeks: [],
     productivitySelectedWeek: null,
     productivityWeekIndex: 0,
-    productivityProfiles: []
+    productivityProfiles: [],
     // <<< Patch
+    unavailabilityEditingId: null
   };
+
+  function isAdminRole() {
+    return (AccessGuards?.getRole ? AccessGuards.getRole() : null) === 'Administrador';
+  }
 
   // Novos valores (patch)
   const REV_OACO_HISTORY_ACTION = 'Status REV-OACO registrado'; // Ação registrada no histórico (REV-OACO = Revisão OACO, conforme sua nomenclatura)
@@ -135,6 +140,19 @@ window.Modules.pessoal = (() => {
     list.forEach(updateProfileMap);
   }
 
+  function getCurrentProfileInfo() {
+    const profile = window.APP_PROFILE || null;
+    if (profile?.id) {
+      registerProfiles([{ id: profile.id, ...profile }]);
+      return { id: profile.id, ...profile };
+    }
+    return null;
+  }
+
+  function getCurrentProfileId() {
+    return getCurrentProfileInfo()?.id || null;
+  }
+
   async function loadProfiles() {
     const { data, error } = await sb.rpc('admin_list_profiles');
     if (error) throw error;
@@ -161,14 +179,14 @@ window.Modules.pessoal = (() => {
     return state.profileMap.get(id) || null;
   }
 
-  function renderUserCell(user) {
+  function renderUserCell(user, { hideEmail = false } = {}) {
     const info = user && typeof user === 'object' ? user : {};
     const wrap = document.createElement('div');
     wrap.className = 'audit-user-cell';
     const name = document.createElement('strong');
     name.textContent = info.name || info.email || '—';
     wrap.appendChild(name);
-    if (info.email) {
+    if (info.email && !hideEmail) {
       const email = document.createElement('div');
       email.className = 'muted';
       email.textContent = info.email;
@@ -207,14 +225,24 @@ window.Modules.pessoal = (() => {
   }
 
   // Preenche o <select id="unavailabilityProfile">
-  function renderUnavailabilityProfileOptions(selectedId = null) {
+  function renderUnavailabilityProfileOptions(options = {}) {
+    const { selectedId = null, restrictToSelf = false } = options || {};
     const select = el('unavailabilityProfile');
     if (!select) return false;
 
     const previousValue = selectedId != null ? String(selectedId) : select.value;
     select.innerHTML = '';
 
-    const profiles = getAnalistaOacoProfiles();
+    let profiles = getAnalistaOacoProfiles();
+    if (restrictToSelf) {
+      const currentProfile = getCurrentProfileInfo();
+      const currentId = currentProfile?.id ? String(currentProfile.id) : null;
+      profiles = profiles.filter(profile => !currentId || String(profile.id) === currentId);
+      if (currentProfile && currentId && !profiles.some(profile => String(profile.id) === currentId)) {
+        profiles.push(currentProfile);
+      }
+    }
+
     if (!profiles.length) {
       select.disabled = true;
       const option = document.createElement('option');
@@ -227,15 +255,17 @@ window.Modules.pessoal = (() => {
       return false;
     }
 
-    select.disabled = false;
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = 'Selecione um Analista OACO';
-    placeholder.disabled = true;
-    placeholder.hidden = true;
-    placeholder.selected = true;
-    placeholder.defaultSelected = true;
-    select.appendChild(placeholder);
+    select.disabled = restrictToSelf && profiles.length <= 1;
+    if (!restrictToSelf) {
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Selecione um Analista OACO';
+      placeholder.disabled = true;
+      placeholder.hidden = true;
+      placeholder.selected = true;
+      placeholder.defaultSelected = true;
+      select.appendChild(placeholder);
+    }
 
     let matchValue = '';
     const fragment = document.createDocumentFragment();
@@ -258,6 +288,8 @@ window.Modules.pessoal = (() => {
 
     if (matchValue) {
       select.value = matchValue;
+    } else if (selectedId != null) {
+      select.value = String(selectedId);
     } else {
       select.value = '';
     }
@@ -284,42 +316,105 @@ window.Modules.pessoal = (() => {
     { key: 'notif_with_review', label: 'Notificações com necessidade de revisão', align: 'center' }
   ];
 
+  function renderUnavailabilityActions(row) {
+    const wrap = document.createElement('div');
+    wrap.className = 'table-actions';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Editar';
+    btn.addEventListener('click', () => {
+      if (!isAdminRole()) {
+        const message = AccessGuards?.message || 'Função não disponível para o seu perfil de acesso.';
+        try { window.alert(message); } catch (_) { /* ignore */ }
+        return;
+      }
+      openUnavailabilityDialog(row);
+    });
+    wrap.appendChild(btn);
+    return wrap;
+  }
+
   const AVAILABILITY_COLUMNS = [
     { label: 'Usuário', render: row => renderUserCell(row.user) },
     { key: 'description', label: 'Descrição' },
     { key: 'starts_at', label: 'Início', value: row => Utils.fmtDateTime(row.starts_at) },
     { key: 'ends_at', label: 'Fim', value: row => Utils.fmtDateTime(row.ends_at) },
-    { label: 'Registrado por', render: row => renderUserCell(row.creator) },
-    { key: 'created_at', label: 'Registro', value: row => Utils.fmtDateTime(row.created_at) }
+    { label: 'Registrado por', render: row => renderUserCell(row.creator, { hideEmail: true }) },
+    { key: 'created_at', label: 'Registro', value: row => Utils.fmtDateTime(row.created_at) },
+    { label: 'Ações', render: row => renderUnavailabilityActions(row) }
   ];
 
-  function resetUnavailabilityForm() {
+  function resetUnavailabilityForm(options = {}) {
+    const defaults = {
+      selectedProfileId: null,
+      restrictToSelf: false,
+      description: '',
+      startsAt: null,
+      endsAt: null,
+      editingId: null
+    };
+    const opts = { ...defaults, ...options };
+
     const form = el('unavailabilityForm');
     if (!form) return false;
 
-    const hasProfiles = renderUnavailabilityProfileOptions();
+    state.unavailabilityEditingId = opts.editingId || null;
+
+    const hasProfiles = renderUnavailabilityProfileOptions({
+      selectedId: opts.selectedProfileId,
+      restrictToSelf: opts.restrictToSelf
+    });
+
     form.reset();
     Utils.setMsg('unavailabilityFormMsg', '');
 
     const profileField = el('unavailabilityProfile');
     if (profileField) {
-      profileField.value = '';
+      if (opts.selectedProfileId) {
+        profileField.value = String(opts.selectedProfileId);
+      } else {
+        profileField.value = '';
+      }
+      if (!hasProfiles) {
+        profileField.setAttribute('disabled', '');
+      } else if (opts.restrictToSelf) {
+        profileField.setAttribute('disabled', '');
+      } else {
+        profileField.removeAttribute('disabled');
+      }
     }
     const startField = el('unavailabilityStart');
     const endField = el('unavailabilityEnd');
     const now = new Date();
-    if (startField) startField.value = Utils.toDateTimeLocalValue(now);
+    const rawStart = opts.startsAt ?? now;
+    const startDate = rawStart instanceof Date ? rawStart : new Date(rawStart);
+    const validStart = Number.isNaN(+startDate) ? now : startDate;
+    if (startField) {
+      startField.value = Utils.toDateTimeLocalValue(validStart);
+    }
+    const rawEnd = opts.endsAt ?? null;
+    const computedEnd = rawEnd != null ? (rawEnd instanceof Date ? rawEnd : new Date(rawEnd)) : new Date(validStart.getTime() + 60 * 60 * 1000);
+    const validEnd = Number.isNaN(+computedEnd) ? new Date(validStart.getTime() + 60 * 60 * 1000) : computedEnd;
     if (endField) {
-      const later = new Date(now.getTime() + 60 * 60 * 1000);
-      endField.value = Utils.toDateTimeLocalValue(later);
+      endField.value = Utils.toDateTimeLocalValue(validEnd);
+    }
+    const descriptionField = el('unavailabilityDescription');
+    if (descriptionField) {
+      descriptionField.value = opts.description || '';
     }
     const saveBtn = el('btnSaveUnavailability');
-    if (saveBtn) saveBtn.disabled = !hasProfiles;
+    if (saveBtn) {
+      saveBtn.disabled = !hasProfiles;
+      saveBtn.textContent = state.unavailabilityEditingId ? 'Salvar alterações' : 'Salvar';
+    }
+
+    form.dataset.mode = state.unavailabilityEditingId ? 'edit' : 'create';
+    form.dataset.editId = state.unavailabilityEditingId ? String(state.unavailabilityEditingId) : '';
 
     return hasProfiles;
   }
 
-  async function openUnavailabilityDialog() {
+  async function openUnavailabilityDialog(row = null) {
     const dlg = el('unavailabilityDialog');
     if (!dlg) return;
     try {
@@ -327,9 +422,22 @@ window.Modules.pessoal = (() => {
     } catch (err) {
       console.error('[pessoal] Falha ao carregar perfis antes do popup de indisponibilidade:', err);
     }
-    const hasProfiles = resetUnavailabilityForm();
+    const restrictToSelf = !isAdminRole() && !!getCurrentProfileId();
+    const selectedProfileId = row?.profile_id || row?.user?.id || (restrictToSelf ? getCurrentProfileId() : null);
+    const hasProfiles = resetUnavailabilityForm({
+      selectedProfileId,
+      restrictToSelf,
+      description: row?.description || '',
+      startsAt: row?.starts_at || null,
+      endsAt: row?.ends_at || null,
+      editingId: row?.id || null
+    });
     if (!hasProfiles) {
       Utils.setMsg('unavailabilityFormMsg', 'Nenhum Analista OACO disponível para registrar indisponibilidade.', true);
+    }
+    const title = dlg.querySelector('h3');
+    if (title) {
+      title.textContent = row ? 'Editar indisponibilidade' : 'Registrar indisponibilidade';
     }
     try {
       dlg.showModal();
@@ -374,6 +482,13 @@ window.Modules.pessoal = (() => {
       return;
     }
 
+    const currentProfileId = getCurrentProfileId();
+    if (!isAdminRole() && currentProfileId && profileId !== String(currentProfileId)) {
+      Utils.setMsg(msgId, 'Você só pode registrar indisponibilidades para o seu usuário.', true);
+      if (saveBtn) saveBtn.disabled = false;
+      return;
+    }
+
     const user = await getUser();
     if (!user?.id) {
       Utils.setMsg(msgId, 'Sessão expirada.', true);
@@ -389,26 +504,41 @@ window.Modules.pessoal = (() => {
       starts_at: startDate.toISOString(),
       ends_at: endDate.toISOString()
     };
+    const editingId = state.unavailabilityEditingId;
 
     try {
-      const { error } = await sb.from('user_unavailabilities').insert(payload);
-      if (error) throw error;
+      if (editingId) {
+        if (!isAdminRole()) {
+          Utils.setMsg(msgId, 'Apenas administradores podem editar indisponibilidades.', true);
+          if (saveBtn) saveBtn.disabled = false;
+          return;
+        }
+        const { error } = await sb
+          .from('user_unavailabilities')
+          .update(payload)
+          .eq('id', editingId);
+        if (error) throw error;
+        Utils.setMsg(msgId, 'Indisponibilidade atualizada.');
+      } else {
+        const { error } = await sb.from('user_unavailabilities').insert(payload);
+        if (error) throw error;
 
-      try {
-        await window.AppAudit?.recordEvent?.('unavailability_created', 'pessoal', {
-          metadata: {
-            starts_at: payload.starts_at,
-            ends_at: payload.ends_at
-          }
-        });
-      } catch (auditErr) {
-        console.warn('[pessoal] Falha ao registrar auditoria de indisponibilidade:', auditErr);
+        try {
+          await window.AppAudit?.recordEvent?.('unavailability_created', 'pessoal', {
+            metadata: {
+              starts_at: payload.starts_at,
+              ends_at: payload.ends_at
+            }
+          });
+        } catch (auditErr) {
+          console.warn('[pessoal] Falha ao registrar auditoria de indisponibilidade:', auditErr);
+        }
+
+        Utils.setMsg(msgId, 'Indisponibilidade registrada.');
       }
-
-      Utils.setMsg(msgId, 'Indisponibilidade registrada.');
       const dlg = el('unavailabilityDialog');
       if (dlg?.open) dlg.close();
-      resetUnavailabilityForm();
+      resetUnavailabilityForm({ restrictToSelf: !isAdminRole() && !!getCurrentProfileId() });
       await loadUnavailability();
     } catch (err) {
       console.error('[pessoal] Falha ao salvar indisponibilidade:', err);
@@ -703,10 +833,12 @@ window.Modules.pessoal = (() => {
           : (item.created_by ? { id: item.created_by, ...(getProfileInfo(item.created_by) || {}) } : null);
         return {
           id: item.id,
+          profile_id: item.profile_id,
           description: item.description || '',
           starts_at: item.starts_at,
           ends_at: item.ends_at,
           created_at: item.created_at,
+          created_by: item.created_by,
           user: userInfo,
           creator: creatorInfo
         };
@@ -737,7 +869,13 @@ window.Modules.pessoal = (() => {
         dlg.close();
       });
       dlg.addEventListener('close', () => {
-        resetUnavailabilityForm();
+        const restrictToSelf = !isAdminRole() && !!getCurrentProfileId();
+        resetUnavailabilityForm({
+          restrictToSelf,
+          selectedProfileId: restrictToSelf ? getCurrentProfileId() : null
+        });
+        const title = dlg.querySelector('h3');
+        if (title) title.textContent = 'Registrar indisponibilidade';
         Utils.setMsg('unavailabilityFormMsg', '');
       });
     }
@@ -745,7 +883,11 @@ window.Modules.pessoal = (() => {
 
   function init() {
     bindEvents();
-    resetUnavailabilityForm();
+    const restrictToSelf = !isAdminRole() && !!getCurrentProfileId();
+    resetUnavailabilityForm({
+      restrictToSelf,
+      selectedProfileId: restrictToSelf ? getCurrentProfileId() : null
+    });
   }
 
   async function load() {
