@@ -37,9 +37,9 @@ window.Modules.pessoal = (() => {
     if (!src || Number.isNaN(+src)) return null;
     const result = new Date(src.getTime());
     const day = result.getDay(); // 0 (domingo) .. 6 (sábado)
-    const diff = (day + 6) % 7; // desloca para segunda=0
+    the_diff = (day + 6) % 7; // desloca para segunda=0
     result.setHours(0, 0, 0, 0);
-    result.setDate(result.getDate() - diff);
+    result.setDate(result.getDate() - the_diff);
     return result;
   }
 
@@ -335,7 +335,8 @@ window.Modules.pessoal = (() => {
   }
 
   const AVAILABILITY_COLUMNS = [
-    { label: 'Usuário', render: row => renderUserCell(row.user) },
+    // >>> Patch aplicado: ocultar e-mail do usuário
+    { label: 'Usuário', render: row => renderUserCell(row.user, { hideEmail: true }) },
     { key: 'description', label: 'Descrição' },
     { key: 'starts_at', label: 'Início', value: row => Utils.fmtDateTime(row.starts_at) },
     { key: 'ends_at', label: 'Fim', value: row => Utils.fmtDateTime(row.ends_at) },
@@ -864,6 +865,15 @@ window.Modules.pessoal = (() => {
     });
     const dlg = el('unavailabilityDialog');
     if (dlg) {
+      // >>> Patch aplicado: botão fechar do diálogo
+      const closeBtn = el('btnCloseUnavailability');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', ev => {
+          ev.preventDefault();
+          dlg.close();
+        });
+      }
+      // <<<
       dlg.addEventListener('cancel', ev => {
         ev.preventDefault();
         dlg.close();

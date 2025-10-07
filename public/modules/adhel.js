@@ -3,7 +3,12 @@
 // - Não altera visual; injeta <tr> no <tbody id="adhelTableBody"> existente.
 // - Tabela: public.adhel_airfields (id, tipo, oaci, ciad, name, municipio, uf [, nup?])
 // - Ordena por oaci ASC, depois ciad ASC.
-// - API: init(), load(), refresh(), setFilter({ nup, oaci, ciad, name })
+// - API pública: init(), load(), refresh(), setFilter({ nup, oaci, ciad, name })
+//
+// Siglas usadas:
+// - NUP: Número Único de Protocolo
+// - OACI: Organização de Aviação Civil Internacional (código ICAO do aeródromo/heliponto)
+// - AISWEB / ROTAER: serviço público do DECEA com dados do ROTAER (Rotas Aéreas) e de aeródromos
 
 window.Modules = window.Modules || {};
 window.Modules.adhel = (() => {
@@ -19,10 +24,19 @@ window.Modules.adhel = (() => {
     tbodyId: 'adhelTableBody',
     countId: 'adhelCount',
     listId: 'adhelList',
+
+    // Dialog de NUPs associados
     dialogId: 'adhelNupDialog',
     dialogListId: 'adhelNupDialogList',
     dialogTitleId: 'adhelNupDialogTitle',
-    dialogMsgId: 'adhelNupDialogMsg'
+    dialogMsgId: 'adhelNupDialogMsg',
+
+    // Dialog de resumo AISWEB/ROTAER
+    aisDialogId: 'adhelAisDialog',
+    aisDialogTitleId: 'adhelAisDialogTitle',
+    aisDialogMsgId: 'adhelAisDialogMsg',
+    aisDialogContentId: 'adhelAisDialogContent',
+    aisDialogOpenButtonId: 'adhelAisDialogOpen'
   };
 
   const FORM_IDS = {
@@ -34,6 +48,23 @@ window.Modules.adhel = (() => {
     submit: 'adhelSearchSubmit',
     clear: 'adhelSearchClear'
   };
+
+  // Estado interno para consultas AIS (controle de concorrência/cancelamento)
+  const AIS_STATE = { requestToken: 0 };
+
+  // Chaves comuns para extrair um "resumo" do payload AISWEB
+  const AIS_SUMMARY_FIELDS = [
+    { label: 'Código OACI', keys: ['icao', 'oaci'] },
+    { label: 'Nome', keys: ['nome', 'name'] },
+    { label: 'Indicativo', keys: ['indicativo'] },
+    { label: 'Município', keys: ['municipio', 'cidade'] },
+    { label: 'UF', keys: ['uf', 'estado'] },
+    { label: 'Tipo', keys: ['tipo'] },
+    { label: 'Latitude', keys: ['latitude', 'lat'] },
+    { label: 'Longitude', keys: ['longitude', 'lon', 'long'] },
+    { label: 'Elevação', keys: ['elevacao', 'elev', 'altitude'] },
+    { label: 'Observações', keys: ['observacao', 'observacoes', 'observações'] }
+  ];
 
   // --------------------------
   // Utilidades
@@ -60,12 +91,103 @@ window.Modules.adhel = (() => {
   }
   function normalizeNup(n) {
     const s = String(n || '').trim();
-    // Se houver utilitário do app, use; caso contrário, devolve s.
     try { return window.Utils?.normalizeNUP ? window.Utils.normalizeNUP(s) : s; } catch { return s; }
   }
 
+  function getFunctionsBase() {
+    const base = window?.APP_CONFIG?.NETLIFY_FUNCTIONS_BASE || '/.netlify/functions';
+    return String(base || '/.netlify/functions').replace(/\/$/, '');
+  }
+
+  // Monta URL pública de página do AISWEB/ROTAER para abrir em nova aba
+  function buildAiswebPageUrl(icao) {
+    const code = String(icao || '').trim().toUpperCase();
+    if (!code) return '';
+    const rawBase = window?.APP_CONFIG?.AISWEB_ROTAER_PAGE_URL || 'https://aisweb.decea.mil.br/?page=rotaer&icao={{ICAO}}';
+    if (rawBase.includes('{{ICAO}}')) {
+      return rawBase.replace('{{ICAO}}', encodeURIComponent(code));
+    }
+    try {
+      const url = new URL(rawBase);
+      url.searchParams.set('icao', code);
+      return url.toString();
+    } catch (_) {
+      const sep = rawBase.includes('?') ? '&' : '?';
+      return `${rawBase}${sep}icao=${encodeURIComponent(code)}`;
+    }
+  }
+
+  // Helpers para tornar legível o resumo
+  function formatLabel(key) {
+    return String(key || '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b([a-zA-ZÀ-ÖØ-öø-ÿ])/g, (m, chr) => chr.toUpperCase());
+  }
+  function normalizeSummaryValue(value) {
+    if (value == null) return '';
+    if (typeof value === 'string') return value.trim();
+    if (typeof value === 'number') return String(value);
+    if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
+    if (Array.isArray(value)) {
+      return value.map(item => normalizeSummaryValue(item)).filter(Boolean).join(', ');
+    }
+    if (typeof value === 'object') {
+      if (Object.prototype.hasOwnProperty.call(value, 'texto')) return normalizeSummaryValue(value.texto);
+      if (Object.prototype.hasOwnProperty.call(value, 'value')) return normalizeSummaryValue(value.value);
+      const entries = Object.entries(value).filter(([, v]) => typeof v === 'string' || typeof v === 'number');
+      if (entries.length && entries.length <= 3) {
+        return entries.map(([k, v]) => `${formatLabel(k)}: ${normalizeSummaryValue(v)}`).join('; ');
+      }
+    }
+    return '';
+  }
+  function findValueDeep(obj, keys, depth = 0) {
+    if (!obj || typeof obj !== 'object') return null;
+    const entries = Object.entries(obj);
+    for (const key of keys) {
+      const target = String(key).toLowerCase();
+      for (const [candidate, value] of entries) {
+        if (String(candidate).toLowerCase() === target) return value;
+      }
+    }
+    if (depth >= 3) return null;
+    for (const [, value] of entries) {
+      if (value && typeof value === 'object') {
+        const nested = findValueDeep(value, keys, depth + 1);
+        if (nested != null && nested !== '') return nested;
+      }
+    }
+    return null;
+  }
+  function extractAisEntry(payload) {
+    if (!payload) return null;
+    if (Array.isArray(payload)) {
+      for (const item of payload) {
+        const entry = extractAisEntry(item);
+        if (entry) return entry;
+      }
+      return null;
+    }
+    if (typeof payload !== 'object') return null;
+    if (payload.rotaer && typeof payload.rotaer === 'object') {
+      const entry = extractAisEntry(payload.rotaer);
+      if (entry) return entry;
+    }
+    if (payload.data && typeof payload.data === 'object') {
+      const entry = extractAisEntry(payload.data);
+      if (entry) return entry;
+    }
+    if (payload.dados && typeof payload.dados === 'object') {
+      const entry = extractAisEntry(payload.dados);
+      if (entry) return entry;
+    }
+    return payload;
+  }
+
   // --------------------------
-  // Infra do popup (não altera visual global)
+  // Infra do popup (NUPs)
   // --------------------------
   function ensureDialog() {
     let dlg = getEl(SELECTORS.dialogId);
@@ -73,7 +195,7 @@ window.Modules.adhel = (() => {
 
     dlg = document.createElement('dialog');
     dlg.id = SELECTORS.dialogId;
-    // Estrutura simples, sem estilos novos (herda CSS global)
+    // Estrutura simples, herda CSS global
     dlg.innerHTML = `
       <form method="dialog" style="max-width: 720px; width: 90vw;">
         <header style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.75rem;">
@@ -85,7 +207,6 @@ window.Modules.adhel = (() => {
       </form>
     `;
     document.body.appendChild(dlg);
-    // Garantir botões type=button dentro do dialog (caso haja algum botão injetado futuramente)
     try { window.SafetyGuards?.fixButtonTypes?.(dlg); } catch {}
     return dlg;
   }
@@ -108,7 +229,7 @@ window.Modules.adhel = (() => {
     }
 
     const frag = document.createDocumentFragment();
-    nups.forEach((raw, idx) => {
+    nups.forEach((raw) => {
       const nup = normalizeNup(raw);
       if (!nup) return;
 
@@ -157,12 +278,12 @@ window.Modules.adhel = (() => {
     try { dlg.showModal(); } catch { dlg.setAttribute('open', ''); }
   }
 
-  // Tenta reproduzir a mesma ação do módulo Prazos (sem alterar visual)
+  // Reproduz a ação existente em Prazos/Processos (sem alterar layout global)
   function tryOpenProcessListByNUP(nup) {
     const s = String(nup || '').trim();
     if (!s) return;
 
-    // 1) Funções óbvias (módulo Prazos)
+    // 1) Funções do módulo Prazos (se existirem)
     if (window.Modules?.prazos?.openProcessByNUP) {
       try { window.Modules.prazos.openProcessByNUP(s); return; } catch {}
     }
@@ -170,7 +291,7 @@ window.Modules.adhel = (() => {
       try { window.Modules.prazos.openProcessListByNUP(s); return; } catch {}
     }
 
-    // 2) Outros módulos comuns
+    // 2) Outros módulos
     if (window.Modules?.processos?.openByNUP) {
       try { window.Modules.processos.openByNUP(s); return; } catch {}
     }
@@ -178,16 +299,14 @@ window.Modules.adhel = (() => {
       try { window.Modules.processos.filterByNUP(s); return; } catch {}
     }
 
-    // 3) Evento global para quem escuta (ex.: prazos.js pode lidar)
+    // 3) Evento global (prazos.js pode ouvir)
     try {
       const ev = new CustomEvent('openProcessByNUP', { detail: { nup: s } });
       window.dispatchEvent(ev);
       return;
     } catch {}
 
-    // 4) Fallback suave: se existir página de prazos, podemos passar querystring
-    // (não muda layout; apenas permite que a página de prazos, se aberta,
-    // leia o parâmetro e aplique o mesmo filtro/ação que já existe por lá).
+    // 4) Fallback de navegação suave para prazos.html?nup=...
     try {
       const url = new URL(window.location.href);
       url.pathname = '/prazos.html';
@@ -198,10 +317,235 @@ window.Modules.adhel = (() => {
     }
   }
 
-  // Busca NUPs associados para um aeródromo/heliponto de forma resiliente:
-  // - 1ª tentativa: RPC: rpc_adhel_list_nups(airfield_id uuid)
-  // - 2ª tentativa: Tabela adhel_airfield_nups (airfield_id, nup)
-  // - 3ª tentativa: Coluna "nup" do próprio registro (string única ou lista "nup1, nup2")
+  // --------------------------
+  // Dialog de resumo AISWEB/ROTAER (sem alterar visual global)
+  // --------------------------
+  function ensureAisDialog() {
+    let dlg = getEl(SELECTORS.aisDialogId);
+    if (dlg) return dlg;
+
+    dlg = document.createElement('dialog');
+    dlg.id = SELECTORS.aisDialogId;
+    dlg.className = 'adhel-ais-dialog';
+    dlg.innerHTML = `
+      <form method="dialog" class="adhel-ais-dialog__form">
+        <header class="adhel-ais-dialog__header" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.5rem;">
+          <h3 id="${SELECTORS.aisDialogTitleId}" style="margin:0;font-size:1rem;">AISWEB — ROTAER</h3>
+          <div class="adhel-ais-dialog__actions" style="display:flex;gap:.5rem;">
+            <button type="button" id="${SELECTORS.aisDialogOpenButtonId}" disabled>Ver na AISWEB</button>
+            <button type="submit">Fechar</button>
+          </div>
+        </header>
+        <div id="${SELECTORS.aisDialogMsgId}" class="muted adhel-ais-dialog__message" style="margin-bottom:.25rem;"></div>
+        <div id="${SELECTORS.aisDialogContentId}" class="adhel-ais-dialog__content"></div>
+      </form>
+    `;
+    document.body.appendChild(dlg);
+    try { window.SafetyGuards?.fixButtonTypes?.(dlg); } catch {}
+
+    dlg.addEventListener('cancel', ev => {
+      ev.preventDefault();
+      dlg.close();
+    });
+    dlg.addEventListener('close', () => {
+      AIS_STATE.requestToken += 1; // invalida requisições em voo
+      setAisDialogMsg('');
+      const content = getEl(SELECTORS.aisDialogContentId);
+      if (content) content.innerHTML = '';
+      const openBtn = getEl(SELECTORS.aisDialogOpenButtonId);
+      if (openBtn) {
+        openBtn.disabled = true;
+        openBtn.dataset.url = '';
+      }
+    });
+
+    const openBtn = getEl(SELECTORS.aisDialogOpenButtonId);
+    if (openBtn) {
+      openBtn.addEventListener('click', () => {
+        const url = openBtn.dataset.url;
+        if (!url) return;
+        try {
+          window.open(url, '_blank', 'noopener');
+        } catch (_) {
+          window.location.assign(url);
+        }
+      });
+    }
+
+    return dlg;
+  }
+
+  function setAisDialogMsg(msg, isError = false) {
+    const el = getEl(SELECTORS.aisDialogMsgId);
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = isError ? 'var(--warn)' : '';
+  }
+
+  function setAisDialogTitle(oaci, row) {
+    const title = getEl(SELECTORS.aisDialogTitleId);
+    if (!title) return;
+    const code = String(oaci || row?.oaci || '').trim().toUpperCase();
+    const name = String(row?.name || '').trim();
+    const pieces = [];
+    if (code) pieces.push(code);
+    if (name) pieces.push(name);
+    title.textContent = pieces.length ? `AISWEB — ${pieces.join(' · ')}` : 'AISWEB — ROTAER';
+  }
+
+  function setAisDialogLink(oaci) {
+    const openBtn = getEl(SELECTORS.aisDialogOpenButtonId);
+    const url = buildAiswebPageUrl(oaci);
+    if (!openBtn) return;
+    if (url) {
+      openBtn.disabled = false;
+      openBtn.dataset.url = url;
+      openBtn.title = `Abrir AISWEB para ${oaci}`;
+    } else {
+      openBtn.disabled = true;
+      openBtn.dataset.url = '';
+      openBtn.title = 'Informe um código OACI para consultar no AISWEB';
+    }
+  }
+
+  function renderAisDialogContent(row, payload) {
+    const container = getEl(SELECTORS.aisDialogContentId);
+    if (!container) return;
+    container.innerHTML = '';
+
+    const entries = [];
+    const seen = new Set();
+    const addEntry = (label, value) => {
+      const text = normalizeSummaryValue(value);
+      if (!text) return;
+      if (seen.has(label)) return;
+      seen.add(label);
+      entries.push({ label, value: text });
+    };
+
+    const entry = extractAisEntry(payload);
+    if (entry) {
+      AIS_SUMMARY_FIELDS.forEach(field => {
+        const value = findValueDeep(entry, field.keys);
+        if (value != null && value !== '') addEntry(field.label, value);
+      });
+      if (!entries.length) {
+        Object.entries(entry).forEach(([key, value]) => {
+          if (value == null) return;
+          if (typeof value === 'string' || typeof value === 'number') {
+            addEntry(formatLabel(key), value);
+          }
+        });
+      }
+    }
+
+    // Fallback: mostrar dados locais da linha
+    [
+      { label: 'Código OACI', value: row?.oaci },
+      { label: 'CIAD', value: row?.ciad },
+      { label: 'Nome', value: row?.name },
+      { label: 'Município', value: row?.municipio },
+      { label: 'UF', value: row?.uf },
+      { label: 'Tipo', value: row?.tipo }
+    ].forEach(item => addEntry(item.label, item.value));
+
+    if (entries.length) {
+      const dl = document.createElement('dl');
+      dl.className = 'adhel-ais-summary';
+      entries.forEach(item => {
+        const dt = document.createElement('dt');
+        dt.textContent = item.label;
+        const dd = document.createElement('dd');
+        dd.textContent = item.value;
+        dl.appendChild(dt);
+        dl.appendChild(dd);
+      });
+      container.appendChild(dl);
+    } else {
+      const paragraph = document.createElement('p');
+      paragraph.className = 'muted';
+      paragraph.textContent = 'Nenhum dado disponível para exibir.';
+      container.appendChild(paragraph);
+    }
+
+    // Dados completos (opcional)
+    if (payload != null && payload !== '') {
+      const details = document.createElement('details');
+      details.style.marginTop = '.75rem';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Ver dados completos (resposta do AISWEB)';
+      const pre = document.createElement('pre');
+      pre.textContent = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+      pre.style.whiteSpace = 'pre-wrap';
+      pre.style.wordBreak = 'break-word';
+      details.appendChild(summary);
+      details.appendChild(pre);
+      container.appendChild(details);
+    }
+  }
+
+  async function fetchAisSummary(oaci) {
+    const base = getFunctionsBase();
+    const url = `${base}/aisweb-rotaer?icao=${encodeURIComponent(String(oaci || '').trim())}`;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutMs = Number(window?.APP_CONFIG?.AISWEB_TIMEOUT_MS || 15000) || 15000;
+    let timeoutId = null;
+    if (controller) timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(url, { signal: controller ? controller.signal : undefined });
+      const text = await res.text();
+      let parsed = null;
+      if (text) { try { parsed = JSON.parse(text); } catch { parsed = null; } }
+      if (!res.ok) {
+        const message = parsed?.error || parsed?.message || text || `AISWEB respondeu com status ${res.status}.`;
+        throw new Error(message);
+      }
+      if (parsed && parsed.ok === false) {
+        throw new Error(parsed.error || parsed.message || 'Falha ao consultar o AISWEB.');
+      }
+      if (parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')) {
+        return parsed.data;
+      }
+      return parsed ?? text;
+    } catch (err) {
+      if (err?.name === 'AbortError') throw new Error('Tempo de resposta excedido ao consultar o AISWEB.');
+      throw err;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }
+
+  async function openAisSummary(row) {
+    const dlg = ensureAisDialog();
+    const oaci = String(row?.oaci || '').trim().toUpperCase();
+    setAisDialogTitle(oaci, row);
+    setAisDialogLink(oaci);
+    if (oaci) {
+      setAisDialogMsg('Carregando dados do AISWEB...');
+    } else {
+      setAisDialogMsg('Código OACI não disponível para consulta.', true);
+    }
+    renderAisDialogContent(row, null);
+    try { dlg.showModal(); } catch { dlg.setAttribute('open', ''); }
+    if (!oaci) return;
+
+    const token = ++AIS_STATE.requestToken;
+    try {
+      const data = await fetchAisSummary(oaci);
+      if (token !== AIS_STATE.requestToken) return; // dialog foi reaberto/fechado
+      setAisDialogMsg('Resumo obtido via AISWEB.');
+      renderAisDialogContent(row, data);
+    } catch (err) {
+      if (token !== AIS_STATE.requestToken) return;
+      setAisDialogMsg(err?.message || 'Falha ao consultar o AISWEB.', true);
+      renderAisDialogContent(row, null);
+    }
+  }
+
+  // --------------------------
+  // Busca NUPs associados (RPC -> tabela relacional -> coluna local "nup")
+  // --------------------------
   async function resolveNupsForAirfield(row) {
     const sb = getSupabaseClient();
     if (!sb) return [];
@@ -211,7 +555,6 @@ window.Modules.adhel = (() => {
       if (typeof sb.rpc === 'function') {
         const { data, error } = await sb.rpc('rpc_adhel_list_nups', { airfield_id: row.id });
         if (!error && Array.isArray(data)) {
-          // data pode vir como [{nup: 'xxx'}, ...] ou ['xxx', ...]
           const list = data.map(item => (item && item.nup != null ? item.nup : item)).filter(Boolean);
           if (list.length) return list;
         }
@@ -234,7 +577,7 @@ window.Modules.adhel = (() => {
       console.info('[AD/HEL] Tabela adhel_airfield_nups indisponível:', err);
     }
 
-    // 3) Coluna local "nup" (string única ou lista separada por vírgula/; ou quebra de linha)
+    // 3) Coluna local "nup" (pode ser lista separada por vírgula/; ou quebras de linha)
     const raw = row?.nup;
     if (raw == null || raw === '') return [];
     const parts = String(raw)
@@ -245,7 +588,7 @@ window.Modules.adhel = (() => {
   }
 
   // --------------------------
-  // Consulta ao Supabase (com fallback sem 'nup')
+  // Consulta ao Supabase (com fallback se a coluna nup não existir)
   // --------------------------
   async function fetchAllFromDB() {
     const sb = getSupabaseClient();
@@ -325,8 +668,11 @@ window.Modules.adhel = (() => {
     for (const r of visibleRows) {
       const tr = document.createElement('tr');
 
-      // Coluna NUP: botão "Ver" abre popup com NUPs associados
+      // Coluna "NUP": botão "Ver" + botão "AIS" (resumo ROTAER)
       const tdNup = document.createElement('td');
+      const actionWrap = document.createElement('div');
+      actionWrap.className = 'adhel-nup-actions';
+
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = 'Ver';
@@ -336,7 +682,18 @@ window.Modules.adhel = (() => {
         const nups = await resolveNupsForAirfield(r);
         openNupDialog(r, nups);
       });
-      tdNup.appendChild(btn);
+      actionWrap.appendChild(btn);
+
+      const aisBtn = document.createElement('button');
+      aisBtn.type = 'button';
+      aisBtn.textContent = 'AIS';
+      aisBtn.title = 'Resumo do ROTAER (AISWEB)';
+      aisBtn.addEventListener('click', () => {
+        openAisSummary(r);
+      });
+      actionWrap.appendChild(aisBtn);
+
+      tdNup.appendChild(actionWrap);
       tr.appendChild(tdNup);
 
       const tdOaci = document.createElement('td');
@@ -447,7 +804,7 @@ window.Modules.adhel = (() => {
 
     const nupInput = getEl(FORM_IDS.nup);
     if (nupInput && window.Utils?.bindNUPMask) {
-      window.Utils.bindNUPMask(nupInput); // máscara NUP (Número Único de Protocolo)
+      window.Utils.bindNUPMask(nupInput); // aplica máscara de NUP (Número Único de Protocolo)
     }
 
     const handleSubmit = (e) => {
@@ -481,6 +838,7 @@ window.Modules.adhel = (() => {
   async function init() {
     bindSearchForm();
     ensureDialog();
+    ensureAisDialog();
     await load();
   }
 
