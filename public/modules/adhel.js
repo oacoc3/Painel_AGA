@@ -1,8 +1,11 @@
 // public/modules/adhel.js
 // Módulo AD/HEL (somente leitura/listagem)
 // - Não altera visual; injeta <tr> no <tbody id="adhelTableBody"> existente.
-// - Tabela: public.adhel_airfields (id, tipo, oaci, ciad, name, municipio, uf [, nup?])
+// - Tabela: public.adhel_airfields (id, tipo, oaci, ciad, name, municipio, uf).
 // - Ordena por oaci ASC, depois ciad ASC.
+// - Coluna "NUP": botão "Ver" que abre popup com NUPs associados ao item.
+//   Em cada NUP do popup há um botão "Ver na lista de processos" que executa
+//   a MESMA ação usada no módulo Prazos (sessionStorage.procPreSelect + redirect).
 // - API: init(), load(), refresh(), setFilter({ nup, oaci, ciad, name })
 
 window.Modules = window.Modules || {};
@@ -53,61 +56,147 @@ window.Modules.adhel = (() => {
   }
 
   // --------------------------
-  // Consulta ao Supabase (com fallback sem 'nup')
+  // Consulta ao Supabase (sem nup, que não existe no schema atual)
   // --------------------------
   async function fetchAllFromDB() {
     const sb = getSupabaseClient();
     if (!sb) return [];
 
-    const selectWithNup = 'id,tipo,oaci,ciad,name,municipio,uf,nup';
-    const selectNoNup   = 'id,tipo,oaci,ciad,name,municipio,uf';
+    const baseSelect = 'id,tipo,oaci,ciad,name,municipio,uf';
 
-    let { data, error } = await sb
+    const { data, error } = await sb
       .from('adhel_airfields')
-      .select(selectWithNup)
+      .select(baseSelect)
       .order('oaci', { ascending: true, nullsFirst: true })
       .order('ciad', { ascending: true, nullsFirst: true })
       .limit(5000);
 
     if (error) {
-      const msg = String(error?.message || '');
-      const code = String(error?.code || '');
-      const missingNup =
-        code === '42703' && /nup/i.test(msg); // ex.: "column adhel_airfields.nup does not exist"
-
-      if (missingNup) {
-        console.info('[AD/HEL] Coluna nup não existe — usando fallback sem nup.');
-        const fallback = await sb
-          .from('adhel_airfields')
-          .select(selectNoNup)
-          .order('oaci', { ascending: true, nullsFirst: true })
-          .order('ciad', { ascending: true, nullsFirst: true })
-          .limit(5000);
-        if (fallback.error) {
-          console.error('[AD/HEL] Erro no fallback adhel_airfields:', fallback.error);
-          return [];
-        }
-        data = fallback.data;
-      } else {
-        console.error('[AD/HEL] Erro ao consultar adhel_airfields:', error);
-        return [];
-      }
+      console.error('[AD/HEL] Erro ao consultar adhel_airfields:', error);
+      return [];
     }
     return data || [];
   }
 
   // --------------------------
+  // Fonte dos NUPs associados (definível no futuro)
+  // Tenta: RPC 'adhel_list_nups(p_airfield_id uuid|bigint)' -> [{nup}]
+  //        Tabela 'adhel_nups' (colunas: airfield_id -> id de adhel_airfields, nup text)
+  // Se nada existir, retorna [].
+  // --------------------------
+  async function fetchNupsForAirfield(airfieldId) {
+    const sb = getSupabaseClient();
+    if (!sb || !airfieldId) return [];
+    // 1) RPC
+    try {
+      const { data, error } = await sb.rpc('adhel_list_nups', { p_airfield_id: airfieldId });
+      if (!error && Array.isArray(data)) {
+        return data
+          .map(r => String(r.nup || '').trim())
+          .filter(Boolean);
+      }
+    } catch (_) { /* ignore */ }
+
+    // 2) Tabela adhel_nups
+    try {
+      const { data, error } = await sb
+        .from('adhel_nups')
+        .select('nup')
+        .eq('airfield_id', airfieldId)
+        .order('nup', { ascending: true });
+      if (!error && Array.isArray(data)) {
+        return data
+          .map(r => String(r.nup || '').trim())
+          .filter(Boolean);
+      }
+    } catch (_) { /* ignore */ }
+
+    return [];
+  }
+
+  // --------------------------
   // Filtro em memória
+  // Obs.: o filtro por NUP só funciona se o item tiver _nups carregados.
+  // Enquanto a associação não existir, o filtro de NUP não elimina linhas.
   // --------------------------
   function applyFilters(rows) {
     const { nup, oaci, ciad, name } = STATE.filters;
     return rows.filter(r => {
-      if (nup && !includesInsensitive(r.nup, nup)) return false;
       if (oaci && !includesInsensitive(r.oaci, oaci)) return false;
       if (ciad && !includesInsensitive(r.ciad, ciad)) return false;
       if (name && !includesInsensitive(r.name, name)) return false;
+
+      if (nup) {
+        const list = Array.isArray(r._nups) ? r._nups : (r.nup ? [r.nup] : null);
+        if (list) {
+          const hit = list.some(n => includesInsensitive(n, nup));
+          if (!hit) return false;
+        }
+        // Se não houver associação ainda, não filtra fora.
+      }
       return true;
     });
+  }
+
+  // --------------------------
+  // Ação "Ver na lista de processos" (mesma do módulo Prazos)
+  // --------------------------
+  function goToProcessListWithNUP(nup) {
+    if (!nup) return;
+    try {
+      sessionStorage.setItem('procPreSelect', nup);
+    } catch (_) {}
+    window.location.href = 'processos.html';
+  }
+
+  // --------------------------
+  // Popup de NUPs associados
+  // --------------------------
+  function openNupPopup(item, nups) {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'prazo-popup'; // reutiliza estilo existente, sem mudar visual global
+    const itemsHtml = (nups && nups.length)
+      ? nups.map(n => `
+          <li style="display:flex;gap:.5rem;align-items:center;justify-content:space-between;">
+            <code>${n}</code>
+            <button type="button" data-nup="${n}">Ver na lista de processos</button>
+          </li>`).join('')
+      : `<li class="muted">Nenhum NUP associado.</li>`;
+
+    dlg.innerHTML = `
+      <form method="dialog">
+        <h3>NUP associados</h3>
+        <div class="muted" style="margin-bottom:.5rem;">
+          ${textOrDash(item.oaci)} — ${textOrDash(item.ciad)} — ${textOrDash(item.name)}
+        </div>
+        <ul style="list-style:none;padding:0;margin:0;display:grid;gap:.5rem;">${itemsHtml}</ul>
+        <menu>
+          <button value="cancel" formnovalidate>Fechar</button>
+        </menu>
+      </form>
+    `;
+    document.body.appendChild(dlg);
+
+    dlg.addEventListener('click', ev => {
+      const btn = ev.target && ev.target.closest('button[data-nup]');
+      if (btn) {
+        ev.preventDefault();
+        const v = btn.getAttribute('data-nup');
+        dlg.close();
+        goToProcessListWithNUP(v);
+      }
+    });
+
+    dlg.addEventListener('close', () => dlg.remove());
+    try { dlg.showModal(); } catch { dlg.show(); }
+  }
+
+  async function handleViewNupsClick(item) {
+    // Cache simples por item para evitar consultas repetidas
+    if (!Array.isArray(item._nups)) {
+      item._nups = await fetchNupsForAirfield(item.id);
+    }
+    openNupPopup(item, item._nups);
   }
 
   // --------------------------
@@ -134,8 +223,13 @@ window.Modules.adhel = (() => {
     for (const r of visibleRows) {
       const tr = document.createElement('tr');
 
+      // Coluna NUP -> botão "Ver"
       const tdNup = document.createElement('td');
-      tdNup.textContent = textOrDash(r.nup);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'Ver';
+      btn.addEventListener('click', () => handleViewNupsClick(r));
+      tdNup.appendChild(btn);
       tr.appendChild(tdNup);
 
       const tdOaci = document.createElement('td');
@@ -246,7 +340,7 @@ window.Modules.adhel = (() => {
 
     const nupInput = getEl(FORM_IDS.nup);
     if (nupInput && window.Utils?.bindNUPMask) {
-      window.Utils.bindNUPMask(nupInput); // máscara NUP (Número Único de Protocolo)
+      window.Utils.bindNUPMask(nupInput);
     }
 
     const handleSubmit = (e) => {
