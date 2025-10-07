@@ -56,3 +56,52 @@
 #adhelList th {
   padding: 6px 8px;
 }
+
+/* === Patch aplicado === */
+
+.adhel-nup-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.adhel-ais-dialog__form {
+  width: min(720px, 90vw);
+}
+
+.adhel-ais-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.adhel-ais-dialog__actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.adhel-ais-dialog__message {
+  margin-bottom: 8px;
+}
+
+.adhel-ais-dialog__content {
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+}
+
+.adhel-ais-summary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.adhel-ais-summary dt {
+  font-weight: 600;
+}
+
+.adhel-ais-summary dd {
+  margin: 0 0 6px;
+  white-space: pre-wrap;
+}
