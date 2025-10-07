@@ -699,10 +699,7 @@ window.Modules.processos = (() => {
       const show = (sel?.value || '') === 'REV-OACO';
       if (show) {
         extrasBox.classList.remove('hidden');
-        docSelect?.setAttribute('required', 'true');
-        docPerformedInput?.setAttribute('required', 'true');
-        notifSelect?.setAttribute('required', 'true');
-        notifPerformedInput?.setAttribute('required', 'true');
+
         const baseVal = dt?.value || U.toDateTimeLocalValue(new Date());
         if (baseVal) {
           if (docPerformedInput && !docPerformedInput.value) docPerformedInput.value = baseVal;
@@ -711,10 +708,7 @@ window.Modules.processos = (() => {
         ensureRevOacoAnalystOptions(dlg);
       } else {
         extrasBox.classList.add('hidden');
-        docSelect?.removeAttribute('required');
-        docPerformedInput?.removeAttribute('required');
-        notifSelect?.removeAttribute('required');
-        notifPerformedInput?.removeAttribute('required');
+
       }
     };
 
@@ -747,61 +741,40 @@ window.Modules.processos = (() => {
       const statusSince = new Date(dtValue).toISOString();
       let docPerformedIso = null;
       let notifPerformedIso = null;
+      let docId = '';
+      let notifId = '';
       if (newStatus === 'REV-OACO') {
-        if (docSelect?.dataset.loading === 'true' || notifSelect?.dataset.loading === 'true') {
-          alert('Aguarde o carregamento da lista de Analistas OACO.');
-          return;
+        docId = docSelect?.value || '';
+        notifId = notifSelect?.value || '';
+
+        if (docId) {
+          const docPerformedVal = docPerformedInput?.value || '';
+          if (docPerformedVal) {
+            const docPerformedDate = new Date(docPerformedVal);
+            if (Number.isNaN(+docPerformedDate)) {
+              alert('Data/hora inválida para a realização da análise documental.');
+              docPerformedInput?.focus();
+              docPerformedInput?.reportValidity?.();
+              return;
+            }
+            docPerformedIso = docPerformedDate.toISOString();
+          }
         }
-        if (!docSelect?.dataset.ready || !notifSelect?.dataset.ready) {
-          alert('Não foi possível carregar a lista de Analistas OACO.');
-          return;
+
+        if (notifId) {
+          const notifPerformedVal = notifPerformedInput?.value || '';
+          if (notifPerformedVal) {
+            const notifPerformedDate = new Date(notifPerformedVal);
+            if (Number.isNaN(+notifPerformedDate)) {
+              alert('Data/hora inválida para a realização da confecção de notificação.');
+              notifPerformedInput?.focus();
+              notifPerformedInput?.reportValidity?.();
+              return;
+            }
+            notifPerformedIso = notifPerformedDate.toISOString();
+          }
         }
-        if (docSelect?.disabled || notifSelect?.disabled) {
-          alert('Nenhum Analista OACO cadastrado. Atualize os cadastros antes de registrar o status.');
-          return;
-        }
-        if (!docSelect?.value) {
-          alert('Selecione o responsável pela análise documental.');
-          docSelect?.focus();
-          docSelect?.reportValidity?.();
-          return;
-        }
-        if (!notifSelect?.value) {
-          alert('Selecione o(a) elaborador(a) da notificação.');
-          notifSelect?.focus();
-          notifSelect?.reportValidity?.();
-          return;
-        }
-        const docPerformedVal = docPerformedInput?.value || '';
-        if (!docPerformedVal) {
-          alert('Informe a data/hora da realização da análise documental.');
-          docPerformedInput?.focus();
-          docPerformedInput?.reportValidity?.();
-          return;
-        }
-        const notifPerformedVal = notifPerformedInput?.value || '';
-        if (!notifPerformedVal) {
-          alert('Informe a data/hora da realização da confecção de notificação.');
-          notifPerformedInput?.focus();
-          notifPerformedInput?.reportValidity?.();
-          return;
-        }
-        const docPerformedDate = new Date(docPerformedVal);
-        if (Number.isNaN(+docPerformedDate)) {
-          alert('Data/hora inválida para a realização da análise documental.');
-          docPerformedInput?.focus();
-          docPerformedInput?.reportValidity?.();
-          return;
-        }
-        const notifPerformedDate = new Date(notifPerformedVal);
-        if (Number.isNaN(+notifPerformedDate)) {
-          alert('Data/hora inválida para a realização da confecção de notificação.');
-          notifPerformedInput?.focus();
-          notifPerformedInput?.reportValidity?.();
-          return;
-        }
-        docPerformedIso = docPerformedDate.toISOString();
-        notifPerformedIso = notifPerformedDate.toISOString();
+
       }
       const payload = {
         status: newStatus,
@@ -809,8 +782,7 @@ window.Modules.processos = (() => {
       };
       let historyDetails = null;
       if (newStatus === 'REV-OACO') {
-        const docId = docSelect?.value || '';
-        const notifId = notifSelect?.value || '';
+
         const docProfile = docId ? (ANALISTA_OACO_MAP.get(docId) || {}) : null;
         const notifProfile = notifId ? (ANALISTA_OACO_MAP.get(notifId) || {}) : null;
         const docLabel = docSelect?.selectedOptions?.[0]?.textContent?.trim() || '';
@@ -824,7 +796,7 @@ window.Modules.processos = (() => {
                 analyst_name: docProfile?.name || docLabel,
                 analyst_email: docProfile?.email || '',
                 analyst_role: docProfile?.role || ANALISTA_OACO_ROLE,
-                 needs_review: !!docReviewCheck?.checked,
+                needs_review: !!docReviewCheck?.checked,
                 performed_at: docPerformedIso
               }
             : null,
