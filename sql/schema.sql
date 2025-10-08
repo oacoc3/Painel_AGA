@@ -1,8 +1,16 @@
 -- ============================================================
--- Migração AGA (revisada) - NUP, Extensões, Fuso, Políticas, Pareceres
--- Idempotente e segura para reexecução.
+-- Consolidado AGA — Migração única (idempotente)
+-- Conteúdo: schema.sql (+patch user_unavailabilities UPDATE),
+--           06c_allow_multiple_finals.sql,
+--           07_checklist_locks_and_rpcs.sql (harmonizado),
+--           adhel_airfields_from_sbre.sql
+-- Seguro para reexecução em banco já existente.
 -- ============================================================
 
+
+/* ============================ */
+/*  BLOCO 1 — schema.sql        */
+/* ============================ */
 DO $mig$
 BEGIN
   ----------------------------------------------------------------
@@ -50,10 +58,6 @@ BEGIN
 
   ----------------------------------------------------------------
   -- 3) Função de normalização de NUP
-  --    Regras:
-  --      - mantém apenas dígitos
-  --      - se tiver 5 dígitos de prefixo, descarta
-  --      - formata como XXXXXX/XXXX-XX (6/4-2)
   ----------------------------------------------------------------
   EXECUTE $sql$
     CREATE OR REPLACE FUNCTION public.normalize_nup(n text)
@@ -78,10 +82,7 @@ BEGIN
   $sql$;
 
   ----------------------------------------------------------------
-  -- 4) Constraint de NUP
-  --    - Remover a antiga (qualquer definição)
-  --    - Normalizar os DADOS EXISTENTES primeiro
-  --    - Adicionar a nova como NOT VALID e, em seguida, VALIDATE
+  -- 4) Constraint de NUP (normaliza dados existentes e valida)
   ----------------------------------------------------------------
   IF EXISTS (
     SELECT 1
@@ -93,9 +94,10 @@ BEGIN
     EXECUTE 'ALTER TABLE public.processes DROP CONSTRAINT nup_format';
   END IF;
 
-  -- Normaliza os registros já existentes antes de criar a nova constraint
-  IF EXISTS (SELECT 1 FROM information_schema.columns
-             WHERE table_schema='public' AND table_name='processes' AND column_name='nup') THEN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='processes' AND column_name='nup'
+  ) THEN
     EXECUTE $sql$
       UPDATE public.processes
          SET nup = public.normalize_nup(nup)
@@ -104,7 +106,6 @@ BEGIN
     $sql$;
   END IF;
 
-  -- Cria a nova constraint como NOT VALID (para não falhar agora)
   EXECUTE $sql$
     ALTER TABLE public.processes
     ADD CONSTRAINT nup_format
@@ -112,17 +113,10 @@ BEGIN
     NOT VALID
   $sql$;
 
-  -- Valida a constraint (lança erro se existirem linhas inválidas)
-  PERFORM 1
-  FROM pg_constraint c
-  JOIN pg_class t ON t.oid=c.conrelid
-  JOIN pg_namespace n ON n.oid=t.relnamespace
-  WHERE c.conname='nup_format' AND n.nspname='public' AND t.relname='processes';
-
   EXECUTE 'ALTER TABLE public.processes VALIDATE CONSTRAINT nup_format';
 
   ----------------------------------------------------------------
-  -- 5) Trigger para manter o formato em novos INSERT/UPDATE
+  -- 5) Trigger para manter NUP normalizado
   ----------------------------------------------------------------
   EXECUTE $sql$
     CREATE OR REPLACE FUNCTION public.trg_processes_normalize_nup()
@@ -158,10 +152,9 @@ BEGIN
   ) THEN
     EXECUTE 'DROP POLICY "profiles self update name" ON public.profiles';
   END IF;
-  -- (mantém políticas de Administrador já presentes)
 
   ----------------------------------------------------------------
-  -- 7) Pareceres internos: liberar (sem exigir ANATEC-PRE/ANATEC)
+  -- 7) Pareceres internos: liberar (sem checagem de status do processo)
   ----------------------------------------------------------------
   EXECUTE $sql$
     CREATE OR REPLACE FUNCTION public.check_opinion_allowed()
@@ -169,14 +162,13 @@ BEGIN
     LANGUAGE plpgsql
     AS $$
     BEGIN
-      -- Libera inserções/atualizações de pareceres internos, sem checagem de status do processo
       RETURN NEW;
     END;
     $$;
   $sql$;
 
   ----------------------------------------------------------------
-  -- 8) Views: usar timezone 'America/Recife'
+  -- 8) Views: timezone 'America/Recife'
   ----------------------------------------------------------------
   -- v_prazo_ad_hel
   IF EXISTS (SELECT 1 FROM pg_views WHERE schemaname='public' AND viewname='v_prazo_ad_hel') THEN
@@ -358,14 +350,11 @@ BEGIN
   END IF;
 
   ----------------------------------------------------------------
-  -- 9) Sinalizações dos cards de prazos (destacar itens VALIDADOS)
+  -- 9) deadline_flags (tabela, índices, RLS/policies)
   ----------------------------------------------------------------
   EXECUTE $sql$
     CREATE TABLE IF NOT EXISTS public.deadline_flags (
       id bigserial PRIMARY KEY,
-      -- IMPORTANTE: mantenha o tipo de process_id compatível com public.processes(id).
-      -- Se processes.id for BIGINT (bigserial), use BIGINT aqui.
-      -- Se for UUID no seu esquema, troque para UUID e mantenha a FK abaixo.
       process_id uuid NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
       card text NOT NULL,
       item_key text NOT NULL,
@@ -484,10 +473,8 @@ BEGIN
   END IF;
 
   ----------------------------------------------------------------
-  -- 10) HISTORY: tabela + índices + RLS + policies (idempotente)
-  --      Necessário para o registro do histórico após "Confirmar".
+  -- 10) history (tabela, índices, RLS/policies)
   ----------------------------------------------------------------
-  -- Criar tabela se não existir (tipos compatíveis com o front)
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.tables
     WHERE table_schema='public' AND table_name='history'
@@ -495,7 +482,6 @@ BEGIN
     EXECUTE $sql$
       CREATE TABLE public.history (
         id          bigserial PRIMARY KEY,
-        -- Ajuste o tipo de process_id para bater com public.processes(id)
         process_id  bigint NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
         action      text   NOT NULL,
         details     jsonb  NULL,
@@ -506,7 +492,6 @@ BEGIN
     $sql$;
   END IF;
 
-  -- Garantias de colunas (caso a tabela já exista diferente)
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='history' AND column_name='details'
@@ -524,7 +509,6 @@ BEGIN
   BEGIN
     EXECUTE 'ALTER TABLE public.history ALTER COLUMN user_id SET NOT NULL';
   EXCEPTION WHEN others THEN
-    -- Se existirem linhas antigas nulas, mantém sem NOT NULL para não quebrar
     NULL;
   END;
 
@@ -535,7 +519,6 @@ BEGIN
     EXECUTE 'ALTER TABLE public.history ADD COLUMN user_name text';
   END IF;
 
-  -- Índices úteis
   IF NOT EXISTS (
     SELECT 1 FROM pg_indexes
     WHERE schemaname='public' AND tablename='history' AND indexname='idx_history_process_id'
@@ -550,10 +533,8 @@ BEGIN
     EXECUTE 'CREATE INDEX idx_history_created_at ON public.history(created_at DESC)';
   END IF;
 
-  -- RLS
   EXECUTE 'ALTER TABLE public.history ENABLE ROW LEVEL SECURITY';
 
-  -- SELECT: qualquer usuário autenticado pode consultar histórico
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
     WHERE schemaname='public' AND tablename='history' AND policyname='history_select_authenticated'
@@ -567,7 +548,6 @@ BEGIN
     $pol$;
   END IF;
 
-  -- INSERT: somente se user_id = auth.uid()  (compatível com o front)
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
     WHERE schemaname='public' AND tablename='history' AND policyname='history_insert_own'
@@ -581,7 +561,6 @@ BEGIN
     $pol$;
   END IF;
 
-  -- (Opcional) DELETE: permitir apenas Administrador
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
     WHERE schemaname='public' AND tablename='history' AND policyname='history_delete_admin'
@@ -601,7 +580,7 @@ BEGIN
   END IF;
 
   ----------------------------------------------------------------
-  -- USER UNAVAILABILITIES: tabela e políticas
+  -- 11) user_unavailabilities (tabela, índices, RLS/policies)
   ----------------------------------------------------------------
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.tables
@@ -705,8 +684,35 @@ BEGIN
     $pol$;
   END IF;
 
+  -- >>>> PATCH SOLICITADO: permitir UPDATE por si mesmo ou Admin <<<<
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='user_unavailabilities' AND policyname='user_unavailabilities_update_self_or_admin'
+  ) THEN
+    EXECUTE $pol$
+      CREATE POLICY "user_unavailabilities_update_self_or_admin"
+        ON public.user_unavailabilities
+        FOR UPDATE
+        TO authenticated
+        USING (
+          profile_id = auth.uid()
+          OR EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.id = auth.uid() AND p.role = 'Administrador'
+          )
+        )
+        WITH CHECK (
+          profile_id = auth.uid()
+          OR EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.id = auth.uid() AND p.role = 'Administrador'
+          )
+        )
+    $pol$;
+  END IF;
+
   ----------------------------------------------------------------
-  -- SIGADAER: garantir colunas de município/UF (para integração com IBGE)
+  -- 12) SIGADAER: colunas municipality_name / municipality_uf
   ----------------------------------------------------------------
   IF EXISTS (
     SELECT 1 FROM information_schema.tables
@@ -731,5 +737,401 @@ BEGIN
     END IF;
   END IF;
 
+END
+$mig$;
+
+
+/* ====================================================== */
+/*  BLOCO 2 — 06c_allow_multiple_finals.sql (idempotente) */
+/* ====================================================== */
+
+-- 1) Remover índice único de FINALS (se existir)
+DO $mig$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.relkind = 'i'
+      AND c.relname = 'uq_checklist_final_unique'
+      AND n.nspname = 'public'
+  ) THEN
+    EXECUTE 'DROP INDEX public.uq_checklist_final_unique';
+  END IF;
+END;
+$mig$;
+
+-- 2) Garantir exclusividade de DRAFT (um por processo+template)
+DO $mig$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.relkind = 'i'
+      AND c.relname = 'uq_checklist_draft_unique'
+      AND n.nspname = 'public'
+  ) THEN
+    EXECUTE $SQL$
+      CREATE UNIQUE INDEX uq_checklist_draft_unique
+        ON public.checklist_responses (process_id, template_id)
+        WHERE status = 'draft';
+    $SQL$;
+  END IF;
+END;
+$mig$;
+
+-- 3) Índices úteis para FINALS (não exclusivos)
+CREATE INDEX IF NOT EXISTS idx_ck_final_lookup
+  ON public.checklist_responses (process_id, template_id, filled_at DESC)
+  WHERE status = 'final';
+
+CREATE INDEX IF NOT EXISTS idx_ck_status
+  ON public.checklist_responses (status);
+
+-- 4) Reinsere FINALS do arquivo (se existir a tabela de arquivo)
+DO $mig$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='checklist_responses_archive'
+  ) THEN
+    EXECUTE $SQL$
+      INSERT INTO public.checklist_responses
+        (id, process_id, template_id, answers, extra_obs, status,
+         started_at, filled_by, filled_at, updated_at,
+         version, lock_owner, lock_acquired_at, lock_expires_at)
+      SELECT
+        a.id, a.process_id, a.template_id, a.answers, a.extra_obs, a.status,
+        a.started_at, a.filled_by, a.filled_at, a.updated_at,
+        a.version, a.lock_owner, a.lock_acquired_at, a.lock_expires_at
+      FROM public.checklist_responses_archive a
+      WHERE a.status = 'final'
+        AND NOT EXISTS (
+          SELECT 1 FROM public.checklist_responses r WHERE r.id = a.id
+        );
+    $SQL$;
+  END IF;
+END;
+$mig$;
+
+-- 5) Views de apoio
+CREATE OR REPLACE VIEW public.v_checklist_latest_final AS
+SELECT DISTINCT ON (r.process_id, r.template_id)
+  r.*
+FROM public.checklist_responses r
+WHERE r.status = 'final'
+ORDER BY
+  r.process_id,
+  r.template_id,
+  r.filled_at DESC NULLS LAST,
+  r.updated_at DESC NULLS LAST,
+  r.started_at DESC NULLS LAST,
+  r.id DESC;
+
+CREATE OR REPLACE VIEW public.v_checklist_finals_ranked AS
+SELECT
+  r.*,
+  ROW_NUMBER() OVER (
+    PARTITION BY r.process_id, r.template_id
+    ORDER BY
+      r.filled_at DESC NULLS LAST,
+      r.updated_at DESC NULLS LAST,
+      r.started_at DESC NULLS LAST,
+      r.id DESC
+  ) AS final_rank
+FROM public.checklist_responses r
+WHERE r.status = 'final';
+
+
+/* ====================================================== */
+/*  BLOCO 3 — 07_checklist_locks_and_rpcs.sql (harmon.)   */
+/*    Nota: “harmonizado” apenas no CREATE IF NOT EXISTS  */
+/*    de public.checklist_responses, para alinhar com     */
+/*    índices/views do BLOCO 2 (status, filled_at etc.).  */
+/* ====================================================== */
+
+-- Extensão para UUID (se necessário)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'uuid-ossp') THEN
+    CREATE EXTENSION "uuid-ossp";
+  END IF;
+END $$;
+
+-- Locks de checklist
+CREATE TABLE IF NOT EXISTS public.checklist_locks (
+  process_id      uuid    NOT NULL,
+  template_id     uuid    NOT NULL,
+  holder_user_id  uuid    NOT NULL,
+  acquired_at     timestamptz NOT NULL DEFAULT now(),
+  expires_at      timestamptz NOT NULL,
+  PRIMARY KEY (process_id, template_id)
+);
+
+CREATE INDEX IF NOT EXISTS checklist_locks_expires_at_idx ON public.checklist_locks (expires_at);
+CREATE INDEX IF NOT EXISTS checklist_locks_holder_idx  ON public.checklist_locks (holder_user_id);
+
+-- Rascunhos de checklist
+CREATE TABLE IF NOT EXISTS public.checklist_drafts (
+  id             uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  process_id     uuid NOT NULL,
+  template_id    uuid NOT NULL,
+  answers        jsonb NOT NULL DEFAULT '{}'::jsonb,
+  extra_obs      text,
+  updated_by     uuid,
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (process_id, template_id)
+);
+
+-- Utilitário now()
+CREATE OR REPLACE FUNCTION public._now() RETURNS timestamptz
+LANGUAGE sql STABLE AS $$ SELECT now() $$;
+
+-- RPC: adquirir lock
+CREATE OR REPLACE FUNCTION public.rpc_acquire_checklist_lock(
+  p_process_id uuid,
+  p_template_id uuid,
+  p_ttl_seconds integer
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_user_id uuid;
+  v_now timestamptz := now();
+  v_expires timestamptz := v_now + make_interval(secs => COALESCE(p_ttl_seconds, 1800));
+  v_holder uuid;
+BEGIN
+  SELECT auth.uid() INTO v_user_id;
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'auth required';
+  END IF;
+
+  DELETE FROM public.checklist_locks WHERE expires_at <= v_now;
+
+  SELECT holder_user_id INTO v_holder
+  FROM public.checklist_locks
+  WHERE process_id = p_process_id AND template_id = p_template_id;
+
+  IF v_holder IS NULL THEN
+    INSERT INTO public.checklist_locks(process_id, template_id, holder_user_id, acquired_at, expires_at)
+    VALUES (p_process_id, p_template_id, v_user_id, v_now, v_expires);
+    RETURN jsonb_build_object('status','acquired');
+  ELSIF v_holder = v_user_id THEN
+    UPDATE public.checklist_locks
+      SET expires_at = v_expires
+    WHERE process_id = p_process_id AND template_id = p_template_id;
+    RETURN jsonb_build_object('status','renewed');
+  ELSE
+    RETURN jsonb_build_object('status','held_by_other', 'holder', v_holder::text);
+  END IF;
+END;
+$$;
+
+-- RPC: renovar lock
+CREATE OR REPLACE FUNCTION public.rpc_renew_checklist_lock(
+  p_process_id uuid,
+  p_template_id uuid,
+  p_ttl_seconds integer
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_user_id uuid;
+  v_now timestamptz := now();
+  v_expires timestamptz := v_now + make_interval(secs => COALESCE(p_ttl_seconds, 1800));
+BEGIN
+  SELECT auth.uid() INTO v_user_id;
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'auth required';
+  END IF;
+
+  UPDATE public.checklist_locks
+     SET expires_at = v_expires
+   WHERE process_id = p_process_id
+     AND template_id = p_template_id
+     AND holder_user_id = v_user_id;
+
+  IF FOUND THEN
+    RETURN jsonb_build_object('status','renewed');
+  END IF;
+
+  RETURN jsonb_build_object('status','no_lock');
+END;
+$$;
+
+-- RPC: liberar lock
+CREATE OR REPLACE FUNCTION public.rpc_release_checklist_lock(
+  p_process_id uuid,
+  p_template_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_user_id uuid;
+BEGIN
+  SELECT auth.uid() INTO v_user_id;
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'auth required';
+  END IF;
+
+  DELETE FROM public.checklist_locks
+   WHERE process_id = p_process_id
+     AND template_id = p_template_id
+     AND holder_user_id = v_user_id;
+
+  IF FOUND THEN
+    RETURN jsonb_build_object('status','released');
+  END IF;
+  RETURN jsonb_build_object('status','no_lock');
+END;
+$$;
+
+-- >>> Harmonização: criar checklist_responses (apenas se não existir)
+--     com colunas compatíveis aos índices/views do BLOCO 2.
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='checklist_responses'
+  ) THEN
+    CREATE TABLE public.checklist_responses (
+      id           uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+      process_id   uuid NOT NULL,
+      template_id  uuid NOT NULL,
+      answers      jsonb NOT NULL,
+      extra_obs    text,
+      status       text NOT NULL DEFAULT 'final', -- valores esperados: 'draft' | 'final'
+      started_at   timestamptz,
+      filled_by    uuid,
+      filled_at    timestamptz,
+      updated_at   timestamptz,
+      version      integer,
+      lock_owner   uuid,
+      lock_acquired_at timestamptz,
+      lock_expires_at  timestamptz
+    );
+    CREATE INDEX checklist_responses_process_idx  ON public.checklist_responses(process_id);
+    CREATE INDEX checklist_responses_template_idx ON public.checklist_responses(template_id);
+  END IF;
+END $$;
+
+-- RPC: salvar/atualizar rascunho
+CREATE OR REPLACE FUNCTION public.rpc_upsert_checklist_draft(
+  p_answers jsonb,
+  p_extra_obs text,
+  p_process_id uuid,
+  p_template_id uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_id uuid;
+  v_user_id uuid;
+BEGIN
+  SELECT auth.uid() INTO v_user_id;
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'auth required';
+  END IF;
+
+  INSERT INTO public.checklist_drafts AS cd (process_id, template_id, answers, extra_obs, updated_by, updated_at)
+  VALUES (p_process_id, p_template_id, COALESCE(p_answers,'{}'::jsonb), p_extra_obs, v_user_id, now())
+  ON CONFLICT (process_id, template_id) DO UPDATE
+     SET answers = EXCLUDED.answers,
+         extra_obs = EXCLUDED.extra_obs,
+         updated_by = EXCLUDED.updated_by,
+         updated_at = EXCLUDED.updated_at
+  RETURNING id INTO v_id;
+
+  RETURN v_id;
+END;
+$$;
+
+-- RPC: finalizar checklist (insere como 'final')
+CREATE OR REPLACE FUNCTION public.rpc_finalize_checklist(
+  p_answers jsonb,
+  p_extra_obs text,
+  p_process_id uuid,
+  p_template_id uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_id uuid;
+  v_user_id uuid;
+BEGIN
+  SELECT auth.uid() INTO v_user_id;
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'auth required';
+  END IF;
+
+  INSERT INTO public.checklist_responses (process_id, template_id, answers, extra_obs, status, filled_by, filled_at, updated_at)
+  VALUES (p_process_id, p_template_id, COALESCE(p_answers,'{}'::jsonb), p_extra_obs, 'final', v_user_id, now(), now())
+  RETURNING id INTO v_id;
+
+  -- Limpa rascunho e lock do usuário
+  DELETE FROM public.checklist_drafts
+   WHERE process_id = p_process_id AND template_id = p_template_id;
+
+  DELETE FROM public.checklist_locks
+   WHERE process_id = p_process_id AND template_id = p_template_id AND holder_user_id = v_user_id;
+
+  RETURN v_id;
+END;
+$$;
+
+-- Grants (ajuste papéis se necessário)
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.checklist_locks   TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.checklist_drafts  TO authenticated;
+GRANT SELECT, INSERT                   ON public.checklist_responses TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.rpc_acquire_checklist_lock(uuid,uuid,integer) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.rpc_renew_checklist_lock(uuid,uuid,integer)   TO authenticated;
+GRANT EXECUTE ON FUNCTION public.rpc_release_checklist_lock(uuid,uuid)         TO authenticated;
+GRANT EXECUTE ON FUNCTION public.rpc_upsert_checklist_draft(jsonb,text,uuid,uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.rpc_finalize_checklist(jsonb,text,uuid,uuid)     TO authenticated;
+
+
+/* ====================================================== */
+/*  BLOCO 4 — adhel_airfields_from_sbre.sql               */
+/* ====================================================== */
+
+DO $mig$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='adhel_airfields'
+  ) THEN
+    CREATE TABLE public.adhel_airfields (
+      id         bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+      tipo       text,
+      oaci       text,
+      ciad       text,
+      name       text,
+      municipio  text,
+      uf         text NOT NULL CHECK (char_length(uf) = 2),
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='adhel_airfields_oaci_idx') THEN
+    CREATE INDEX adhel_airfields_oaci_idx ON public.adhel_airfields (oaci);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='adhel_airfields_ciad_idx') THEN
+    CREATE INDEX adhel_airfields_ciad_idx ON public.adhel_airfields (ciad);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='adhel_airfields_municipio_idx') THEN
+    CREATE INDEX adhel_airfields_municipio_idx ON public.adhel_airfields (municipio);
+  END IF;
 END
 $mig$;
