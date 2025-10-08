@@ -375,6 +375,54 @@ window.Modules.dashboard = (() => {
       sigadaerPref: 0
     };
 
+// >>> FIX Atividades: contar ENTRADA no status (histórico) com fallback em status_since
+(() => {
+  const seenAnadoc = new Set();
+  const seenAnatecPre = new Set();
+  const seenAnatec = new Set();
+
+  // 1) Pelo histórico (uma vez por processo/ano)
+  Object.entries(cachedStatusHistory || {}).forEach(([procId, list]) => {
+    if (!Array.isArray(list)) return;
+    for (let i = 0; i < list.length; i++) {
+      const cur = list[i];
+      if (!cur || !cur.start || !cur.status) continue;
+
+      // evita duplicata idêntica em sequência
+      if (i > 0) {
+        const prev = list[i - 1];
+        if (prev && prev.start === cur.start && prev.status === cur.status) continue;
+      }
+
+      const d = new Date(cur.start);
+      if (Number.isNaN(+d) || d.getFullYear() !== year) continue;
+
+      const pid = String(procId);
+      if (cur.status === 'ANADOC')      seenAnadoc.add(pid);
+      if (cur.status === 'ANATEC-PRE')  seenAnatecPre.add(pid);
+      if (cur.status === 'ANATEC')      seenAnatec.add(pid);
+    }
+  });
+
+  // 2) Fallback: se não houver histórico, considerar status_since do processo no ano
+  (cachedProcesses || []).forEach(proc => {
+    if (!proc || !proc.id || !proc.status || !proc.status_since) return;
+    const d = new Date(proc.status_since);
+    if (Number.isNaN(+d) || d.getFullYear() !== year) return;
+
+    const pid = String(proc.id);
+    if (proc.status === 'ANADOC')      seenAnadoc.add(pid);
+    if (proc.status === 'ANATEC-PRE')  seenAnatecPre.add(pid);
+    if (proc.status === 'ANATEC')      seenAnatec.add(pid);
+  });
+
+  counters.anadoc     = seenAnadoc.size;
+  counters.anatecPre  = seenAnatecPre.size;
+  counters.anatec     = seenAnatec.size;
+})();
+// <<< FIX
+
+    
     // >>> Patch do diff: contar cada processo apenas uma vez por status no ano
     const statusProcessSets = {
       anadoc: new Set(),
