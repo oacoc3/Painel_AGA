@@ -26,8 +26,12 @@ window.Modules.dashboard = (() => {
     'ICA-PUB'
   ];
 
-  // >>> Patch: médias de pareceres (ATM/DT/CGNA)
-  const OPINION_TYPES_SET = new Set(['ATM', 'DT', 'CGNA']);
+  // >>> Patch: médias de pareceres (ATM/DT)
+  const OPINION_AVERAGE_TYPES = ['ATM', 'DT'];
+  const OPINION_LABELS = {
+    ATM: 'Análise ATM',
+    DT: 'Análise DT'
+  };
   // <<< Patch
 
   const STATUS_LABELS = {
@@ -104,13 +108,37 @@ window.Modules.dashboard = (() => {
     node.textContent = value == null ? '—' : YEARLY_COUNTER_FORMATTER.format(value);
   }
 
+  function ensureYearSelectPopulated() {
+    const select = el('entryYearSelect');
+    if (!select) return false;
+
+    if (select.options && select.options.length) return true;
+
+    const years = unique(
+      (cachedProcesses || [])
+        .map(proc => proc.first_entry_date)
+        .filter(Boolean)
+        .map(date => (Utils.dateOnly(date) || {}).getFullYear?.())
+        .filter(y => Number.isFinite(y))
+    ).sort((a, b) => a - b);
+
+    if (!years.length) return false;
+
+    const previous = Number(localStorage.getItem('dashboard.entryYear') || '');
+    select.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+
+    const chosen = (Number.isFinite(previous) && years.includes(previous)) ? previous : years[0];
+    select.value = String(chosen);
+    return true;
+  }
+
   function renderEntryChart() {
     const container = el('entryChart');
     if (!container) return;
 
     const select = el('entryYearSelect');
     const year = select && select.value ? Number(select.value) : NaN;
-    if (!Number.isFinite(year)) {
+    if (!year || Number.isNaN(year)) {
       renderEntryChartEmpty('Selecione um ano.');
       return;
     }
@@ -213,8 +241,6 @@ window.Modules.dashboard = (() => {
     const agg = {};
     const opinionAgg = {}; // <<< Patch
     const now = new Date();
-
-    // médias por status (apenas dentro do ano selecionado)
     if (hasYear) {
       Object.values(cachedStatusHistory || {}).forEach(list => {
         if (!Array.isArray(list)) return;
@@ -234,7 +260,8 @@ window.Modules.dashboard = (() => {
 
           const startYear = startDate.getFullYear();
           const endYear = endDate.getFullYear();
-          if (startYear !== year || endYear !== year) continue;
+          // >>> CORREÇÃO: considerar etapas que COMEÇARAM no ano selecionado
+          if (startYear !== year) continue;
 
           const days = Utils.daysBetween(startDate, endDate);
           if (typeof days !== 'number' || Number.isNaN(days)) continue;
@@ -246,32 +273,29 @@ window.Modules.dashboard = (() => {
       });
     }
 
-    // >>> Patch: médias ATM/DT/CGNA por ano (solicitação → recebimento)
+    // >>> Patch: agregação de médias de pareceres (ATM/DT) por ano (solicitação → recebimento)
     if (hasYear) {
       (cachedOpinions || []).forEach(opinion => {
         if (!opinion) return;
         const type = typeof opinion.type === 'string' ? opinion.type.toUpperCase() : '';
-        if (!OPINION_TYPES_SET.has(type)) return;
-        const req = opinion.requested_at ? new Date(opinion.requested_at) : null;
-        const rcv = opinion.received_at ? new Date(opinion.received_at) : null;
-        if (!req || !rcv || Number.isNaN(+req) || Number.isNaN(+rcv)) return;
+        if (!OPINION_AVERAGE_TYPES.includes(type)) return;
+        if (!opinion.requested_at) return;
+        const receivedValue = opinion.received_at || opinion.received_at;
+        if (!receivedValue) return;
+
+        const req = new Date(opinion.requested_at);
+        const rcv = new Date(receivedValue);
+        if (Number.isNaN(+req) || Number.isNaN(+rcv)) return;
         if (req.getFullYear() !== year && rcv.getFullYear() !== year) return;
 
         const days = Utils.daysBetween(req, rcv);
         if (typeof days !== 'number' || Number.isNaN(days)) return;
 
-        const bucket = opinionAgg[type] || (opinionAgg[type] = { sum: 0, n: 0 });
+        const bucket = (opinionAgg[type] ||= { sum: 0, n: 0 });
         bucket.sum += days;
         bucket.n += 1;
       });
     }
-
-    const getOpinionAverage = (type) => {
-      const entry = opinionAgg[type];
-      if (!entry || !entry.n) return null;
-      const avg = entry.sum / entry.n;
-      return Number.isFinite(avg) ? avg : null;
-    };
     // <<< Patch
 
     const ringStatuses = SPEED_STATUS_ORDER.filter(
@@ -286,52 +310,27 @@ window.Modules.dashboard = (() => {
         label,
         count: countMap[statusCode] || 0,
         avg: agg[statusCode] ? (agg[statusCode].sum / agg[statusCode].n) : null,
-        avgLabel: agg[statusCode] ? `${(agg[statusCode].sum / agg[statusCode].n).toFixed(1)}d` : '—'
+        ariaLabel: `Velocidade média de ${label}`
       });
+
+      // >>> Patch: inserir as médias de pareceres logo após ANATEC-PRE
+      if (statusCode === 'ANATEC-PRE') {
+        OPINION_AVERAGE_TYPES.forEach(type => {
+          const a = opinionAgg[type];
+          const avg = a?.n ? (a.sum / a.n) : null;
+          items.push({
+            status: `OP-${type}`,
+            label: OPINION_LABELS[type] || type,
+            count: null,
+            avg,
+            ariaLabel: `Tempo médio da ${OPINION_LABELS[type] || type} (da solicitação ao recebimento)`
+          });
+        });
+      }
+      // <<< Patch
     });
 
-    const container = document.getElementById('overviewContainer');
-    if (!container) return;
-    container.innerHTML = '';
-
-    items.forEach(item => {
-      const node = document.createElement('div');
-      node.className = 'ov-item';
-      node.innerHTML = `
-        <div class="ov-ring">
-          <div class="ov-ring-count">${YEARLY_COUNTER_FORMATTER.format(item.count)}</div>
-        </div>
-        <div class="ov-info">
-          <div class="ov-title">${item.label}</div>
-          <div class="ov-meta">${item.avg != null ? `${item.avg.toFixed(1)}d (médio)` : '—'}</div>
-        </div>
-      `;
-      container.appendChild(node);
-    });
-
-    // cartão de médias de pareceres (usa os mesmos estilos)
-    const opinionsContainer = document.getElementById('opinionAveragesContainer');
-    if (opinionsContainer) {
-      opinionsContainer.innerHTML = '';
-      ['ATM','DT','CGNA'].forEach(type => {
-        const avg = getOpinionAverage(type);
-        const label = type === 'ATM' ? 'Análise ATM'
-                    : type === 'DT'  ? 'Análise DT'
-                    : 'Análise CGNA';
-        const card = document.createElement('div');
-        card.className = 'ov-item opinion';
-        card.innerHTML = `
-          <div class="ov-ring small">
-            <div class="ov-ring-count">${avg != null ? avg.toFixed(1) : '—'}</div>
-          </div>
-          <div class="ov-info">
-            <div class="ov-title">${label}</div>
-            <div class="ov-meta">${avg != null ? 'dias (médio)' : '—'}</div>
-          </div>
-        `;
-        opinionsContainer.appendChild(card);
-      });
-    }
+    Utils.renderProcessBars('velocimetros', items);
   }
 
   function renderYearlyActivity() {
@@ -363,7 +362,7 @@ window.Modules.dashboard = (() => {
       sigadaerPref: 0
     };
 
-    // >>> IMPORTANTE: contamos o "evento de entrada no status" pelo HISTÓRICO (uma vez por processo/ano)
+    // Contagem por ENTRADA no status (histórico) — 1x por processo/ano
     const statusProcessSets = {
       anadoc: new Set(),
       anatecPre: new Set(),
@@ -393,9 +392,8 @@ window.Modules.dashboard = (() => {
     counters.anadoc = statusProcessSets.anadoc.size;
     counters.anatecPre = statusProcessSets.anatecPre.size;
     counters.anatec = statusProcessSets.anatec.size;
-    // <<< Patch do diff
 
-    // Notificações: contam pela data efetiva do pedido
+    // Notificações
     (cachedNotifications || []).forEach(notification => {
       if (!notification) return;
       const { requested_at: requestedAt } = notification;
@@ -407,7 +405,7 @@ window.Modules.dashboard = (() => {
       }
     });
 
-    // SIGADAER: contam quando EXPEDIDO, pela data de expedição (expedit_at)
+    // SIGADAER (EXPEDIDO → expedit_at)
     (cachedSigadaer || []).forEach(sigadaer => {
       if (!sigadaer) return;
       const { type, status, expedit_at: expeditAt } = sigadaer;
@@ -428,7 +426,7 @@ window.Modules.dashboard = (() => {
     });
   }
 
-  // >>> Patch novo: Engajamento por hora (mantendo seu layout e classes)
+  // ====== Engajamento por hora ======
   function determineHourlyGroupKey(date) {
     const dow = date.getDay(); // 0=Dom,1=Seg..6=Sáb
     if (dow === 0 || dow === 6) return 'weekend';
@@ -510,7 +508,7 @@ window.Modules.dashboard = (() => {
     title.textContent = `Distribuição por hora — ${group.label}`;
     block.appendChild(title);
 
-    // tabela de barras (0..23h)
+    // barras 0..23h
     const bars = document.createElement('div');
     bars.className = 'hourly-bars';
 
@@ -577,7 +575,6 @@ window.Modules.dashboard = (() => {
     summary.appendChild(summaryValue);
     container.appendChild(summary);
   }
-  // <<< Patch novo
 
   async function load() {
     renderEntryChartEmpty('Carregando…');
@@ -598,23 +595,7 @@ window.Modules.dashboard = (() => {
 
     cachedProcesses = procs || [];
 
-    // popular seletor de anos
-    const years = unique(
-      (cachedProcesses || [])
-        .map(proc => proc.first_entry_date)
-        .filter(Boolean)
-        .map(date => (Utils.dateOnly(date) || {}).getFullYear?.())
-        .filter(y => Number.isFinite(y))
-    ).sort((a, b) => a - b);
-
-    const selectNode = el('entryYearSelect');
-    if (selectNode) {
-      selectNode.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
-    }
-
-    const hasYears = years.length > 0;
-    if (hasYears) renderEntryChart();
-    else renderEntryChartEmpty('Nenhum dado para exibir.');
+    ensureYearSelectPopulated();
 
     const { data: notifications } = await sb
       .from('notifications')
@@ -626,7 +607,7 @@ window.Modules.dashboard = (() => {
       .select('type, status, requested_at, expedit_at');
     cachedSigadaer = sigadaer || [];
 
-    // médias de pareceres — precisamos do received_at
+    // >> Precisamos de received_at p/ médias de pareceres
     const { data: opinions } = await sb
       .from('internal_opinions')
       .select('type, requested_at, received_at');
@@ -656,7 +637,7 @@ window.Modules.dashboard = (() => {
       });
     }
 
-    // garantir que o status atual também esteja na sequência
+    // garantir que o status atual esteja na sequência
     (procs || []).forEach(proc => {
       if (!proc || !proc.id) return;
       const list = byProc[proc.id] || (byProc[proc.id] = []);
@@ -670,6 +651,7 @@ window.Modules.dashboard = (() => {
     cachedStatusHistory = byProc;
 
     renderOverview();
+    renderEntryChart();
     renderYearlyActivity();
     renderHourlyEngagement();
 
@@ -679,8 +661,9 @@ window.Modules.dashboard = (() => {
   function init() {
     const yearSelect = el('entryYearSelect');
     yearSelect?.addEventListener('change', () => {
-      renderEntryChart();
+      localStorage.setItem('dashboard.entryYear', String(yearSelect.value || ''));
       renderOverview();
+      renderEntryChart();
       renderYearlyActivity();
       renderHourlyEngagement();
     });
