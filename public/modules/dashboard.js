@@ -48,6 +48,9 @@ window.Modules.dashboard = (() => {
   const YEARLY_COUNTER_FORMATTER = new Intl.NumberFormat('pt-BR');
   const PERCENTAGE_FORMATTER = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 
+  const OPINION_TYPES_SET = new Set(['ATM', 'DT', 'CGNA']);
+
+  // >>> Patch novo: grupos/visões para Engajamento por Hora
   const HOURLY_GROUPS = [
     {
       key: 'monThu',
@@ -73,9 +76,12 @@ window.Modules.dashboard = (() => {
     acc[group.key] = group;
     return acc;
   }, {});
-  const HOURLY_VIEW_DEFAULT = 'monThu';
-  const HOURLY_VIEW_VALUES = new Set(HOURLY_GROUPS.map(g => g.key));
+
+  // (alterado pelo patch) agora a visão padrão é o primeiro grupo existente
+  const HOURLY_VIEW_DEFAULT = HOURLY_GROUPS.length ? HOURLY_GROUPS[0].key : null;
+  const HOURLY_VIEW_VALUES = new Set(HOURLY_GROUPS.map(group => group.key));
   const HOURLY_VIEW_SELECT_ID = 'hourlyEngagementViewSelect';
+  // <<< Patch novo
 
   let cachedProcesses = [];
   let cachedStatusHistory = {};
@@ -87,12 +93,21 @@ window.Modules.dashboard = (() => {
     return document.getElementById(id);
   }
 
-  function unique(arr) {
-    return Array.from(new Set(arr));
-  }
+  function init() {
+    const yearSelect = el('entryYearSelect');
+    yearSelect?.addEventListener('change', () => {
+      renderEntryChart();
+      renderOverview();
+      renderYearlyActivity();
+      renderHourlyEngagement();
+    });
 
-  function daysBetween(d1, d2) {
-    return Utils.daysBetween(d1, d2);
+    // >>> Patch novo: seletor de visão do gráfico horário (se existir no HTML)
+    const hourlyViewSelect = el(HOURLY_VIEW_SELECT_ID);
+    hourlyViewSelect?.addEventListener('change', () => {
+      renderHourlyEngagement();
+    });
+    // <<< Patch novo
   }
 
   function renderEntryChartEmpty(message = 'Nenhum dado para exibir.') {
@@ -109,23 +124,46 @@ window.Modules.dashboard = (() => {
   function setEntryYearTotal(value) {
     const node = el('entryYearTotal');
     if (!node) return;
-    node.textContent = value == null ? '—' : YEARLY_COUNTER_FORMATTER.format(value);
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      node.textContent = YEARLY_COUNTER_FORMATTER.format(value);
+    } else {
+      node.textContent = '—';
+    }
   }
 
   function updateYearOptions() {
     const select = el('entryYearSelect');
     if (!select) return false;
 
-    const years = unique(
-      (cachedProcesses || [])
-        .map(proc => proc.first_entry_date)
-        .filter(Boolean)
-        .map(date => (Utils.dateOnly(date) || {}).getFullYear?.())
-        .filter(y => Number.isFinite(y))
-    ).sort((a, b) => a - b);
+    const previous = select.value ? Number(select.value) : null;
+    const yearSet = new Set();
+    (cachedProcesses || []).forEach(proc => {
+      const d = Utils.dateOnly(proc.first_entry_date);
+      if (!d || Number.isNaN(+d)) return;
+      yearSet.add(d.getFullYear());
+    });
 
-    if (!years.length) return false;
-    select.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+    const years = Array.from(yearSet)
+      .filter(y => Number.isFinite(y))
+      .sort((a, b) => b - a);
+
+    select.innerHTML = '';
+    if (!years.length) {
+      select.value = '';
+      select.disabled = true;
+      return false;
+    }
+
+    select.disabled = false;
+    years.forEach(year => {
+      const opt = document.createElement('option');
+      opt.value = String(year);
+      opt.textContent = String(year);
+      select.appendChild(opt);
+    });
+
+    const chosen = (Number.isFinite(previous) && years.includes(previous)) ? previous : years[0];
+    select.value = String(chosen);
     return true;
   }
 
@@ -135,92 +173,65 @@ window.Modules.dashboard = (() => {
 
     const select = el('entryYearSelect');
     const year = select && select.value ? Number(select.value) : NaN;
-    if (!Number.isFinite(year)) {
-      renderEntryChartEmpty('Selecione um ano.');
+    if (!year || Number.isNaN(year)) {
+      renderEntryChartEmpty('Nenhum dado para exibir.');
       return;
     }
 
-    const items = (cachedProcesses || [])
-      .map(p => ({ id: p.id, type: p.type, date: Utils.dateOnly(p.first_entry_date) }))
-      .filter(p => p.date && p.date.getFullYear() === year);
+    const counts = new Array(12).fill(0);
+    (cachedProcesses || []).forEach(proc => {
+      const d = Utils.dateOnly(proc.first_entry_date);
+      if (!d || Number.isNaN(+d)) return;
+      if (d.getFullYear() !== year) return;
+      counts[d.getMonth()] += 1;
+    });
 
-    setEntryYearTotal(items.length);
+    const totalCount = counts.reduce((sum, value) => sum + value, 0);
+    setEntryYearTotal(totalCount);
 
-    // agrupar por mês e tipo
-    const groups = new Map();
-    for (const it of items) {
-      const key = `${it.date.getMonth()}|${it.type || '—'}`;
-      groups.set(key, (groups.get(key) || 0) + 1);
-    }
-
-    // preparar DOM
     container.innerHTML = '';
-    const chart = document.createElement('div');
-    chart.className = 'bar-chart';
+    const bars = document.createElement('div');
+    bars.className = 'bar-chart-bars';
 
-    // montar cabeçalhos de meses
-    const header = document.createElement('div');
-    header.className = 'bar-chart-header';
-    MONTH_LABELS.forEach(lbl => {
-      const h = document.createElement('div');
-      h.className = 'bar-chart-header-cell';
-      h.textContent = lbl;
-      header.appendChild(h);
-    });
-    chart.appendChild(header);
+    const max = counts.reduce((m, v) => Math.max(m, v), 0);
+    counts.forEach((count, idx) => {
+      const item = document.createElement('div');
+      item.className = 'bar-chart-item';
 
-    // descobrir tipos presentes
-    const types = unique(items.map(it => it.type || '—'));
+      const value = document.createElement('span');
+      value.className = 'bar-chart-value';
+      value.textContent = String(count);
 
-    // construir linhas por tipo
-    types.forEach(type => {
-      const row = document.createElement('div');
-      row.className = 'bar-chart-row';
+      const wrapper = document.createElement('div');
+      wrapper.className = 'bar-chart-bar-wrapper';
 
-      const label = document.createElement('div');
-      label.className = 'bar-chart-row-label';
-      label.textContent = type || '—';
-      row.appendChild(label);
+      const bar = document.createElement('div');
+      bar.className = 'bar-chart-bar';
+      let percent = max ? (count / max) * 100 : 0;
+      if (count > 0 && percent < 8) percent = 8; // altura mínima para barras > 0
+      bar.style.height = `${percent}%`;
+      bar.title = `${MONTH_LABELS[idx]}: ${count}`;
 
-      const bars = document.createElement('div');
-      bars.className = 'bar-chart-row-bars';
+      wrapper.appendChild(bar);
 
-      for (let m = 0; m < 12; m++) {
-        const value = groups.get(`${m}|${type}`) || 0;
-        const item = document.createElement('div');
-        item.className = 'bar-chart-item';
+      const label = document.createElement('span');
+      label.className = 'bar-chart-label';
+      label.textContent = MONTH_LABELS[idx];
 
-        const valueNode = document.createElement('span');
-        valueNode.className = 'bar-chart-value';
-        valueNode.textContent = value ? YEARLY_COUNTER_FORMATTER.format(value) : '';
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'bar-chart-bar-wrapper';
-
-        const bar = document.createElement('div');
-        bar.className = `bar-chart-bar blue`;
-        let heightPercent = value > 0 ? Math.min(100, 10 + value * 8) : 0;
-        if (value > 0 && heightPercent < 8) heightPercent = 8;
-        bar.style.height = `${heightPercent}%`;
-        bar.title = `${MONTH_LABELS[m]} — ${type}: ${value}`;
-
-        wrapper.appendChild(bar);
-
-        const label = document.createElement('span');
-        label.className = 'bar-chart-label';
-        label.textContent = MONTH_LABELS[m];
-
-        item.appendChild(valueNode);
-        item.appendChild(wrapper);
-        item.appendChild(label);
-        bars.appendChild(item);
-      }
-
-      row.appendChild(bars);
-      chart.appendChild(row);
+      item.appendChild(value);
+      item.appendChild(wrapper);
+      item.appendChild(label);
+      bars.appendChild(item);
     });
 
-    container.appendChild(chart);
+    container.appendChild(bars);
+
+    if (!counts.some(Boolean)) {
+      const msg = document.createElement('p');
+      msg.className = 'muted chart-placeholder';
+      msg.textContent = 'Nenhum processo no ano selecionado.';
+      container.appendChild(msg);
+    }
   }
 
   function renderOverview() {
@@ -256,7 +267,8 @@ window.Modules.dashboard = (() => {
           if (Number.isNaN(+endDate)) continue;
 
           const startYear = startDate.getFullYear();
-          if (startYear !== year) continue; // considerar etapas que começam no ano
+          const endYear = endDate.getFullYear();
+          if (startYear !== year || endYear !== year) continue;
 
           const days = Utils.daysBetween(startDate, endDate);
           if (typeof days !== 'number' || Number.isNaN(days)) continue;
@@ -268,29 +280,36 @@ window.Modules.dashboard = (() => {
       });
     }
 
-    // >>> Patch: médias ATM/DT por ano (solicitação → recebimento)
+    // >>> Patch: agregação de médias de pareceres (ATM/DT) por ano (solicitação → recebimento)
     if (hasYear) {
       (cachedOpinions || []).forEach(opinion => {
         if (!opinion) return;
         const type = typeof opinion.type === 'string' ? opinion.type.toUpperCase() : '';
         if (!OPINION_AVERAGE_TYPES.includes(type)) return;
         if (!opinion.requested_at) return;
-        const receivedValue = opinion.received_at || opinion.received_at;
+        const receivedValue = opinion.received_at || opinion.receb_at; // tolerante a nome alternativo
         if (!receivedValue) return;
 
-        const req = new Date(opinion.requested_at);
-        const rcv = new Date(receivedValue);
-        if (Number.isNaN(+req) || Number.isNaN(+rcv)) return;
-        if (req.getFullYear() !== year && rcv.getFullYear() !== year) return;
+        const startDate = new Date(opinion.requested_at);
+        const endDate = new Date(receivedValue);
+        if (Number.isNaN(+startDate) || Number.isNaN(+endDate)) return;
+        if (startDate.getFullYear() !== year || endDate.getFullYear() !== year) return;
 
-        const days = Utils.daysBetween(req, rcv);
+        const days = Utils.daysBetween(startDate, endDate);
         if (typeof days !== 'number' || Number.isNaN(days)) return;
 
-        const bucket = (opinionAgg[type] ||= { sum: 0, n: 0 });
+        const bucket = opinionAgg[type] || (opinionAgg[type] = { sum: 0, n: 0 });
         bucket.sum += days;
         bucket.n += 1;
       });
     }
+
+    const getOpinionAverage = (type) => {
+      const entry = opinionAgg[type];
+      if (!entry || !entry.n) return null;
+      const avg = entry.sum / entry.n;
+      return Number.isFinite(avg) ? avg : null;
+    };
     // <<< Patch
 
     const ringStatuses = SPEED_STATUS_ORDER.filter(
@@ -311,8 +330,7 @@ window.Modules.dashboard = (() => {
       // >>> Patch: inserir as médias de pareceres logo após ANATEC-PRE
       if (statusCode === 'ANATEC-PRE') {
         OPINION_AVERAGE_TYPES.forEach(type => {
-          const a = opinionAgg[type];
-          const avg = a?.n ? (a.sum / a.n) : null;
+          const avg = getOpinionAverage(type);
           items.push({
             status: `OP-${type}`,
             label: OPINION_LABELS[type] || type,
@@ -383,17 +401,6 @@ window.Modules.dashboard = (() => {
         if (cur.status === 'ANATEC') statusProcessSets.anatec.add(procKey);
       }
     });
-    // Fallback: se não houver histórico daquele processo para o ano,
-    // considerar a ENTRADA pelo próprio status atual (status_since) no ano selecionado.
-    (cachedProcesses || []).forEach(proc => {
-      if (!proc || !proc.id || !proc.status || !proc.status_since) return;
-      const d = new Date(proc.status_since);
-      if (Number.isNaN(+d) || d.getFullYear() !== year) return;
-      const procKey = String(proc.id);
-      if (proc.status === 'ANADOC') statusProcessSets.anadoc.add(procKey);
-      if (proc.status === 'ANATEC-PRE') statusProcessSets.anatecPre.add(procKey);
-      if (proc.status === 'ANATEC') statusProcessSets.anatec.add(procKey);
-    });
 
     counters.anadoc = statusProcessSets.anadoc.size;
     counters.anatecPre = statusProcessSets.anatecPre.size;
@@ -453,10 +460,11 @@ window.Modules.dashboard = (() => {
   }
 
   function determineHourlyGroupKey(date) {
-    const dow = date.getDay();
-    if (dow === 0 || dow === 6) return 'weekend';
-    if (dow === 5) return 'friday';
-    return 'monThu';
+    const day = date.getDay();
+    if (day >= 1 && day <= 4) return 'monThu';
+    if (day === 5) return 'friday';
+    if (day === 0 || day === 6) return 'weekend';
+    return null;
   }
 
   function computeHourlyEngagementData(year) {
@@ -490,15 +498,121 @@ window.Modules.dashboard = (() => {
       }
     });
 
-    const overallTotal = HOURLY_GROUPS.reduce((sum, g) => sum + groups[g.key].reduce((s, v) => s + v, 0), 0);
-    const offHoursByGroup = {};
-    HOURLY_GROUPS.forEach(group => {
-      offHoursByGroup[group.key] = groups[group.key].reduce((sum, v, hour) =>
-        sum + (group.offHours(hour) ? v : 0), 0);
+    (cachedSigadaer || []).forEach(item => {
+      if (!item) return;
+      if (item.requested_at) registerDate(item.requested_at);
+      if (item.status === 'EXPEDIDO' && item.expedit_at) registerDate(item.expedit_at);
     });
 
-    return { groups, overallTotal, offHoursByGroup };
+    (cachedOpinions || []).forEach(opinion => {
+      if (!opinion) return;
+      const type = typeof opinion.type === 'string' ? opinion.type.toUpperCase() : '';
+      if (!OPINION_TYPES_SET.has(type)) return;
+      if (opinion.requested_at) registerDate(opinion.requested_at);
+    });
+
+    const totals = {};
+    const offHoursByGroup = {};
+    let overallTotal = 0;
+
+    HOURLY_GROUPS.forEach(group => {
+      const list = groups[group.key] || [];
+      const groupTotal = list.reduce((sum, value) => sum + value, 0);
+      totals[group.key] = groupTotal;
+      overallTotal += groupTotal;
+      offHoursByGroup[group.key] = list.reduce((sum, value, hour) => (
+        group.offHours(hour) ? sum + value : sum
+      ), 0);
+    });
+
+    let overallMaxPercent = 0;
+    if (overallTotal > 0) {
+      HOURLY_GROUPS.forEach(group => {
+        const list = groups[group.key] || [];
+        for (let hour = 0; hour < list.length; hour += 1) {
+          const value = list[hour] || 0;
+          const percent = (value / overallTotal) * 100;
+          if (percent > overallMaxPercent) overallMaxPercent = percent;
+        }
+      });
+    }
+
+    return { groups, totals, overallTotal, offHoursByGroup, overallMaxPercent };
   }
+
+  // (removido pelo patch) renderUnifiedHourlyView
+
+  function renderSingleHourlyView(container, data, group) {
+    const { overallTotal, overallMaxPercent } = data;
+    const bars = document.createElement('div');
+    bars.className = 'bar-chart-bars';
+    bars.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
+
+    const counts = data.groups[group.key] || [];
+    const percents = counts.map(value => (overallTotal ? (value / overallTotal) * 100 : 0));
+    const effectiveMaxPercent = (typeof overallMaxPercent === 'number' && overallMaxPercent > 0)
+      ? overallMaxPercent
+      : percents.reduce((max, value) => (value > max ? value : max), 0);
+
+    counts.forEach((value, hour) => {
+      const percent = percents[hour] || 0;
+      const item = document.createElement('div');
+      item.className = 'bar-chart-item';
+
+      const isOffHours = group.offHours(hour);
+      const barColorClass = group.key === 'weekend' ? 'red' : (isOffHours ? 'red' : group.defaultBarClass);
+      const valueColorClass = barColorClass;
+      const labelColorClass = group.key === 'weekend' ? 'red' : (isOffHours ? 'red' : 'black');
+
+      const valueNode = document.createElement('span');
+      valueNode.className = `bar-chart-value ${valueColorClass}`;
+      valueNode.textContent = `${PERCENTAGE_FORMATTER.format(percent)}%`;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'bar-chart-bar-wrapper';
+
+      const bar = document.createElement('div');
+      bar.className = `bar-chart-bar ${barColorClass}`;
+      let heightPercent = effectiveMaxPercent ? (percent / effectiveMaxPercent) * 100 : 0;
+      if (percent > 0 && heightPercent < 8) heightPercent = 8;
+      bar.style.height = `${heightPercent}%`;
+      bar.title = `${group.label} — ${String(hour).padStart(2, '0')}h: ${value} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
+
+      wrapper.appendChild(bar);
+
+      const label = document.createElement('span');
+      label.className = `bar-chart-label ${labelColorClass}`;
+      label.textContent = `${String(hour).padStart(2, '0')}h`;
+
+      item.appendChild(valueNode);
+      item.appendChild(wrapper);
+      item.appendChild(label);
+      bars.appendChild(item);
+    });
+
+    container.appendChild(bars);
+  }
+
+  function appendHourlySummary(container, data) {
+    const offHoursTotal = HOURLY_GROUPS.reduce((sum, group) => sum + (data.offHoursByGroup[group.key] || 0), 0);
+    const offHoursPercent = data.overallTotal ? (offHoursTotal / data.overallTotal) * 100 : 0;
+
+    const summary = document.createElement('div');
+    summary.className = 'hourly-engagement-summary';
+
+    const summaryLabel = document.createElement('span');
+    summaryLabel.className = 'hourly-engagement-summary-label';
+    summaryLabel.textContent = 'Fora do expediente';
+
+    const summaryValue = document.createElement('strong');
+    summaryValue.className = 'hourly-engagement-summary-value';
+    summaryValue.textContent = `${PERCENTAGE_FORMATTER.format(offHoursPercent)}%`;
+
+    summary.appendChild(summaryLabel);
+    summary.appendChild(summaryValue);
+    container.appendChild(summary);
+  }
+  // <<< Patch novo
 
   function renderHourlyEngagement() {
     const container = el('hourlyEngagementChart');
@@ -511,78 +625,23 @@ window.Modules.dashboard = (() => {
       return;
     }
 
+    // >>> Patch novo: calcula dados por grupos e renderiza conforme a visão escolhida
     const data = computeHourlyEngagementData(year);
-    container.innerHTML = '';
-
-    const view = getSelectedHourlyView();
-    const group = HOURLY_GROUP_MAP[view];
-
-    const block = document.createElement('div');
-    block.className = 'hourly-block';
-
-    const title = document.createElement('div');
-    title.className = 'hourly-title';
-    title.textContent = `Distribuição por hora — ${group.label}`;
-    block.appendChild(title);
-
-    const bars = document.createElement('div');
-    bars.className = 'hourly-bars';
-
-    const groupData = data.groups[group.key] || new Array(24).fill(0);
-    const maxVal = Math.max(...groupData, 0);
-    const effectiveMaxPercent = maxVal ? 100 : 0;
-
-    for (let hour = 0; hour < 24; hour++) {
-      const value = groupData[hour] || 0;
-      const percent = maxVal ? (value / maxVal) * 100 : 0;
-
-      const barColorClass = group.defaultBarClass;
-      const labelColorClass = group.key === 'weekend' ? 'muted' : '';
-
-      const item = document.createElement('div');
-      item.className = 'bar-chart-item';
-
-      const valueNode = document.createElement('span');
-      valueNode.className = 'bar-chart-value';
-      valueNode.textContent = value ? YEARLY_COUNTER_FORMATTER.format(value) : '';
-
-      const wrapper = document.createElement('div');
-      wrapper.className = 'bar-chart-bar-wrapper';
-
-      const bar = document.createElement('div');
-      bar.className = `bar-chart-bar ${barColorClass}`;
-      let heightPercent = effectiveMaxPercent ? (percent / effectiveMaxPercent) * 100 : 0;
-      if (percent > 0 && heightPercent < 8) heightPercent = 8;
-      bar.style.height = `${heightPercent}%`;
-      bar.title = `${group.label} — ${String(hour).padStart(2, '0')}:00 — ${value} evento(s) (${PERCENTAGE_FORMATTER.format(percent)}%)`;
-
-      wrapper.appendChild(bar);
-
-      const label = document.createElement('span');
-      label.className = `bar-chart-label ${labelColorClass}`;
-      label.textContent = `${String(hour).padStart(2, '0')}h`;
-
-      item.appendChild(valueNode);
-      item.appendChild(wrapper);
-      item.appendChild(label);
-      bars.appendChild(item);
+    if (!data.overallTotal) {
+      renderHourlyEngagementEmpty('Nenhum evento registrado para o ano selecionado.');
+      return;
     }
 
-    block.appendChild(bars);
-    container.appendChild(block);
+    container.innerHTML = '';
+    const view = getSelectedHourlyView();
+    if (view && HOURLY_GROUP_MAP[view]) {
+      renderSingleHourlyView(container, data, HOURLY_GROUP_MAP[view]);
+    } else if (HOURLY_VIEW_DEFAULT && HOURLY_GROUP_MAP[HOURLY_VIEW_DEFAULT]) {
+      renderSingleHourlyView(container, data, HOURLY_GROUP_MAP[HOURLY_VIEW_DEFAULT]);
+    }
 
-    const offHoursTotal = HOURLY_GROUPS.reduce((sum, group) => sum + (data.offHoursByGroup[group.key] || 0), 0);
-    const offHoursPercent = data.overallTotal ? (offHoursTotal / data.overallTotal) * 100 : 0;
-
-    const summary = document.createElement('div');
-    summary.className = 'hourly-summary';
-    const summaryLabel = document.createElement('span');
-    summaryLabel.textContent = 'Fora do horário (estimativa):';
-    const summaryValue = document.createElement('strong');
-    summaryValue.textContent = `${PERCENTAGE_FORMATTER.format(offHoursPercent)}%`;
-    summary.appendChild(summaryLabel);
-    summary.appendChild(summaryValue);
-    container.appendChild(summary);
+    appendHourlySummary(container, data);
+    // <<< Patch novo
   }
 
   async function load() {
