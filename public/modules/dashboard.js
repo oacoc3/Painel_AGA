@@ -308,14 +308,15 @@ window.Modules.dashboard = (() => {
       sigadaerPref: 0
     };
 
-    // >>> FIX: contar OCORRÊNCIAS no ano (inclui múltiplas por processo), excluindo duplicatas idênticas consecutivas
+    // >>> FIX Atividades: contar OCORRÊNCIAS no ano (permite múltiplas por processo),
+    // eliminando apenas duplicatas idênticas consecutivas (mesmo status/mesmo start)
     Object.values(cachedStatusHistory || {}).forEach(list => {
       if (!Array.isArray(list)) return;
       for (let i = 0; i < list.length; i++) {
         const cur = list[i];
         if (!cur || !cur.start || !cur.status) continue;
 
-        // eliminar duplicata idêntica consecutiva (mesmo status com o mesmo start)
+        // eliminar duplicata consecutiva idêntica
         if (i > 0) {
           const prev = list[i - 1];
           if (prev && prev.start === cur.start && prev.status === cur.status) continue;
@@ -324,9 +325,9 @@ window.Modules.dashboard = (() => {
         const d = new Date(cur.start);
         if (Number.isNaN(+d) || d.getFullYear() !== year) continue;
 
-        if (cur.status === 'ANADOC')      counters.anadoc += 1;
-        if (cur.status === 'ANATEC-PRE')  counters.anatecPre += 1;
-        if (cur.status === 'ANATEC')      counters.anatec += 1;
+        if (cur.status === 'ANADOC')     counters.anadoc += 1;
+        if (cur.status === 'ANATEC-PRE') counters.anatecPre += 1;
+        if (cur.status === 'ANATEC')     counters.anatec += 1;
       }
     });
     // <<< FIX
@@ -404,7 +405,7 @@ window.Modules.dashboard = (() => {
       if (!Number.isInteger(hour) || hour < 0 || hour > 23) return;
       const groupKey = determineHourlyGroupKey(dt);
       if (!groupKey) return;
-      groups[groupKey][hour] += 1;
+      groups[group.key][hour] += 1;
     };
 
     Object.values(cachedStatusHistory || {}).forEach(list => {
@@ -547,10 +548,7 @@ window.Modules.dashboard = (() => {
       .select('type, status, requested_at, expedit_at');
     cachedSigadaer = sigadaer || [];
 
-    const { data: opinions } = await sb
-      .from('internal_opinions')
-      .select('type, requested_at, received_at');
-    cachedOpinions = opinions || [];
+    // (REMOVIDO: consulta a internal_opinions/received_at — não é necessária para Atividades)
 
     // histórico (tabela history, ação "Status atualizado")
     const ids = (procs || []).map(p => p.id);
