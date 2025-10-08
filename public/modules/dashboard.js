@@ -64,13 +64,17 @@ window.Modules.dashboard = (() => {
     {
       key: 'weekend',
       label: 'Sábados e domingos',
-      defaultBarClass: 'gray',
-      offHours: _hour => true
+      defaultBarClass: 'red',
+      offHours: () => true
     }
   ];
-  const HOURLY_GROUP_MAP = HOURLY_GROUPS.reduce((acc, g) => (acc[g.key]=g, acc), {});
+
+  const HOURLY_GROUP_MAP = HOURLY_GROUPS.reduce((acc, group) => {
+    acc[group.key] = group;
+    return acc;
+  }, {});
   const HOURLY_VIEW_DEFAULT = 'monThu';
-  const HOURLY_VIEW_VALUES = new Set(HOURLY_GROUPS.map(group => group.key));
+  const HOURLY_VIEW_VALUES = new Set(HOURLY_GROUPS.map(g => g.key));
   const HOURLY_VIEW_SELECT_ID = 'hourlyEngagementViewSelect';
 
   let cachedProcesses = [];
@@ -108,11 +112,9 @@ window.Modules.dashboard = (() => {
     node.textContent = value == null ? '—' : YEARLY_COUNTER_FORMATTER.format(value);
   }
 
-  function ensureYearSelectPopulated() {
+  function updateYearOptions() {
     const select = el('entryYearSelect');
     if (!select) return false;
-
-    if (select.options && select.options.length) return true;
 
     const years = unique(
       (cachedProcesses || [])
@@ -123,12 +125,7 @@ window.Modules.dashboard = (() => {
     ).sort((a, b) => a - b);
 
     if (!years.length) return false;
-
-    const previous = Number(localStorage.getItem('dashboard.entryYear') || '');
     select.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
-
-    const chosen = (Number.isFinite(previous) && years.includes(previous)) ? previous : years[0];
-    select.value = String(chosen);
     return true;
   }
 
@@ -138,7 +135,7 @@ window.Modules.dashboard = (() => {
 
     const select = el('entryYearSelect');
     const year = select && select.value ? Number(select.value) : NaN;
-    if (!year || Number.isNaN(year)) {
+    if (!Number.isFinite(year)) {
       renderEntryChartEmpty('Selecione um ano.');
       return;
     }
@@ -172,7 +169,7 @@ window.Modules.dashboard = (() => {
     });
     chart.appendChild(header);
 
-    // descobrir tipos presentes (limitado pelo layout existente)
+    // descobrir tipos presentes
     const types = unique(items.map(it => it.type || '—'));
 
     // construir linhas por tipo
@@ -259,9 +256,7 @@ window.Modules.dashboard = (() => {
           if (Number.isNaN(+endDate)) continue;
 
           const startYear = startDate.getFullYear();
-          const endYear = endDate.getFullYear();
-          // >>> CORREÇÃO: considerar etapas que COMEÇARAM no ano selecionado
-          if (startYear !== year) continue;
+          if (startYear !== year) continue; // considerar etapas que começam no ano
 
           const days = Utils.daysBetween(startDate, endDate);
           if (typeof days !== 'number' || Number.isNaN(days)) continue;
@@ -273,7 +268,7 @@ window.Modules.dashboard = (() => {
       });
     }
 
-    // >>> Patch: agregação de médias de pareceres (ATM/DT) por ano (solicitação → recebimento)
+    // >>> Patch: médias ATM/DT por ano (solicitação → recebimento)
     if (hasYear) {
       (cachedOpinions || []).forEach(opinion => {
         if (!opinion) return;
@@ -341,7 +336,7 @@ window.Modules.dashboard = (() => {
       notifications: el('dashboardMetricNotifications'),
       sigadaerJjaer: el('dashboardMetricSigadaerJjaer'),
       sigadaerAgu: el('dashboardMetricSigadaerAgu'),
-      sigadaerPref: el('dashboardMetricSigadaerPref')
+      sigadaerPref: el('dashboardMetricSigadaerPref') // PREF: Prefeitura
     };
 
     Object.values(metricEls).forEach(node => {
@@ -362,7 +357,7 @@ window.Modules.dashboard = (() => {
       sigadaerPref: 0
     };
 
-    // Contagem por ENTRADA no status (histórico) — 1x por processo/ano
+    // >>> Patch do diff: contar cada processo apenas uma vez por status no ano
     const statusProcessSets = {
       anadoc: new Set(),
       anatecPre: new Set(),
@@ -388,12 +383,24 @@ window.Modules.dashboard = (() => {
         if (cur.status === 'ANATEC') statusProcessSets.anatec.add(procKey);
       }
     });
+    // Fallback: se não houver histórico daquele processo para o ano,
+    // considerar a ENTRADA pelo próprio status atual (status_since) no ano selecionado.
+    (cachedProcesses || []).forEach(proc => {
+      if (!proc || !proc.id || !proc.status || !proc.status_since) return;
+      const d = new Date(proc.status_since);
+      if (Number.isNaN(+d) || d.getFullYear() !== year) return;
+      const procKey = String(proc.id);
+      if (proc.status === 'ANADOC') statusProcessSets.anadoc.add(procKey);
+      if (proc.status === 'ANATEC-PRE') statusProcessSets.anatecPre.add(procKey);
+      if (proc.status === 'ANATEC') statusProcessSets.anatec.add(procKey);
+    });
 
     counters.anadoc = statusProcessSets.anadoc.size;
     counters.anatecPre = statusProcessSets.anatecPre.size;
     counters.anatec = statusProcessSets.anatec.size;
+    // <<< Patch do diff
 
-    // Notificações
+    // Notificações: contam pela data efetiva do pedido
     (cachedNotifications || []).forEach(notification => {
       if (!notification) return;
       const { requested_at: requestedAt } = notification;
@@ -405,7 +412,7 @@ window.Modules.dashboard = (() => {
       }
     });
 
-    // SIGADAER (EXPEDIDO → expedit_at)
+    // SIGADAER: contam quando EXPEDIDO, pela data de expedição (expedit_at)
     (cachedSigadaer || []).forEach(sigadaer => {
       if (!sigadaer) return;
       const { type, status, expedit_at: expeditAt } = sigadaer;
@@ -417,7 +424,7 @@ window.Modules.dashboard = (() => {
       const normalizedType = typeof type === 'string' ? type.toUpperCase() : '';
       if (normalizedType === 'JJAER') counters.sigadaerJjaer += 1;
       if (normalizedType === 'AGU') counters.sigadaerAgu += 1;
-      if (normalizedType === 'PREF') counters.sigadaerPref += 1;
+      if (normalizedType === 'PREF') counters.sigadaerPref += 1; // incluído
     });
 
     Object.entries(metricEls).forEach(([key, node]) => {
@@ -426,9 +433,27 @@ window.Modules.dashboard = (() => {
     });
   }
 
-  // ====== Engajamento por hora ======
+  function renderHourlyEngagementEmpty(message = 'Nenhum dado para exibir.') {
+    const container = el('hourlyEngagementChart');
+    if (!container) return;
+    container.innerHTML = '';
+    const msg = document.createElement('p');
+    msg.className = 'muted chart-placeholder';
+    msg.textContent = message;
+    container.appendChild(msg);
+  }
+
+  // >>> Patch novo: suporte a múltiplas visões do gráfico horário
+  function getSelectedHourlyView() {
+    const select = el(HOURLY_VIEW_SELECT_ID);
+    if (!select) return HOURLY_VIEW_DEFAULT;
+    const { value } = select;
+    if (HOURLY_VIEW_VALUES.has(value)) return value;
+    return HOURLY_VIEW_DEFAULT;
+  }
+
   function determineHourlyGroupKey(date) {
-    const dow = date.getDay(); // 0=Dom,1=Seg..6=Sáb
+    const dow = date.getDay();
     if (dow === 0 || dow === 6) return 'weekend';
     if (dow === 5) return 'friday';
     return 'monThu';
@@ -465,7 +490,6 @@ window.Modules.dashboard = (() => {
       }
     });
 
-    // sumarização
     const overallTotal = HOURLY_GROUPS.reduce((sum, g) => sum + groups[g.key].reduce((s, v) => s + v, 0), 0);
     const offHoursByGroup = {};
     HOURLY_GROUPS.forEach(group => {
@@ -474,12 +498,6 @@ window.Modules.dashboard = (() => {
     });
 
     return { groups, overallTotal, offHoursByGroup };
-  }
-
-  function renderHourlyEngagementEmpty(msg) {
-    const node = el('hourlyEngagementChart');
-    if (!node) return;
-    node.innerHTML = `<div class="empty">${msg || '—'}</div>`;
   }
 
   function renderHourlyEngagement() {
@@ -494,12 +512,11 @@ window.Modules.dashboard = (() => {
     }
 
     const data = computeHourlyEngagementData(year);
-
     container.innerHTML = '';
-    const view = (el(HOURLY_VIEW_SELECT_ID)?.value) || HOURLY_VIEW_DEFAULT;
-    const group = HOURLY_GROUP_MAP[HOURLY_VIEW_VALUES.has(view) ? view : HOURLY_VIEW_DEFAULT];
 
-    // bloco principal
+    const view = getSelectedHourlyView();
+    const group = HOURLY_GROUP_MAP[view];
+
     const block = document.createElement('div');
     block.className = 'hourly-block';
 
@@ -508,7 +525,6 @@ window.Modules.dashboard = (() => {
     title.textContent = `Distribuição por hora — ${group.label}`;
     block.appendChild(title);
 
-    // barras 0..23h
     const bars = document.createElement('div');
     bars.className = 'hourly-bars';
 
@@ -555,22 +571,15 @@ window.Modules.dashboard = (() => {
     block.appendChild(bars);
     container.appendChild(block);
 
-    appendHourlySummary(container, data);
-  }
-
-  function appendHourlySummary(container, data) {
     const offHoursTotal = HOURLY_GROUPS.reduce((sum, group) => sum + (data.offHoursByGroup[group.key] || 0), 0);
     const offHoursPercent = data.overallTotal ? (offHoursTotal / data.overallTotal) * 100 : 0;
 
     const summary = document.createElement('div');
     summary.className = 'hourly-summary';
-
     const summaryLabel = document.createElement('span');
     summaryLabel.textContent = 'Fora do horário (estimativa):';
-
     const summaryValue = document.createElement('strong');
     summaryValue.textContent = `${PERCENTAGE_FORMATTER.format(offHoursPercent)}%`;
-
     summary.appendChild(summaryLabel);
     summary.appendChild(summaryValue);
     container.appendChild(summary);
@@ -587,15 +596,14 @@ window.Modules.dashboard = (() => {
     cachedSigadaer = [];
     cachedOpinions = [];
 
-    const sb = window.sb;
     const { data: procs } = await sb
       .from('processes')
-      .select('id,type,status,status_since,first_entry_date')
-      .order('first_entry_date', { ascending: true });
+      .select('id,status,status_since,first_entry_date');
 
     cachedProcesses = procs || [];
-
-    ensureYearSelectPopulated();
+    const hasYears = updateYearOptions();
+    if (hasYears) renderEntryChart();
+    else renderEntryChartEmpty('Nenhum dado para exibir.');
 
     const { data: notifications } = await sb
       .from('notifications')
@@ -607,13 +615,14 @@ window.Modules.dashboard = (() => {
       .select('type, status, requested_at, expedit_at');
     cachedSigadaer = sigadaer || [];
 
-    // >> Precisamos de received_at p/ médias de pareceres
+    // >>> Patch: incluir received_at para calcular médias
     const { data: opinions } = await sb
       .from('internal_opinions')
       .select('type, requested_at, received_at');
+    // <<< Patch
     cachedOpinions = opinions || [];
 
-    // histórico de status por processo (tabela history, ação "Status atualizado")
+    // Velocidade média — montar histórico de status por processo (usando 'history')
     const ids = (procs || []).map(p => p.id);
     const byProc = {};
     if (ids.length) {
@@ -623,11 +632,11 @@ window.Modules.dashboard = (() => {
         .eq('action', 'Status atualizado')
         .in('process_id', ids)
         .order('created_at');
-
       (historyData || []).forEach(item => {
-        let det = item && item.details;
-        if (det && typeof det === 'string') {
-          try { det = JSON.parse(det); } catch (_) { det = null; }
+        if (!item || !item.process_id) return;
+        let det = item.details || {};
+        if (typeof det === 'string') {
+          try { det = JSON.parse(det); } catch (_) { det = {}; }
         }
         const status = det?.status;
         let start = det?.status_since || det?.start || item.created_at;
@@ -637,7 +646,6 @@ window.Modules.dashboard = (() => {
       });
     }
 
-    // garantir que o status atual esteja na sequência
     (procs || []).forEach(proc => {
       if (!proc || !proc.id) return;
       const list = byProc[proc.id] || (byProc[proc.id] = []);
@@ -651,27 +659,10 @@ window.Modules.dashboard = (() => {
     cachedStatusHistory = byProc;
 
     renderOverview();
-    renderEntryChart();
     renderYearlyActivity();
     renderHourlyEngagement();
 
     if (yearSelect) yearSelect.disabled = false;
-  }
-
-  function init() {
-    const yearSelect = el('entryYearSelect');
-    yearSelect?.addEventListener('change', () => {
-      localStorage.setItem('dashboard.entryYear', String(yearSelect.value || ''));
-      renderOverview();
-      renderEntryChart();
-      renderYearlyActivity();
-      renderHourlyEngagement();
-    });
-
-    const hourlyViewSelect = el(HOURLY_VIEW_SELECT_ID);
-    hourlyViewSelect?.addEventListener('change', () => {
-      renderHourlyEngagement();
-    });
   }
 
   return { init, load };
