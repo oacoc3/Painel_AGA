@@ -395,7 +395,7 @@ window.Modules.dashboard = (() => {
         if (Number.isNaN(+startDate) || startDate.getFullYear() !== year) return;
 
         const timestamp = startDate.getTime();
-        const dedupeKey = `${procId}__${timestamp}`;
+        const dedupeKey = `${procId}__${status}__${timestamp}`;
         setForStatus.add(dedupeKey);
       });
     });
@@ -716,7 +716,7 @@ window.Modules.dashboard = (() => {
     cachedStatusHistory = byProc;
 
     renderOverview();
-    renderYearlyActivity();
+    lyActivity();
     renderHourlyEngagement();
 
     if (yearSelect) yearSelect.disabled = false;
