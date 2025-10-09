@@ -375,36 +375,34 @@ window.Modules.dashboard = (() => {
       sigadaerPref: 0
     };
 
-    // >>> Patch do diff: contar cada processo apenas uma vez por status no ano
-    const statusProcessSets = {
-      anadoc: new Set(),
-      anatecPre: new Set(),
-      anatec: new Set()
+    // >>> Patch do diff: contar cada início de status no ano (ignorando duplicatas idênticas)
+    const trackedStatusSets = {
+      ANADOC: new Set(),
+      'ANATEC-PRE': new Set(),
+      ANATEC: new Set()
     };
 
     Object.entries(cachedStatusHistory || {}).forEach(([procId, list]) => {
       if (!Array.isArray(list)) return;
-      for (let i = 0; i < list.length; i++) {
-        const cur = list[i];
-        if (!cur || !cur.start || !cur.status) continue;
-        if (i > 0) {
-          const prev = list[i - 1];
-          if (prev && prev.start === cur.start && prev.status === cur.status) continue;
-        }
+      list.forEach(entry => {
+        const { status, start } = entry || {};
+        if (!status || !start) return;
 
-        const startDate = new Date(cur.start);
-        if (Number.isNaN(+startDate) || startDate.getFullYear() !== year) continue;
+        const setForStatus = trackedStatusSets[status];
+        if (!setForStatus) return;
 
-        const procKey = String(procId);
-        if (cur.status === 'ANADOC') statusProcessSets.anadoc.add(procKey);
-        if (cur.status === 'ANATEC-PRE') statusProcessSets.anatecPre.add(procKey);
-        if (cur.status === 'ANATEC') statusProcessSets.anatec.add(procKey);
-      }
+        const startDate = new Date(start);
+        if (Number.isNaN(+startDate) || startDate.getFullYear() !== year) return;
+
+        const timestamp = startDate.getTime();
+        const dedupeKey = `${procId}__${timestamp}`;
+        setForStatus.add(dedupeKey);
+      });
     });
 
-    counters.anadoc = statusProcessSets.anadoc.size;
-    counters.anatecPre = statusProcessSets.anatecPre.size;
-    counters.anatec = statusProcessSets.anatec.size;
+    counters.anadoc = trackedStatusSets.ANADOC.size;
+    counters.anatecPre = trackedStatusSets['ANATEC-PRE'].size;
+    counters.anatec = trackedStatusSets.ANATEC.size;
     // <<< Patch do diff
 
     // Notificações: contam pela data efetiva do pedido
