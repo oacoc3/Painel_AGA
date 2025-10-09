@@ -56,6 +56,29 @@ BEGIN
     END IF;
   END IF;
 
+----------------------------------------------------------------
+  -- 2.1) Enum process_status: garantir novo status KML/KMZ
+  ----------------------------------------------------------------
+  PERFORM 1
+  FROM pg_type t
+  JOIN pg_namespace n ON n.oid = t.typnamespace
+  WHERE n.nspname = 'public'
+    AND t.typname = 'process_status';
+
+  IF FOUND THEN
+    PERFORM 1
+    FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    JOIN pg_enum e ON e.enumtypid = t.oid
+    WHERE n.nspname = 'public'
+      AND t.typname = 'process_status'
+      AND e.enumlabel = 'KML/KMZ';
+
+    IF NOT FOUND THEN
+      EXECUTE 'ALTER TYPE public.process_status ADD VALUE ''KML/KMZ''';
+    END IF;
+  END IF;
+
   ----------------------------------------------------------------
   -- 3) Função de normalização de NUP
   ----------------------------------------------------------------
@@ -1135,3 +1158,4 @@ BEGIN
   END IF;
 END
 $mig$;
+
