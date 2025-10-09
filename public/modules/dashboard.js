@@ -716,7 +716,7 @@ window.Modules.dashboard = (() => {
     cachedStatusHistory = byProc;
 
     renderOverview();
-    lyActivity();
+    renderYearlyActivity();
     renderHourlyEngagement();
 
     if (yearSelect) yearSelect.disabled = false;
