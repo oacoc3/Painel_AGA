@@ -375,7 +375,14 @@ window.Modules.dashboard = (() => {
       sigadaerPref: 0
     };
 
-    Object.values(cachedStatusHistory || {}).forEach(list => {
+    // >>> Patch do diff: contar cada processo apenas uma vez por status no ano
+    const statusProcessSets = {
+      anadoc: new Set(),
+      anatecPre: new Set(),
+      anatec: new Set()
+    };
+
+    Object.entries(cachedStatusHistory || {}).forEach(([procId, list]) => {
       if (!Array.isArray(list)) return;
       for (let i = 0; i < list.length; i++) {
         const cur = list[i];
@@ -388,11 +395,17 @@ window.Modules.dashboard = (() => {
         const startDate = new Date(cur.start);
         if (Number.isNaN(+startDate) || startDate.getFullYear() !== year) continue;
 
-        if (cur.status === 'ANADOC') counters.anadoc += 1;
-        if (cur.status === 'ANATEC-PRE') counters.anatecPre += 1;
-        if (cur.status === 'ANATEC') counters.anatec += 1;
+        const procKey = String(procId);
+        if (cur.status === 'ANADOC') statusProcessSets.anadoc.add(procKey);
+        if (cur.status === 'ANATEC-PRE') statusProcessSets.anatecPre.add(procKey);
+        if (cur.status === 'ANATEC') statusProcessSets.anatec.add(procKey);
       }
     });
+
+    counters.anadoc = statusProcessSets.anadoc.size;
+    counters.anatecPre = statusProcessSets.anatecPre.size;
+    counters.anatec = statusProcessSets.anatec.size;
+    // <<< Patch do diff
 
     // Notificações: contam pela data efetiva do pedido
     (cachedNotifications || []).forEach(notification => {
