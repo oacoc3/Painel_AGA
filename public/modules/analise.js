@@ -459,7 +459,7 @@ window.Modules.analise = (() => {
 
     const extraNcField = el('adNCExtra');
     if (extraNcField) {
-      answers.push({ code: EXTRA_NC_CODE, value: extraNcField.checked ? 'Sim' : 'Não', obs: null });
+       answers.push({ code: EXTRA_NC_CODE(), value: extraNcField.checked ? 'Sim' : 'Não', obs: null });
     }
 
     const extraField = el('adOutrasObs');
