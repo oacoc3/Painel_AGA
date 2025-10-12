@@ -31,7 +31,6 @@ window.Modules.analise = (() => {
     return t || null;
   }
 
-
   // === Lock/session heartbeats (injetado) ===
   let lockHeartbeatTimer = null;
   let sessionHeartbeatTimer = null;
@@ -579,12 +578,23 @@ window.Modules.analise = (() => {
     saveTimer = setTimeout(saveChecklistDraft, SAVE_DEBOUNCE_MS);
   }
 
+  // >>> PATCH aplicado: tentar checklist_drafts antes de checklist_responses
   async function loadChecklistDraft(processId, templateId) {
     if (!processId || !templateId) return null;
     try {
       const sb = getSupabaseClient();
       if (!sb) throw new Error('Cliente Supabase indisponível.');
-      const { data, error } = await sb
+
+      const { data: draft, error: draftError } = await sb
+        .from('checklist_drafts')
+        .select('*')
+        .eq('process_id', processId)
+        .eq('template_id', templateId)
+        .maybeSingle();
+      if (draftError) throw draftError;
+      if (draft) return draft;
+
+      const { data: finalized, error: finalizedError } = await sb
         .from('checklist_responses')
         .select('*')
         .eq('process_id', processId)
@@ -592,13 +602,14 @@ window.Modules.analise = (() => {
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (error) throw error;
-      return data || null;
+      if (finalizedError) throw finalizedError;
+      return finalized || null;
     } catch (err) {
       console.error('Falha ao carregar rascunho.', err);
       return null;
     }
   }
+  // <<< PATCH aplicado
 
   async function evaluateChecklistResult(draft) {
     const answers = Array.isArray(draft?.answers) ? draft.answers : [];
