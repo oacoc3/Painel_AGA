@@ -51,7 +51,7 @@
     const defaultAlign = options.align ?? 'justify';
     const headerSpacing = options.headerSpacing ?? 4;
 
-    // NOVO: recuo configurável para seção "Texto sugerido"
+    // NOVO: recuo configurável para seção "Texto(s) sugerido(s)"
     const parsedSuggestionIndent = Number(options.suggestionIndent);
     const suggestionIndent = Number.isFinite(parsedSuggestionIndent)
       ? parsedSuggestionIndent
@@ -162,8 +162,12 @@
       const x = opts.x ?? marginLeft;
       const availableWidth = contentWidth - (x - marginLeft);
       const maxWidth = opts.maxWidth ?? availableWidth;
-      const { x: _ignoredX, ...restOpts } = opts;
-      const baseOptions = { ...restOpts, align: 'left', maxWidth };
+      const { x: _ignoredX, align: customAlign, ...restOpts } = opts;
+      const baseOptions = {
+        ...restOpts,
+        align: customAlign ?? defaultAlign,
+        maxWidth
+      };
       const labelText = `${label}${separator}`;
 
       const prevStyle = typeof doc.getFont === 'function'
@@ -216,7 +220,7 @@
       doc.setFont(undefined, prevStyle);
     };
 
-    // NOVO: seção "Texto sugerido" com recuo
+    // NOVO: seção "Texto(s) sugerido(s)" com recuo
     const addSuggestionSection = (text, opts = {}) => {
       if (!text) return;
 
@@ -234,16 +238,14 @@
       const suggestionWidth = Math.max(10, maxWidth - normalizedIndent);
 
       addVerticalSpace(lineHeight * 2);
-      addWrappedText('Texto sugerido:', {
+      addWrappedText('Texto(s) sugerido(s) (não conformidade / não aplicação):', {
         x: suggestionX,
-        maxWidth: suggestionWidth,
-        align: 'left'
+        maxWidth: suggestionWidth
       });
       addVerticalSpace(lineHeight * 2);
       addWrappedText(text, {
         x: suggestionX,
-        maxWidth: suggestionWidth,
-        align: 'left'
+        maxWidth: suggestionWidth
       });
     };
 
@@ -257,7 +259,11 @@
       const underlineOffset = Number.isFinite(opts.underlineOffset)
         ? opts.underlineOffset
         : 0.75;
-      const baseOptions = { ...opts, align: 'left', maxWidth };
+      const baseOptions = {
+        ...opts,
+        align: opts.align ?? defaultAlign,
+        maxWidth
+      };
 
       paragraphs.forEach((paragraph, index) => {
         if (!paragraph.trim()) {
@@ -487,7 +493,7 @@
               }
 
               if (isApproved) {
-                // Alterado: usar seção com recuo para "Texto sugerido"
+                // Alterado: usar seção com recuo para "Texto(s) sugerido(s)"
                 addSuggestionSection(firstItem.texto_sugerido, { x, maxWidth });
               } else {
                 addLabelValue('Resultado', '', { separator: '', x, maxWidth });
@@ -497,7 +503,7 @@
                   addWrappedText(ans.obs, { x, maxWidth });
                 }
                 if (firstItem.texto_sugerido) {
-                  addWrappedText(`Texto sugerido: ${firstItem.texto_sugerido}`, { x, maxWidth });
+                  addWrappedText(`Texto(s) sugerido(s) (não conformidade / não aplicação): ${firstItem.texto_sugerido}`, { x, maxWidth });
                 }
               }
 
@@ -559,7 +565,7 @@
           }
 
           if (isApproved) {
-            // Alterado: usar seção com recuo para "Texto sugerido"
+            // Alterado: usar seção com recuo para "Texto(s) sugerido(s)"
             addSuggestionSection(item.texto_sugerido, { x, maxWidth });
           } else {
             addLabelValue('Resultado', '', { separator: '', x, maxWidth });
@@ -569,7 +575,7 @@
               addWrappedText(ans.obs, { x, maxWidth });
             }
             if (item.texto_sugerido) {
-              addWrappedText(`Texto sugerido: ${item.texto_sugerido}`, { x, maxWidth });
+              addWrappedText(`Texto(s) sugerido(s) (não conformidade / não aplicação): ${item.texto_sugerido}`, { x, maxWidth });
             }
           }
 
@@ -598,7 +604,7 @@
     if (!isApproved) {
       addVerticalSpace(headerSpacing);
       doc.setFont(undefined, 'bold');
-      addWrappedText('Fim da checklist.', { align: 'left' });
+      addWrappedText('Fim da checklist.');
       doc.setFont(undefined, 'normal');
     }
 
