@@ -776,6 +776,15 @@ footer { padding: 8px 12px; background: #faf9f7; }
   resize: vertical;
 }
 
+.ck-suggestion {
+  background: rgba(75, 111, 145, 0.08);
+}
+
+.ck-suggestion-text {
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
 .ck-sugestoes {
   display: flex;
   flex-direction: column;
