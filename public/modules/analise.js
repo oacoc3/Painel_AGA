@@ -399,6 +399,23 @@ window.Modules.analise = (() => {
         obsBox.appendChild(obs);
         detailsCol.appendChild(obsBox);
 
+        if (item.texto_sugerido) {
+          const suggestionBox = document.createElement('div');
+          suggestionBox.className = 'ck-detail-card ck-suggestion';
+
+          const suggestionTitle = document.createElement('span');
+          suggestionTitle.className = 'ck-detail-card-title';
+          suggestionTitle.textContent = 'Texto(s) sugerido(s) para não conformidade / não aplicação:';
+
+          const suggestionText = document.createElement('div');
+          suggestionText.className = 'ck-suggestion-text';
+          suggestionText.textContent = item.texto_sugerido || '';
+
+          suggestionBox.appendChild(suggestionTitle);
+          suggestionBox.appendChild(suggestionText);
+          detailsCol.appendChild(suggestionBox);
+        }
+
         grid.appendChild(detailsCol);
         // ====== FIM ======
 
