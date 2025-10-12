@@ -319,7 +319,7 @@ window.Modules.analise = (() => {
 
     const warning = document.createElement('div');
     warning.className = 'ck-warning';
-    warning.innerHTML = '<strong>Atenção!</strong> Os itens apresentados abaixo se referem aos requisitos regulamentares aplicáveis à Análise Documental. Quaisquer não conformidades não previstas devem ser registradas no campo “Outras observações do(a) Analista”.';
+    warning.innerHTML = '<strong>Atenção!</strong> Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, haverá o pertinente registro no campo "Outras observações do(a) Analista".';
     frag.appendChild(warning);
 
     (template.items || []).forEach(cat => {
@@ -419,7 +419,7 @@ window.Modules.analise = (() => {
       scheduleDraftSave();
     });
     extraFlag.appendChild(extraInput);
-    extraFlag.appendChild(document.createTextNode(' Há “Não conformidade não abarcada pelos itens”?'));
+    extraFlag.appendChild(document.createTextNode(' Foi identificada não conformidade não abarcada pelos itens anteriores (vide outras observações do(a) Analista)'));
     frag.appendChild(extraFlag);
 
     const extraObs = document.createElement('label');
