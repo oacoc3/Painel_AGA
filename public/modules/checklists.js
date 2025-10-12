@@ -78,7 +78,7 @@ window.Modules.checklists = (() => {
     row.innerHTML = `
       <input class="item-code" placeholder="Código" value="${item.code || ''}" required>
       <textarea class="item-req" placeholder="Requisito" rows="2" required></textarea>
-      <textarea class="item-txt" placeholder="Texto sugerido" rows="3"></textarea>
+      <textarea class="item-txt" placeholder="Texto(s) sugerido(s) (não conformidade / não aplicação)" rows="3"></textarea>
       <button type="button" class="del-item">×</button>
     `;
     const req = row.querySelector('.item-req');
