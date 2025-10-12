@@ -502,9 +502,6 @@
                   addLabelValue('Obs', '', { separator: '', x, maxWidth });
                   addWrappedText(ans.obs, { x, maxWidth });
                 }
-                if (firstItem.texto_sugerido) {
-                  addWrappedText(`Texto(s) sugerido(s) (não conformidade / não aplicação): ${firstItem.texto_sugerido}`, { x, maxWidth });
-                }
               }
 
               if (isNonConform) doc.setTextColor(0, 0, 0);
@@ -573,9 +570,6 @@
             if (ans.obs) {
               addLabelValue('Obs', '', { separator: '', x, maxWidth });
               addWrappedText(ans.obs, { x, maxWidth });
-            }
-            if (item.texto_sugerido) {
-              addWrappedText(`Texto(s) sugerido(s) (não conformidade / não aplicação): ${item.texto_sugerido}`, { x, maxWidth });
             }
           }
 
