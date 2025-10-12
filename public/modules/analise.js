@@ -578,9 +578,11 @@ window.Modules.analise = (() => {
     saveTimer = setTimeout(saveChecklistDraft, SAVE_DEBOUNCE_MS);
   }
 
-  // >>> PATCH aplicado: tentar checklist_drafts antes de checklist_responses
-  async function loadChecklistDraft(processId, templateId) {
-    if (!processId || !templateId) return null;
+  // >>> Estado da checklist: tenta carregar rascunho; senão consulta a última finalizada
+  async function loadChecklistProgress(processId, templateId) {
+    if (!processId || !templateId) {
+      return { draft: null, finalized: null };
+    }
     try {
       const sb = getSupabaseClient();
       if (!sb) throw new Error('Cliente Supabase indisponível.');
@@ -592,24 +594,27 @@ window.Modules.analise = (() => {
         .eq('template_id', templateId)
         .maybeSingle();
       if (draftError) throw draftError;
-      if (draft) return draft;
+      if (draft) {
+        return { draft, finalized: null };
+      }
 
       const { data: finalized, error: finalizedError } = await sb
         .from('checklist_responses')
-        .select('*')
+        .select('id, filled_at, filled_by, profiles:filled_by(name)')
         .eq('process_id', processId)
         .eq('template_id', templateId)
-        .order('updated_at', { ascending: false })
+        .eq('status', 'final')
+        .order('filled_at', { ascending: false, nullsLast: false })
         .limit(1)
         .maybeSingle();
       if (finalizedError) throw finalizedError;
-      return finalized || null;
+      return { draft: null, finalized: finalized || null };
     } catch (err) {
       console.error('Falha ao carregar rascunho.', err);
-      return null;
+      return { draft: null, finalized: null };
     }
   }
-  // <<< PATCH aplicado
+  // <<< Estado da checklist
 
   async function evaluateChecklistResult(draft) {
     const answers = Array.isArray(draft?.answers) ? draft.answers : [];
@@ -655,6 +660,7 @@ window.Modules.analise = (() => {
 
       await abrirChecklistPDF(data, pdfWindow);
       Utils.setMsg('adMsg', '');
+      clearLocalDraftSnapshot();
       await releaseLock();
       stopLockHeartbeat();
     } catch (err) {
@@ -740,7 +746,7 @@ window.Modules.analise = (() => {
       box.innerHTML = '<div class="muted">Carregando…</div>';
 
       const sb = getSupabaseClient();
-      if (!sb || typeof sb.from !== 'function') {
+      if (sb === null || typeof sb.from !== 'function') {
         console.error('[Análise] Cliente Supabase não encontrado.');
         approvedListRetryCount += 1;
         if (approvedListRetryCount <= APPROVED_LIST_MAX_RETRIES) {
@@ -917,11 +923,27 @@ window.Modules.analise = (() => {
     startSessionHeartbeat();
     if (gotLock) startLockHeartbeat();
 
+    let infoMsg = '';
     if (template && currentProcessId) {
-      const draft = await loadChecklistDraft(currentProcessId, template.id);
-      applyDraftToUI(draft);
+      const { draft, finalized } = await loadChecklistProgress(currentProcessId, template.id);
+      if (draft) {
+        currentDraftId = draft.id || null;
+        applyDraftToUI(draft);
+        infoMsg = 'Checklist em andamento carregada.';
+      } else {
+        applyDraftToUI(null);
+        if (finalized) {
+          const filledAt = finalized.filled_at ? Utils.fmtDateTime(finalized.filled_at) : '';
+          const filledBy = finalized.profiles?.name || finalized.filled_by || '';
+          const parts = ['Uma checklist para este processo já foi finalizada.'];
+          if (filledAt) parts.push(`Finalizada em ${filledAt}.`);
+          if (filledBy) parts.push(`Responsável: ${filledBy}.`);
+          parts.push('Ao prosseguir, você preencherá uma nova checklist em branco.');
+          infoMsg = parts.join(' ');
+        }
+      }
     }
-    Utils.setMsg('adMsg', '');
+    Utils.setMsg('adMsg', infoMsg);
   }
 
   function bind() {
