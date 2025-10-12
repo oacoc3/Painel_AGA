@@ -51,6 +51,12 @@
     const defaultAlign = options.align ?? 'justify';
     const headerSpacing = options.headerSpacing ?? 4;
 
+    // NOVO: recuo configurável para seção "Texto sugerido"
+    const parsedSuggestionIndent = Number(options.suggestionIndent);
+    const suggestionIndent = Number.isFinite(parsedSuggestionIndent)
+      ? parsedSuggestionIndent
+      : 8;
+
     // Controle de espaçamento após o título de categoria
     const parsedCategorySpacing = Number(options.categorySpacing);
     const hasCategorySpacing = Number.isFinite(parsedCategorySpacing);
@@ -208,6 +214,37 @@
       });
 
       doc.setFont(undefined, prevStyle);
+    };
+
+    // NOVO: seção "Texto sugerido" com recuo
+    const addSuggestionSection = (text, opts = {}) => {
+      if (!text) return;
+
+      const baseX = opts.x ?? marginLeft;
+      const availableWidth = contentWidth - (baseX - marginLeft);
+      const maxWidth = opts.maxWidth ?? availableWidth;
+
+      const normalizedIndent = (() => {
+        const positiveIndent = Math.max(0, suggestionIndent);
+        if (!Number.isFinite(maxWidth) || maxWidth <= 0) return positiveIndent;
+        return Math.min(positiveIndent, Math.max(0, maxWidth - 10));
+      })();
+
+      const suggestionX = baseX + normalizedIndent;
+      const suggestionWidth = Math.max(10, maxWidth - normalizedIndent);
+
+      addVerticalSpace(lineHeight * 2);
+      addWrappedText('Texto sugerido:', {
+        x: suggestionX,
+        maxWidth: suggestionWidth,
+        align: 'left'
+      });
+      addVerticalSpace(lineHeight * 2);
+      addWrappedText(text, {
+        x: suggestionX,
+        maxWidth: suggestionWidth,
+        align: 'left'
+      });
     };
 
     // NOVO: texto sublinhado (usado nos títulos de categoria)
@@ -450,9 +487,8 @@
               }
 
               if (isApproved) {
-                if (firstItem.texto_sugerido) {
-                  addWrappedText(`Texto sugerido: ${firstItem.texto_sugerido}`, { x, maxWidth });
-                }
+                // Alterado: usar seção com recuo para "Texto sugerido"
+                addSuggestionSection(firstItem.texto_sugerido, { x, maxWidth });
               } else {
                 addLabelValue('Resultado', '', { separator: '', x, maxWidth });
                 if (ans.value) addWrappedText(ans.value, { x, maxWidth });
@@ -523,9 +559,8 @@
           }
 
           if (isApproved) {
-            if (item.texto_sugerido) {
-              addWrappedText(`Texto sugerido: ${item.texto_sugerido}`, { x, maxWidth });
-            }
+            // Alterado: usar seção com recuo para "Texto sugerido"
+            addSuggestionSection(item.texto_sugerido, { x, maxWidth });
           } else {
             addLabelValue('Resultado', '', { separator: '', x, maxWidth });
             if (ans.value) addWrappedText(ans.value, { x, maxWidth });
