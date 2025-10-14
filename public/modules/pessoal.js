@@ -315,15 +315,18 @@ window.Modules.pessoal = (() => {
       span.title = 'Sem horas úteis configuradas.';
       return span;
     }
-    if (!Number.isFinite(info.percent)) {
-      span.textContent = '—';
-    } else {
+    const availableMinutes = Number.isFinite(info.availableMinutes) ? Math.max(0, info.availableMinutes) : 0;
+    const totalMinutes = Number.isFinite(info.totalMinutes) ? Math.max(0, info.totalMinutes) : 0;
+    const available = minutesToLabel(availableMinutes);
+    const total = minutesToLabel(totalMinutes);
+    span.textContent = available;
+    if (Number.isFinite(info.percent)) {
       const pct = Math.max(0, Math.min(100, info.percent));
-      span.textContent = `${PERCENT_FORMATTER.format(pct)}%`;
+      span.title = `${available} disponíveis de ${total} (${PERCENT_FORMATTER.format(pct)}%)`;
+    } else {
+      span.title = `${available} disponíveis de ${total}`;
     }
-    const available = minutesToLabel(info.availableMinutes || 0);
-    const total = minutesToLabel(info.totalMinutes || 0);
-    span.title = `${available} disponíveis de ${total}`;
+
     return span;
   }
   // <<< Patch
