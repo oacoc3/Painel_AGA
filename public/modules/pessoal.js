@@ -327,19 +327,29 @@ window.Modules.pessoal = (() => {
     return span;
   }
  
+  // >>> Patch aplicado: mostrar "horas úteis possíveis" e tooltip descritiva
   function formatAvailabilityHoursCell(info) {
     const span = document.createElement('span');
-    if (!info || !Number.isFinite(info.totalMinutes) || info.totalMinutes <= 0) {
+    const possibleMinutes = info && Number.isFinite(info.possibleMinutes)
+      ? info.possibleMinutes
+      : info?.totalMinutes;
+
+    if (!Number.isFinite(possibleMinutes) || possibleMinutes <= 0) {
       span.textContent = '—';
       span.title = 'Sem horas úteis configuradas.';
       return span;
     }
 
-    const total = minutesToLabel(info.totalMinutes || 0);
+    const total = minutesToLabel(possibleMinutes || 0);
     span.textContent = total;
 
-    const available = minutesToLabel(info.availableMinutes || 0);
-    span.title = `${available} disponíveis de ${total}`;
+    if (info && Number.isFinite(info.totalMinutes) && info.totalMinutes > 0) {
+      const available = minutesToLabel(info.availableMinutes || 0);
+      const capacity = minutesToLabel(info.totalMinutes || 0);
+      span.title = `Horário útil configurado: ${total}. Capacidade disponível: ${available} de ${capacity}.`;
+    } else {
+      span.title = `Horário útil configurado: ${total}.`;
+    }
     return span;
   }
   // <<< Patch
@@ -1131,7 +1141,8 @@ window.Modules.pessoal = (() => {
         const baseMinutes = workingMinutesPerDay[idx] || 0;
         const totalMinutes = baseMinutes * analystCount;
         if (!totalMinutes) {
-          return { percent: null, availableMinutes: 0, totalMinutes: 0 };
+          // >>> Patch aplicado: expor possibleMinutes (horas úteis possíveis por dia, sem considerar headcount)
+          return { percent: null, availableMinutes: 0, totalMinutes: 0, possibleMinutes: baseMinutes };
         }
         let unavailableMinutes = 0;
         profileDayIntervals.forEach(dayArrays => {
@@ -1151,11 +1162,14 @@ window.Modules.pessoal = (() => {
         const unavailableClamped = Math.min(capacity, unavailableMinutes);
         const availableMinutes = capacity - unavailableClamped;
         const percent = capacity > 0 ? (availableMinutes / capacity) * 100 : null;
-        return { percent, availableMinutes, totalMinutes: capacity };
+        // >>> Patch aplicado: incluir possibleMinutes
+        return { percent, availableMinutes, totalMinutes: capacity, possibleMinutes: baseMinutes };
       });
 
       const availableSum = daySummaries.reduce((sum, dayInfo) => sum + (dayInfo.availableMinutes || 0), 0);
       const totalSum = daySummaries.reduce((sum, dayInfo) => sum + (dayInfo.totalMinutes || 0), 0);
+      // >>> Patch aplicado: somar possibleMinutes para o resumo
+      const possibleSum = daySummaries.reduce((sum, dayInfo) => sum + (dayInfo.possibleMinutes || 0), 0);
       const summaryPercent = totalSum > 0 ? (availableSum / totalSum) * 100 : null;
 
       result.set(week.key, {
@@ -1163,7 +1177,8 @@ window.Modules.pessoal = (() => {
         summary: {
           percent: summaryPercent,
           availableMinutes: availableSum,
-          totalMinutes: totalSum
+          totalMinutes: totalSum,
+          possibleMinutes: possibleSum
         }
       });
     });
@@ -1396,7 +1411,8 @@ window.Modules.pessoal = (() => {
       state.unavailabilityRows = rows;
       recomputeWeeklyAvailability();
       Utils.renderTable(tableId, AVAILABILITY_COLUMNS, rows);
-      Utils.setMsg(msgId, rows.length ? '' : 'Nenhuma indisponibilidade registrada.');
+      Utils.setMsg(msgId, rows.length ? '' : 'Nenhuma indisponibilidade registrado.'
+      );
     } catch (err) {
       console.error('[pessoal] Falha ao carregar indisponibilidades:', err);
       state.unavailabilityRows = [];
