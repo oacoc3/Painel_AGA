@@ -228,6 +228,18 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   gap: 12px;
   height: 100%;
 }
+.pessoal-grid-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.pessoal-grid-col > .card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
 .pessoal-grid > .card {
   display: flex;
   flex-direction: column;
