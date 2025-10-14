@@ -228,6 +228,18 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   gap: 12px;
   height: 100%;
 }
+.pessoal-grid-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.pessoal-grid-col > .card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
 .pessoal-grid > .card {
   display: flex;
   flex-direction: column;
@@ -298,7 +310,8 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 
 .working-hours-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 160px));
+  justify-content: space-between;
   gap: 8px;
 }
 
@@ -327,10 +340,15 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   display: flex;
   gap: 6px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .working-hours-interval label {
-  flex: 1;
+  flex: 0 0 110px;
+}
+
+.working-hours-interval label input {
+  width: 100%;
 }
 
 .working-hours-interval label span {
