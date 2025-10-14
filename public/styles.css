@@ -270,6 +270,93 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   font-size: 12px;
 }
 
+.working-hours-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f9fafb;
+}
+
+.working-hours-selector.hidden {
+  display: none;
+}
+
+.working-hours-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.working-hours-header strong {
+  font-family: var(--mono);
+}
+
+.working-hours-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.working-hours-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.working-hours-row strong {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.working-hours-intervals {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.working-hours-interval {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.working-hours-interval label {
+  flex: 1;
+}
+
+.working-hours-interval label span {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.working-hours-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.working-hours-note {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+#weeklyAvailabilityTable table tbody tr.selected {
+  background: #eef2ff;
+}
+
+#weeklyAvailabilityTable table tbody tr.selected td {
+  font-weight: 600;
+}
+
 .analysis-col { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
 
 /* Grade de 3 colunas (base) */

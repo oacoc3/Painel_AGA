@@ -11,6 +11,11 @@ window.Modules.pessoal = (() => {
     productivitySelectedWeek: null,
     productivityWeekIndex: 0,
     productivityProfiles: [],
+    weeklyAvailabilityData: new Map(),
+    weeklyAvailabilityMsg: '',
+    unavailabilityRows: [],
+    workingHoursByWeek: new Map(),
+    selectedHoursWeekKey: null,
     // <<< Patch
     unavailabilityEditingId: null
   };
@@ -24,6 +29,44 @@ window.Modules.pessoal = (() => {
   const ANALISTA_OACO_ROLE = 'Analista OACO'; // Papel interno usado no seu sistema
   const PRODUCTIVITY_FIRST_WEEK_ISO = '2025-10-06';
   const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+  const MS_PER_MINUTE = 60 * 1000;
+
+  const WORKING_DAYS = [
+    { key: 'monday', label: 'Segunda-feira', short: 'Seg', offset: 0 },
+    { key: 'tuesday', label: 'Terça-feira', short: 'Ter', offset: 1 },
+    { key: 'wednesday', label: 'Quarta-feira', short: 'Qua', offset: 2 },
+    { key: 'thursday', label: 'Quinta-feira', short: 'Qui', offset: 3 },
+    { key: 'friday', label: 'Sexta-feira', short: 'Sex', offset: 4 }
+  ];
+
+  const WORKING_HOURS_STORAGE_KEY = 'pessoalWorkingHoursByWeek';
+
+  const DEFAULT_WORKING_HOURS = {
+    monday: [
+      { start: '08:00', end: '11:15' },
+      { start: '13:00', end: '15:45' }
+    ],
+    tuesday: [
+      { start: '10:00', end: '11:15' },
+      { start: '13:00', end: '15:45' }
+    ],
+    wednesday: [
+      { start: '09:15', end: '11:15' },
+      { start: '13:00', end: '15:45' }
+    ],
+    thursday: [
+      { start: '10:00', end: '11:15' },
+      { start: '13:00', end: '15:45' }
+    ],
+    friday: [
+      { start: '08:00', end: '12:00' }
+    ]
+  };
+
+  const PERCENT_FORMATTER = new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1
+  });
 
   // >>> Patch: helpers de papel/semana/contagem
   function isAnalistaOacoRole(role) {
@@ -120,6 +163,168 @@ window.Modules.pessoal = (() => {
     }
 
     return weeks;
+  }
+  // <<< Patch
+
+  // >>> Patch: utilitários para horários úteis e disponibilidade
+  function isValidTimeValue(value) {
+    return typeof value === 'string' && /^\d{2}:\d{2}$/.test(value);
+  }
+
+  function cloneWorkingHours(hours = {}) {
+    const result = {};
+    WORKING_DAYS.forEach(day => {
+      const slots = Array.isArray(hours?.[day.key]) ? hours[day.key] : [];
+      const normalized = slots
+        .map(slot => ({
+          start: isValidTimeValue(slot?.start) ? slot.start : '',
+          end: isValidTimeValue(slot?.end) ? slot.end : ''
+        }))
+        .filter(slot => slot.start || slot.end);
+      result[day.key] = normalized;
+    });
+    return result;
+  }
+
+  function getDefaultWorkingHours() {
+    return cloneWorkingHours(DEFAULT_WORKING_HOURS);
+  }
+
+  function isSameWorkingHours(a, b) {
+    return WORKING_DAYS.every(day => {
+      const listA = Array.isArray(a?.[day.key]) ? a[day.key] : [];
+      const listB = Array.isArray(b?.[day.key]) ? b[day.key] : [];
+      if (listA.length !== listB.length) return false;
+      return listA.every((slot, idx) => slot.start === listB[idx].start && slot.end === listB[idx].end);
+    });
+  }
+
+  function ensureWeekWorkingHours(weekKey) {
+    if (!weekKey) return getDefaultWorkingHours();
+    if (!state.workingHoursByWeek.has(weekKey)) {
+      state.workingHoursByWeek.set(weekKey, getDefaultWorkingHours());
+    }
+    return state.workingHoursByWeek.get(weekKey);
+  }
+
+  function getWeekWorkingHours(weekKey) {
+    const base = ensureWeekWorkingHours(weekKey);
+    return cloneWorkingHours(base);
+  }
+
+  function setWeekWorkingHours(weekKey, hours) {
+    if (!weekKey) return;
+    state.workingHoursByWeek.set(weekKey, cloneWorkingHours(hours));
+    persistWorkingHours();
+  }
+
+  function hasCustomWorkingHours(weekKey) {
+    if (!weekKey) return false;
+    const stored = state.workingHoursByWeek.get(weekKey);
+    if (!stored) return false;
+    return !isSameWorkingHours(stored, getDefaultWorkingHours());
+  }
+
+  function persistWorkingHours() {
+    try {
+      if (typeof window === 'undefined' || !window?.localStorage) return;
+      const payload = {};
+      state.workingHoursByWeek.forEach((hours, key) => {
+        if (!key) return;
+        payload[key] = cloneWorkingHours(hours);
+      });
+      window.localStorage.setItem(WORKING_HOURS_STORAGE_KEY, JSON.stringify(payload));
+    } catch (err) {
+      console.warn('[pessoal] Falha ao salvar horários úteis:', err);
+    }
+  }
+
+  function loadWorkingHoursFromStorage() {
+    try {
+      if (typeof window === 'undefined' || !window?.localStorage) return;
+      const raw = window.localStorage.getItem(WORKING_HOURS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return;
+      Object.entries(parsed).forEach(([weekKey, hours]) => {
+        if (!weekKey) return;
+        state.workingHoursByWeek.set(weekKey, cloneWorkingHours(hours));
+      });
+    } catch (err) {
+      console.warn('[pessoal] Falha ao carregar horários úteis salvos:', err);
+    }
+  }
+
+  function resetWorkingHoursForWeek(weekKey) {
+    if (!weekKey) return;
+    if (state.workingHoursByWeek.has(weekKey)) {
+      state.workingHoursByWeek.delete(weekKey);
+      persistWorkingHours();
+    }
+    recomputeWeeklyAvailability();
+  }
+
+  function parseTimeToMinutes(value) {
+    if (!isValidTimeValue(value)) return null;
+    const [hh, mm] = value.split(':').map(Number);
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+    return hh * 60 + mm;
+  }
+
+  function mergeIntervals(intervals = []) {
+    if (!Array.isArray(intervals) || !intervals.length) return [];
+    const normalized = intervals
+      .map(item => {
+        const start = item?.start instanceof Date ? new Date(item.start.getTime()) : new Date(item?.start);
+        const end = item?.end instanceof Date ? new Date(item.end.getTime()) : new Date(item?.end);
+        if (!start || !end || Number.isNaN(+start) || Number.isNaN(+end) || end <= start) return null;
+        return { start, end };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.start - b.start);
+    if (!normalized.length) return [];
+    const merged = [normalized[0]];
+    for (let i = 1; i < normalized.length; i += 1) {
+      const current = normalized[i];
+      const last = merged[merged.length - 1];
+      if (current.start <= last.end) {
+        if (current.end > last.end) last.end = current.end;
+      } else {
+        merged.push(current);
+      }
+    }
+    return merged;
+  }
+
+  function minutesToLabel(minutes) {
+    if (!Number.isFinite(minutes) || minutes <= 0) return '0min';
+    const total = Math.round(minutes);
+    const hours = Math.floor(total / 60);
+    const mins = total % 60;
+    const parts = [];
+    if (hours) parts.push(`${hours}h`);
+    if (mins) parts.push(`${mins}min`);
+    if (!parts.length) parts.push('0min');
+    return parts.join(' ');
+  }
+
+  function formatAvailabilityCell(info) {
+    const span = document.createElement('span');
+    if (!info || !Number.isFinite(info.totalMinutes) || info.totalMinutes <= 0) {
+      span.textContent = '—';
+      span.title = 'Sem horas úteis configuradas.';
+      return span;
+    }
+    if (!Number.isFinite(info.percent)) {
+      span.textContent = '—';
+    } else {
+      const pct = Math.max(0, Math.min(100, info.percent));
+      span.textContent = `${PERCENT_FORMATTER.format(pct)}%`;
+    }
+    const available = minutesToLabel(info.availableMinutes || 0);
+    const total = minutesToLabel(info.totalMinutes || 0);
+    span.title = `${available} disponíveis de ${total}`;
+    return span;
   }
   // <<< Patch
 
@@ -315,6 +520,18 @@ window.Modules.pessoal = (() => {
     { key: 'notif_no_review', label: 'Notificações sem necessidade de revisão', align: 'center' },
     { key: 'notif_with_review', label: 'Notificações com necessidade de revisão', align: 'center' }
   ];
+
+  // >>> Patch: colunas para disponibilidade semanal
+  const WEEKLY_AVAILABILITY_COLUMNS = [
+    { label: 'Semana', render: row => row.weekLabel },
+    { label: 'Seg', align: 'center', render: row => formatAvailabilityCell(row.days?.[0]) },
+    { label: 'Ter', align: 'center', render: row => formatAvailabilityCell(row.days?.[1]) },
+    { label: 'Qua', align: 'center', render: row => formatAvailabilityCell(row.days?.[2]) },
+    { label: 'Qui', align: 'center', render: row => formatAvailabilityCell(row.days?.[3]) },
+    { label: 'Sex', align: 'center', render: row => formatAvailabilityCell(row.days?.[4]) },
+    { label: 'Semana (%)', align: 'center', render: row => formatAvailabilityCell(row.summary) }
+  ];
+  // <<< Patch
 
   function renderUnavailabilityActions(row) {
     const wrap = document.createElement('div');
@@ -549,7 +766,7 @@ window.Modules.pessoal = (() => {
     }
   }
 
-  // >>> Patch: filtros/tabela por semana
+  // >>> Patch: filtros/tabela por semana (produtividade) + disponibilidade semanal
   function renderProductivityWeekFilters() {
     const container = el('productivityWeekFilters');
     if (!container) return;
@@ -640,6 +857,313 @@ window.Modules.pessoal = (() => {
     }
   }
 
+  function renderWeeklyAvailabilityTable() {
+    const tableId = 'weeklyAvailabilityTable';
+    const msgId = 'weeklyAvailabilityMsg';
+    const weeks = state.productivityWeeks || [];
+    const rows = weeks.map(week => {
+      const info = state.weeklyAvailabilityData.get(week.key) || null;
+      return {
+        weekKey: week.key,
+        weekLabel: formatWeekLabel(week),
+        days: info?.days || WORKING_DAYS.map(() => ({ percent: null, availableMinutes: 0, totalMinutes: 0 })),
+        summary: info?.summary || { percent: null, availableMinutes: 0, totalMinutes: 0 }
+      };
+    });
+
+    const { tbody } = Utils.renderTable(tableId, WEEKLY_AVAILABILITY_COLUMNS, rows);
+    const selectedKey = state.productivitySelectedWeek || null;
+    if (tbody) {
+      Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
+        tr.classList.remove('selected');
+        try {
+          const rowData = JSON.parse(tr.dataset.row || '{}');
+          if (rowData?.weekKey && rowData.weekKey === selectedKey) {
+            tr.classList.add('selected');
+          }
+        } catch (_) {
+          /* ignore */
+        }
+      });
+    }
+
+    const message = state.weeklyAvailabilityMsg || (weeks.length ? '' : 'Nenhuma semana disponível.');
+    Utils.setMsg(msgId, message);
+  }
+
+  function handleWorkingHourChange(weekKey, dayKey, slotIndex, field, value) {
+    if (!weekKey || !dayKey || !isAdminRole()) return;
+    const hours = getWeekWorkingHours(weekKey);
+    const list = Array.isArray(hours[dayKey]) ? hours[dayKey] : [];
+    const index = Number(slotIndex) || 0;
+    while (list.length <= index) {
+      list.push({ start: '', end: '' });
+    }
+    const slot = list[index] || { start: '', end: '' };
+    slot[field] = isValidTimeValue(value) ? value : '';
+    hours[dayKey] = list.filter(item => item.start || item.end);
+    setWeekWorkingHours(weekKey, hours);
+    recomputeWeeklyAvailability();
+  }
+
+  function renderWorkingHoursSelector() {
+    const container = el('workingHoursSelector');
+    if (!container) return;
+
+    const weeks = state.productivityWeeks || [];
+    if (!weeks.length) {
+      container.innerHTML = '';
+      container.classList.add('hidden');
+      return;
+    }
+
+    let selectedKey = state.productivitySelectedWeek;
+    if (!selectedKey || !weeks.some(week => week.key === selectedKey)) {
+      selectedKey = weeks[0]?.key || null;
+    }
+    state.selectedHoursWeekKey = selectedKey;
+
+    const selectedWeek = weeks.find(week => week.key === selectedKey) || weeks[0];
+    const hours = selectedKey ? getWeekWorkingHours(selectedKey) : getDefaultWorkingHours();
+    const admin = isAdminRole();
+
+    container.classList.remove('hidden');
+    container.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.className = 'working-hours-header';
+
+    const title = document.createElement('strong');
+    title.textContent = selectedWeek ? `Horários úteis • ${formatWeekLabel(selectedWeek)}` : 'Horários úteis';
+    header.appendChild(title);
+
+    if (admin) {
+      const resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
+      resetBtn.textContent = 'Restaurar padrão';
+      resetBtn.disabled = !hasCustomWorkingHours(selectedKey);
+      resetBtn.addEventListener('click', () => resetWorkingHoursForWeek(selectedKey));
+      header.appendChild(resetBtn);
+    }
+
+    container.appendChild(header);
+
+    const grid = document.createElement('div');
+    grid.className = 'working-hours-grid';
+
+    WORKING_DAYS.forEach(day => {
+      const dayBox = document.createElement('div');
+      dayBox.className = 'working-hours-row';
+
+      const dayTitle = document.createElement('strong');
+      dayTitle.textContent = day.label;
+      dayBox.appendChild(dayTitle);
+
+      const intervals = document.createElement('div');
+      intervals.className = 'working-hours-intervals';
+      const daySlots = Array.isArray(hours[day.key]) ? hours[day.key] : [];
+      const baseSlots = day.key === 'friday' ? 1 : 2;
+      const totalSlots = Math.max(baseSlots, daySlots.length || baseSlots);
+
+      for (let idx = 0; idx < totalSlots; idx += 1) {
+        const slot = daySlots[idx] || { start: '', end: '' };
+        const row = document.createElement('div');
+        row.className = 'working-hours-interval';
+
+        const startLabel = document.createElement('label');
+        const startCaption = document.createElement('span');
+        startCaption.textContent = `${idx + 1}º início`;
+        startLabel.appendChild(startCaption);
+        const startInput = document.createElement('input');
+        startInput.type = 'time';
+        startInput.value = slot.start || '';
+        startInput.disabled = !admin;
+        startInput.addEventListener('change', ev => handleWorkingHourChange(selectedKey, day.key, idx, 'start', ev.target.value));
+        startLabel.appendChild(startInput);
+
+        const endLabel = document.createElement('label');
+        const endCaption = document.createElement('span');
+        endCaption.textContent = `${idx + 1}º fim`;
+        endLabel.appendChild(endCaption);
+        const endInput = document.createElement('input');
+        endInput.type = 'time';
+        endInput.value = slot.end || '';
+        endInput.disabled = !admin;
+        endInput.addEventListener('change', ev => handleWorkingHourChange(selectedKey, day.key, idx, 'end', ev.target.value));
+        endLabel.appendChild(endInput);
+
+        row.appendChild(startLabel);
+        row.appendChild(endLabel);
+        intervals.appendChild(row);
+      }
+
+      dayBox.appendChild(intervals);
+      grid.appendChild(dayBox);
+    });
+
+    container.appendChild(grid);
+
+    const note = document.createElement('div');
+    note.className = 'working-hours-note';
+    note.textContent = admin
+      ? 'Ajustes aplicam-se apenas à semana selecionada. Intervalos inválidos são desconsiderados no cálculo.'
+      : 'Horários exibidos conforme configuração da semana selecionada.';
+    container.appendChild(note);
+  }
+
+  function recomputeWeeklyAvailability() {
+    const weeks = state.productivityWeeks || [];
+    const analysts = getAnalistaOacoProfiles();
+    const analystIds = analysts
+      .map(profile => (profile?.id != null ? String(profile.id) : null))
+      .filter(Boolean);
+    const analystSet = new Set(analystIds);
+    const analystCount = analystIds.length;
+    const unavailability = state.unavailabilityRows || [];
+    const result = new Map();
+    let hasWorkingMinutes = false;
+
+    if (!weeks.length) {
+      state.weeklyAvailabilityData = result;
+      state.weeklyAvailabilityMsg = analystCount
+        ? 'Nenhuma semana disponível.'
+        : 'Nenhum Analista OACO cadastrado.';
+      renderWeeklyAvailabilityTable();
+      renderWorkingHoursSelector();
+      return;
+    }
+
+    weeks.forEach(week => {
+      const weekStart = week?.start instanceof Date ? new Date(week.start.getTime()) : new Date(week.start);
+      if (!weekStart || Number.isNaN(+weekStart)) return;
+      const weekEnd = new Date(weekStart.getTime());
+      weekEnd.setDate(weekEnd.getDate() + 7);
+
+      const dayBounds = WORKING_DAYS.map(day => {
+        const start = new Date(weekStart.getTime());
+        start.setDate(start.getDate() + day.offset);
+        const end = new Date(start.getTime());
+        end.setDate(end.getDate() + 1);
+        return { start, end };
+      });
+
+      const hours = getWeekWorkingHours(week.key);
+      const workingIntervals = [];
+      const workingMinutesPerDay = [];
+
+      WORKING_DAYS.forEach((day, idx) => {
+        const dayStart = dayBounds[idx].start;
+        const slots = Array.isArray(hours[day.key]) ? hours[day.key] : [];
+        const intervals = slots
+          .map(slot => {
+            const startMinutes = parseTimeToMinutes(slot.start);
+            const endMinutes = parseTimeToMinutes(slot.end);
+            if (startMinutes == null || endMinutes == null || endMinutes <= startMinutes) return null;
+            const start = new Date(dayStart.getTime());
+            start.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
+            const end = new Date(dayStart.getTime());
+            end.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
+            return { start, end };
+          })
+          .filter(Boolean);
+        workingIntervals[idx] = intervals;
+        const dayMinutes = intervals.reduce((total, interval) => total + (interval.end - interval.start) / MS_PER_MINUTE, 0);
+        workingMinutesPerDay[idx] = dayMinutes;
+        if (dayMinutes > 0) hasWorkingMinutes = true;
+      });
+
+      const profileDayIntervals = new Map();
+
+      if (analystCount) {
+        const weekStartTime = weekStart.getTime();
+        const weekEndTime = weekEnd.getTime();
+
+        unavailability.forEach(item => {
+          const profileKey = item?.profile_id != null ? String(item.profile_id) : null;
+          if (!profileKey || !analystSet.has(profileKey)) return;
+
+          const rawStart = new Date(item.starts_at);
+          const rawEnd = new Date(item.ends_at);
+          if (!rawStart || !rawEnd || Number.isNaN(+rawStart) || Number.isNaN(+rawEnd) || rawEnd <= rawStart) return;
+
+          const startTime = Math.max(rawStart.getTime(), weekStartTime);
+          const endTime = Math.min(rawEnd.getTime(), weekEndTime);
+          if (startTime >= endTime) return;
+
+          if (!profileDayIntervals.has(profileKey)) {
+            profileDayIntervals.set(profileKey, WORKING_DAYS.map(() => []));
+          }
+          const dayCollections = profileDayIntervals.get(profileKey);
+
+          WORKING_DAYS.forEach((day, idx) => {
+            const dayStartTime = dayBounds[idx].start.getTime();
+            const dayEndTime = dayBounds[idx].end.getTime();
+            const overlapStart = Math.max(startTime, dayStartTime);
+            const overlapEnd = Math.min(endTime, dayEndTime);
+            if (overlapStart < overlapEnd) {
+              dayCollections[idx].push({
+                start: new Date(overlapStart),
+                end: new Date(overlapEnd)
+              });
+            }
+          });
+        });
+      }
+
+      const daySummaries = WORKING_DAYS.map((day, idx) => {
+        const baseMinutes = workingMinutesPerDay[idx] || 0;
+        const totalMinutes = baseMinutes * analystCount;
+        if (!totalMinutes) {
+          return { percent: null, availableMinutes: 0, totalMinutes: 0 };
+        }
+        let unavailableMinutes = 0;
+        profileDayIntervals.forEach(dayArrays => {
+          const merged = mergeIntervals(dayArrays[idx] || []);
+          if (!merged.length) return;
+          merged.forEach(interval => {
+            workingIntervals[idx].forEach(work => {
+              const overlapStart = Math.max(interval.start.getTime(), work.start.getTime());
+              const overlapEnd = Math.min(interval.end.getTime(), work.end.getTime());
+              if (overlapStart < overlapEnd) {
+                unavailableMinutes += (overlapEnd - overlapStart) / MS_PER_MINUTE;
+              }
+            });
+          });
+        });
+        const capacity = Math.max(0, totalMinutes);
+        const unavailableClamped = Math.min(capacity, unavailableMinutes);
+        const availableMinutes = capacity - unavailableClamped;
+        const percent = capacity > 0 ? (availableMinutes / capacity) * 100 : null;
+        return { percent, availableMinutes, totalMinutes: capacity };
+      });
+
+      const availableSum = daySummaries.reduce((sum, dayInfo) => sum + (dayInfo.availableMinutes || 0), 0);
+      const totalSum = daySummaries.reduce((sum, dayInfo) => sum + (dayInfo.totalMinutes || 0), 0);
+      const summaryPercent = totalSum > 0 ? (availableSum / totalSum) * 100 : null;
+
+      result.set(week.key, {
+        days: daySummaries,
+        summary: {
+          percent: summaryPercent,
+          availableMinutes: availableSum,
+          totalMinutes: totalSum
+        }
+      });
+    });
+
+    state.weeklyAvailabilityData = result;
+    if (!analystCount) {
+      state.weeklyAvailabilityMsg = 'Nenhum Analista OACO cadastrado.';
+    } else if (!hasWorkingMinutes) {
+      state.weeklyAvailabilityMsg = 'Nenhum horário útil configurado.';
+    } else {
+      state.weeklyAvailabilityMsg = '';
+    }
+
+    renderWeeklyAvailabilityTable();
+    renderWorkingHoursSelector();
+  }
+
   function setProductivityWeekIndex(nextIndex) {
     const weeks = state.productivityWeeks || [];
     if (!weeks.length) return;
@@ -650,6 +1174,8 @@ window.Modules.pessoal = (() => {
     state.productivitySelectedWeek = weeks[clampedIndex]?.key || null;
     renderProductivityWeekFilters();
     renderProductivityTable();
+    renderWeeklyAvailabilityTable();
+    renderWorkingHoursSelector();
   }
 
   function setProductivityWeek(weekKey) {
@@ -796,6 +1322,7 @@ window.Modules.pessoal = (() => {
 
       renderProductivityWeekFilters();
       renderProductivityTable();
+      recomputeWeeklyAvailability();
     } catch (err) {
       console.error('[pessoal] Falha ao carregar produtividade:', err);
       state.productivityProfiles = [];
@@ -810,6 +1337,10 @@ window.Modules.pessoal = (() => {
       }
       Utils.renderTable('productivityList', PRODUCTIVITY_COLUMNS, []);
       Utils.setMsg('productivityMsg', err?.message || 'Falha ao carregar dados.', true);
+      state.weeklyAvailabilityData = new Map();
+      state.weeklyAvailabilityMsg = err?.message || 'Falha ao carregar dados.';
+      renderWeeklyAvailabilityTable();
+      renderWorkingHoursSelector();
     }
   }
 
@@ -845,10 +1376,16 @@ window.Modules.pessoal = (() => {
         };
       });
 
+      state.unavailabilityRows = rows;
+      recomputeWeeklyAvailability();
       Utils.renderTable(tableId, AVAILABILITY_COLUMNS, rows);
       Utils.setMsg(msgId, rows.length ? '' : 'Nenhuma indisponibilidade registrada.');
     } catch (err) {
       console.error('[pessoal] Falha ao carregar indisponibilidades:', err);
+      state.unavailabilityRows = [];
+      state.weeklyAvailabilityMsg = err?.message || 'Falha ao carregar indisponibilidades.';
+      renderWeeklyAvailabilityTable();
+      renderWorkingHoursSelector();
       Utils.renderTable(tableId, AVAILABILITY_COLUMNS, []);
       Utils.setMsg(msgId, err?.message || 'Falha ao carregar indisponibilidades.', true);
     }
@@ -892,15 +1429,18 @@ window.Modules.pessoal = (() => {
   }
 
   function init() {
+    loadWorkingHoursFromStorage();
     bindEvents();
     const restrictToSelf = !isAdminRole() && !!getCurrentProfileId();
     resetUnavailabilityForm({
       restrictToSelf,
       selectedProfileId: restrictToSelf ? getCurrentProfileId() : null
     });
+    renderWeeklyAvailabilityTable();
   }
 
   async function load() {
+    Utils.setMsg('weeklyAvailabilityMsg', 'Carregando disponibilidade...');
     await ensureProfiles();
     await Promise.allSettled([
       loadProductivity(),
