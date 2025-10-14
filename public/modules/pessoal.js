@@ -326,6 +326,22 @@ window.Modules.pessoal = (() => {
     span.title = `${available} disponíveis de ${total}`;
     return span;
   }
+ 
+  function formatAvailabilityHoursCell(info) {
+    const span = document.createElement('span');
+    if (!info || !Number.isFinite(info.totalMinutes) || info.totalMinutes <= 0) {
+      span.textContent = '—';
+      span.title = 'Sem horas úteis configuradas.';
+      return span;
+    }
+
+    const total = minutesToLabel(info.totalMinutes || 0);
+    span.textContent = total;
+
+    const available = minutesToLabel(info.availableMinutes || 0);
+    span.title = `${available} disponíveis de ${total}`;
+    return span;
+  }
   // <<< Patch
 
   function updateProfileMap(profile) {
@@ -529,8 +545,8 @@ window.Modules.pessoal = (() => {
     { label: 'Qua', align: 'center', render: row => formatAvailabilityCell(row.days?.[2]) },
     { label: 'Qui', align: 'center', render: row => formatAvailabilityCell(row.days?.[3]) },
     { label: 'Sex', align: 'center', render: row => formatAvailabilityCell(row.days?.[4]) },
-    { label: 'Semana (h úteis)', align: 'center', render: row => formatAvailabilityCell(row.summary) },
-    { label: 'Semana (%)', align: 'center', render: row => formatAvailabilityCell(row.summary) }
+    { label: 'h úteis possíveis', align: 'center', render: row => formatAvailabilityHoursCell(row.summary) },
+    { label: 'Disponibilidade de pessoal', align: 'center', render: row => formatAvailabilityCell(row.summary) }
   ];
   // <<< Patch
 
