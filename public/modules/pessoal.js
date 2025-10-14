@@ -529,6 +529,7 @@ window.Modules.pessoal = (() => {
     { label: 'Qua', align: 'center', render: row => formatAvailabilityCell(row.days?.[2]) },
     { label: 'Qui', align: 'center', render: row => formatAvailabilityCell(row.days?.[3]) },
     { label: 'Sex', align: 'center', render: row => formatAvailabilityCell(row.days?.[4]) },
+    { label: 'Semana (h úteis)', align: 'center', render: row => formatAvailabilityCell(row.summary) },
     { label: 'Semana (%)', align: 'center', render: row => formatAvailabilityCell(row.summary) }
   ];
   // <<< Patch
