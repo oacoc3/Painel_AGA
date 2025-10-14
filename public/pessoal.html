@@ -49,20 +49,22 @@
     <main class="main">
       <section id="viewPessoal" class="view">
         <div class="pessoal-grid">
-           <div class="card">
-            <h2>Produtividade</h2>
-            <!-- Patch: novo container para filtros semanais -->
-            <div id="productivityWeekFilters" class="week-selector hidden"></div>
-            <div id="productivityMsg" class="msg"></div>
-            <div id="productivityList" class="table scrolly"></div>
-          </div>
-          <div class="card">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
-              <h2>Registro de indisponibilidade</h2>
-              <button id="btnNewUnavailability" type="button">Cadastrar indisponibilidade</button>
+          <div class="pessoal-grid-col">
+            <div class="card">
+              <h2>Produtividade</h2>
+              <!-- Patch: novo container para filtros semanais -->
+              <div id="productivityWeekFilters" class="week-selector hidden"></div>
+              <div id="productivityMsg" class="msg"></div>
+              <div id="productivityList" class="table scrolly"></div>
             </div>
-            <div id="availabilityMsg" class="msg"></div>
-            <div id="availabilityList" class="table scrolly"></div>
+            <div class="card">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
+                <h2>Registro de indisponibilidade</h2>
+                <button id="btnNewUnavailability" type="button">Cadastrar indisponibilidade</button>
+              </div>
+              <div id="availabilityMsg" class="msg"></div>
+              <div id="availabilityList" class="table scrolly"></div>
+            </div>
           </div>
           <div class="card" id="weeklyAvailabilityCard">
             <h2>% de disponibilidade semanal</h2>
