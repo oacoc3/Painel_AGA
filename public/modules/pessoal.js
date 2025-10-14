@@ -315,17 +315,15 @@ window.Modules.pessoal = (() => {
       span.title = 'Sem horas úteis configuradas.';
       return span;
     }
-    const availableMinutes = Number.isFinite(info.availableMinutes) ? Math.max(0, info.availableMinutes) : 0;
-    const totalMinutes = Number.isFinite(info.totalMinutes) ? Math.max(0, info.totalMinutes) : 0;
-    const available = minutesToLabel(availableMinutes);
-    const total = minutesToLabel(totalMinutes);
-    span.textContent = available;
-    if (Number.isFinite(info.percent)) {
-      const pct = Math.max(0, Math.min(100, info.percent));
-      span.title = `${available} disponíveis de ${total} (${PERCENT_FORMATTER.format(pct)}%)`;
+    if (!Number.isFinite(info.percent)) {
+      span.textContent = '—';
     } else {
-      span.title = `${available} disponíveis de ${total}`;
+      const pct = Math.max(0, Math.min(100, info.percent));
+      span.textContent = `${PERCENT_FORMATTER.format(pct)}%`;
     }
+    const available = minutesToLabel(info.availableMinutes || 0);
+    const total = minutesToLabel(info.totalMinutes || 0);
+    span.title = `${available} disponíveis de ${total}`;
     return span;
   }
   // <<< Patch
@@ -531,7 +529,8 @@ window.Modules.pessoal = (() => {
     { label: 'Qua', align: 'center', render: row => formatAvailabilityCell(row.days?.[2]) },
     { label: 'Qui', align: 'center', render: row => formatAvailabilityCell(row.days?.[3]) },
     { label: 'Sex', align: 'center', render: row => formatAvailabilityCell(row.days?.[4]) },
-    { label: 'Semana (h úteis)', align: 'center', render: row => formatAvailabilityCell(row.summary) }
+    { label: 'Semana (h úteis)', align: 'center', render: row => formatAvailabilityCell(row.summary) },
+    { label: 'Semana (%)', align: 'center', render: row => formatAvailabilityCell(row.summary) }
   ];
   // <<< Patch
 
