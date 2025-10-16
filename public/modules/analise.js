@@ -5,55 +5,6 @@ window.Modules.analise = (() => {
   let currentProcessId = null;
   let currentDraftId = null;
 
-  // >>> Patch: histórico + autosave por inatividade
-  let historyStartLogged = false;
-  let lastEditAt = 0;
-  let autosaveTimer = null;
-  let lifecycleHooksInstalled = false;   // instala listeners uma única vez
-  const AUTOSAVE_EVERY_MS = 60_000;      // salva a cada 60s se houver inatividade
-  const INACTIVITY_MIN_MS = 30_000;      // considera inativo após 30s sem edições
-
-  function startAutosave() { // só inicia se houver processo+template válidos
-    if (autosaveTimer) return;
-    autosaveTimer = setInterval(() => {
-      if (!currentProcessId || !currentTemplate) return; // guarda-chuva
-      const idleFor = Date.now() - (lastEditAt || 0);
-      if (idleFor >= INACTIVITY_MIN_MS) {
-        try { saveChecklistDraft?.(); } catch (e) { console.warn('[analise] autosave erro:', e); }
-      }
-    }, AUTOSAVE_EVERY_MS);
-  }
-  function stopAutosave() { if (autosaveTimer) { clearInterval(autosaveTimer); autosaveTimer = null; } }
-
-  function installLifecycleHooksOnce() {
-    if (lifecycleHooksInstalled) return;
-    lifecycleHooksInstalled = true;
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { try { saveChecklistDraft?.(); } catch (_) {} }
-    });
-    window.addEventListener('beforeunload', () => {
-      try { saveChecklistDraft?.(); } catch (_) {}
-    });
-  }
-
-  async function insertChecklistHistory(action, details = {}) {
-    try {
-      const sb = getSupabaseClient();
-      if (!sb || !currentProcessId) return;
-      const payload = {
-        process_id: currentProcessId,
-        action: String(action || '').trim() || 'Evento',
-        details: details || {},
-        occurred_at: nowISO()
-      };
-      // Tabela 'history' com colunas: process_id (uuid), action (text), details (jsonb), occurred_at (timestamptz)
-      await sb.from('history').insert(payload);
-    } catch (e) {
-      console.warn('[analise] falha ao inserir histórico:', e);
-    }
-  }
-  // <<< Patch
-
   const LOCAL_STORAGE_PREFIX = 'agaChecklistDraft:';
   const memoryDraftBackups = new Map();
   let sessionExpiredWarningShown = false;
@@ -159,30 +110,6 @@ window.Modules.analise = (() => {
     if (btnLimpar) btnLimpar.disabled = !!readonly || !currentTemplate;
     document.querySelectorAll('#ckContainer input,#ckContainer select,#ckContainer textarea')
       .forEach(el => readonly ? el.setAttribute('disabled','disabled') : el.removeAttribute('disabled'));
-
-    // >>> Patch: ao entrar em modo edição, instala listeners, inicia autosave e registra "início"
-    try {
-      if (!readonly && currentProcessId && currentTemplate) {
-        installLifecycleHooksOnce();
-        startAutosave();
-      }
-    } catch (e) {
-      console.warn('[analise] erro ao iniciar autosave:', e);
-    }
-
-    try {
-      if (!readonly && !historyStartLogged && currentProcessId && currentTemplate) {
-        historyStartLogged = true;
-        insertChecklistHistory('Checklist iniciada', {
-          template_id: currentTemplate.id,
-          template_title: currentTemplate.title || currentTemplate.name || '',
-          started_at: nowISO()
-        });
-      }
-    } catch (e) {
-      console.warn('[analise] erro ao registrar início no histórico:', e);
-    }
-    // <<< Patch
   }
 
   const SESSION_EXPIRED_MESSAGE = 'Sessão expirada. As respostas recentes foram salvas localmente e serão sincronizadas quando você fizer login novamente e aguarde o salvamento automático antes de finalizar.';
@@ -647,9 +574,6 @@ window.Modules.analise = (() => {
   let saveTimer = null;
   const SAVE_DEBOUNCE_MS = 800;
   function scheduleDraftSave() {
-    // >>> Patch: marca o último momento de edição (usado pelo autosave por inatividade)
-    lastEditAt = Date.now();
-    // <<< Patch
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveChecklistDraft, SAVE_DEBOUNCE_MS);
   }
@@ -735,19 +659,6 @@ window.Modules.analise = (() => {
       if (error) throw error;
 
       await abrirChecklistPDF(data, pdfWindow);
-
-      // >>> Patch: registra fim no histórico apenas se deu tudo certo
-      try {
-        await insertChecklistHistory('Checklist finalizada', {
-          template_id: currentTemplate?.id,
-          template_title: currentTemplate?.title || currentTemplate?.name || '',
-          finished_at: nowISO()
-        });
-      } catch (e) {
-        console.warn('[analise] erro ao registrar fim no histórico:', e);
-      }
-      // <<< Patch
-
       Utils.setMsg('adMsg', '');
       clearLocalDraftSnapshot();
       await releaseLock();
@@ -948,7 +859,7 @@ window.Modules.analise = (() => {
     // Abre ou cria o processo e carrega o template aprovado
     let { data: pData, error: pErr } = await sb
       .from('processes')
-      .select('id,type')
+      .select('id')
       .eq('nup', nup)
       .maybeSingle();
 
@@ -1091,7 +1002,6 @@ window.Modules.analise = (() => {
       releaseLock();
       stopLockHeartbeat();
       stopSessionHeartbeat();
-      stopAutosave(); // >>> Patch: encerra autosave no unload
     }, { capture: true });
   }
 
