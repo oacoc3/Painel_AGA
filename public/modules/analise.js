@@ -926,9 +926,11 @@ window.Modules.analise = (() => {
     startAutosave();
     if (gotLock) startLockHeartbeat();
 
+    let loadedDraft = null;
     let infoMsg = '';
     if (template && currentProcessId) {
       const { draft, finalized } = await loadChecklistProgress(currentProcessId, template.id);
+      loadedDraft = draft || null;
       if (draft) {
         currentDraftId = draft.id || null;
         applyDraftToUI(draft);
@@ -946,7 +948,7 @@ window.Modules.analise = (() => {
         }
       }
     }
-    tryRestoreLocalBackupAgainst(draft);
+    tryRestoreLocalBackupAgainst(loadedDraft);
     Utils.setMsg('adMsg', infoMsg);
   }
 
