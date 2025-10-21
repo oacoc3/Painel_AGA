@@ -291,6 +291,7 @@ window.Modules.analise = (() => {
   }
 
   function clearChecklist() {
+    stopAutosave();
     const box = el('ckContainer');
     box.innerHTML = '';
     currentTemplate = null;
@@ -356,7 +357,7 @@ window.Modules.analise = (() => {
           const input = document.createElement('input');
           input.type = 'checkbox';
           input.value = v;
-          input.addEventListener('change', () => {
+          input.addEventListener('change', () => { markEdited(); 
             wrap.dataset.value = input.checked ? v : '';
             if (v === 'Não conforme') wrap.classList.toggle('ck-has-nc', input.checked);
             wrap.querySelectorAll('input[type="checkbox"]').forEach(chk => {
@@ -389,7 +390,7 @@ window.Modules.analise = (() => {
         const obs = document.createElement('textarea');
         obs.rows = 3;
         obs.placeholder = 'Observações';
-        obs.addEventListener('input', () => {
+        obs.addEventListener('input', () => { markEdited(); 
           updateSaveState();
           scheduleDraftSave();
         });
@@ -447,7 +448,7 @@ window.Modules.analise = (() => {
     extraObsText.id = 'adOutrasObs';
     extraObsText.rows = 4;
     extraObsText.placeholder = 'Descreva aqui quaisquer não conformidades adicionais, se houver.';
-    extraObsText.addEventListener('input', () => {
+    extraObsText.addEventListener('input', () => { markEdited(); 
       updateSaveState();
       scheduleDraftSave();
     });
@@ -650,6 +651,7 @@ window.Modules.analise = (() => {
     try {
       const sb = getSupabaseClient();
       if (!sb) throw new Error('Cliente Supabase indisponível.');
+      await acquireLock().catch(() => {});
       const { data, error } = await sb.rpc('rpc_finalize_checklist', {
         p_process_id: currentProcessId,
         p_template_id: currentTemplate.id,
@@ -921,6 +923,7 @@ window.Modules.analise = (() => {
     // Acquire exclusive lock e iniciar heartbeats
     const gotLock = await acquireLock();
     startSessionHeartbeat();
+    startAutosave();
     if (gotLock) startLockHeartbeat();
 
     let infoMsg = '';
@@ -943,6 +946,7 @@ window.Modules.analise = (() => {
         }
       }
     }
+    tryRestoreLocalBackupAgainst(draft);
     Utils.setMsg('adMsg', infoMsg);
   }
 
@@ -997,11 +1001,32 @@ window.Modules.analise = (() => {
     }
 
     // Libera trava ao fechar/atualizar a página
-    window.addEventListener('beforeunload', () => {
+    
+    // Instala ganchos de ciclo de vida uma única vez
+    if (!lifecycleHooksInstalled) {
+      lifecycleHooksInstalled = true;
+
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible' && currentProcessId && currentTemplate) {
+          try { await acquireLock(); } catch (_) {}
+          try { await saveChecklistDraft(); } catch (_) {}
+        }
+      });
+
+      window.addEventListener('online', async () => {
+        if (currentProcessId && currentTemplate) {
+          try { await acquireLock(); } catch (_) {}
+          try { await saveChecklistDraft(); } catch (_) {}
+        }
+      }, { passive: true });
+    }
+
+window.addEventListener('beforeunload', () => {
       try { navigator.sendBeacon && navigator.sendBeacon('/noop','1'); } catch(_) {}
       releaseLock();
       stopLockHeartbeat();
       stopSessionHeartbeat();
+      stopAutosave();
     }, { capture: true });
   }
 
@@ -1013,6 +1038,94 @@ window.Modules.analise = (() => {
       loadApprovedChecklists()
     ]);
   }
+
+
+  // >>> Autosave robusto + histórico (injetado)
+  let historyStartLogged = false;
+  let lastEditAt = 0;
+  let autosaveTimer = null;
+  let lifecycleHooksInstalled = false;
+  const AUTOSAVE_EVERY_MS = 60_000;      // salva a cada 60s
+  const INACTIVITY_MIN_MS = 30_000;      // considera "houve edição" por 30s após última digitação
+
+  function nowISO() { return new Date().toISOString(); }
+
+  async function insertChecklistHistory(action, details = {}) {
+    try {
+      const sb = getSupabaseClient();
+      if (!sb || !currentProcessId || !action) return;
+      const u = await getSessionUser();
+      if (!u?.id) return;
+      await sb.from('history').insert({
+        process_id: currentProcessId,
+        action,
+        details,
+        user_id: u.id,
+        user_name: (u.user_metadata && (u.user_metadata.full_name || u.user_metadata.name)) || u.email || null
+      });
+    } catch (e) {
+      console.error('[analise] falha ao registrar histórico:', e);
+    }
+  }
+
+  function markEdited() {
+    lastEditAt = Date.now();
+    if (!historyStartLogged) {
+      insertChecklistHistory('Checklist: início de preenchimento', {
+        template_id: currentTemplate?.id || null,
+        template_name: currentTemplate?.name || currentTemplate?.title || null
+      });
+      historyStartLogged = true;
+    }
+  }
+
+  function startAutosave() {
+    if (autosaveTimer) return;
+    autosaveTimer = setInterval(async () => {
+      const since = Date.now() - (lastEditAt || 0);
+      // Salva sempre que houve edição recente OU se houver rascunho marcado como "unsynced" no backup local
+      const backupKey = `${LOCAL_STORAGE_PREFIX}${currentProcessId || 'null'}:${currentTemplate?.id || 'null'}`;
+      let unsynced = false;
+      try {
+        const obj = JSON.parse(localStorage.getItem(backupKey) || '{}');
+        unsynced = !!obj.unsynced || !!obj.__unsynced;
+      } catch (_) {}
+      if (since <= INACTIVITY_MIN_MS || unsynced) {
+        try { await acquireLock(); } catch (_) {}
+        try { await saveChecklistDraft(); } catch (_) {}
+      }
+    }, AUTOSAVE_EVERY_MS);
+  }
+  function stopAutosave() { clearInterval(autosaveTimer); autosaveTimer = null; }
+
+  function tryRestoreLocalBackupAgainst(draftRow) {
+    try {
+      const key = `${LOCAL_STORAGE_PREFIX}${currentProcessId || 'null'}:${currentTemplate?.id || 'null'}`;
+      const local = JSON.parse(localStorage.getItem(key) || '{}');
+      if (!local || !local.__localUpdatedAt) return false;
+
+      const localAt = Date.parse(local.__localUpdatedAt) || 0;
+      const remoteAt = Date.parse(draftRow?.updated_at || draftRow?.filled_at || '') || 0;
+
+      if (localAt > remoteAt) {
+        const draftLike = {
+          answers: Array.isArray(local.answers) ? local.answers : [],
+          extra_obs: local.extra_obs || ''
+        };
+        draftLike.__fromLocalBackup = true;
+        draftLike.__unsynced = !!local.unsynced || !!local.__unsynced;
+        applyDraftToUI(draftLike);
+        updateLocalDraftSnapshot({ unsynced: true });
+        saveChecklistDraft().catch(() => {});
+        return true;
+      }
+    } catch (e) {
+      console.warn('[analise] falha ao comparar/aplicar backup local', e);
+    }
+    return false;
+  }
+  // <<< Autosave robusto + histórico
+
 
   return { init, load, syncDraftBackup: () => {/* mantido */} };
 })();
