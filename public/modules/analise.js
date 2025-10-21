@@ -188,7 +188,33 @@ window.Modules.analise = (() => {
 
   function clearLocalDraftSnapshot() {
     try {
+      const key = `${LOCAL_STORAGE_PREFIX}
+  // Captura o estado atual da UI e salva um backup local completo (answers + extra_obs)
+  function persistLocalDraftFromUI() {
+    try {
+      if (!currentTemplate) return;
       const key = `${LOCAL_STORAGE_PREFIX}${currentProcessId || 'null'}:${currentTemplate?.id || 'null'}`;
+      const items = $$('#ckContainer .ck-item[data-code]');
+      const answers = items.map(wrap => {
+        const code = wrap.dataset.code;
+        const value = wrap.dataset.value || '';
+        const obsField = wrap.querySelector('textarea');
+        const obs = obsField ? (obsField.value || '').trim() : '';
+        return { code, value: value || null, obs: obs || null };
+      });
+      const extraNcField = el('adNCExtra');
+      if (extraNcField) {
+        answers.push({ code: EXTRA_NC_CODE(), value: extraNcField.checked ? 'Sim' : 'Não', obs: null });
+      }
+      const extraField = el('adOutrasObs');
+      const extra_obs = extraField ? (extraField.value || '').trim() : '';
+      const prev = JSON.parse(localStorage.getItem(key) || '{}');
+      const next = { ...(prev || {}), answers, extra_obs, unsynced: true, __localUpdatedAt: nowISO() };
+      localStorage.setItem(key, JSON.stringify(next));
+      memoryDraftBackups.set(key, next);
+    } catch (_) {}
+  }
+${currentProcessId || 'null'}:${currentTemplate?.id || 'null'}`;
       localStorage.removeItem(key);
       memoryDraftBackups.delete(key);
     } catch (_) {}
@@ -576,6 +602,8 @@ window.Modules.analise = (() => {
   const SAVE_DEBOUNCE_MS = 800;
   function scheduleDraftSave() {
     clearTimeout(saveTimer);
+    persistLocalDraftFromUI();
+    updateLocalDraftSnapshot({ unsynced: true });
     saveTimer = setTimeout(saveChecklistDraft, SAVE_DEBOUNCE_MS);
   }
 
@@ -1009,7 +1037,11 @@ window.Modules.analise = (() => {
       lifecycleHooksInstalled = true;
 
       document.addEventListener('visibilitychange', async () => {
-        if (document.visibilityState === 'visible' && currentProcessId && currentTemplate) {
+        if (document.visibilityState === 'hidden') {
+          // Ao trocar de aba/tela, garantir backup local e tentar salvar no servidor
+          persistLocalDraftFromUI();
+          try { await saveChecklistDraft(); } catch (_) {}
+        } else if (document.visibilityState === 'visible' && currentProcessId && currentTemplate) {
           try { await acquireLock(); } catch (_) {}
           try { await saveChecklistDraft(); } catch (_) {}
         }
@@ -1020,10 +1052,22 @@ window.Modules.analise = (() => {
           try { await acquireLock(); } catch (_) {}
           try { await saveChecklistDraft(); } catch (_) {}
         }
+      
+      // Salva ao sair da página (navegação do SPA, voltar, fechar)
+      window.addEventListener('pagehide', () => {
+        try { persistLocalDraftFromUI(); } catch(_) {}
+        try { saveChecklistDraft(); } catch(_) {}
+      }, { capture: true });
+
+      // Quando perde foco, pelo menos persistimos localmente
+      window.addEventListener('blur', () => {
+        try { persistLocalDraftFromUI(); } catch(_) {}
       }, { passive: true });
+}, { passive: true });
     }
 
 window.addEventListener('beforeunload', () => {
+      try { persistLocalDraftFromUI(); } catch(_) {}
       try { navigator.sendBeacon && navigator.sendBeacon('/noop','1'); } catch(_) {}
       releaseLock();
       stopLockHeartbeat();
@@ -1072,6 +1116,8 @@ window.addEventListener('beforeunload', () => {
 
   function markEdited() {
     lastEditAt = Date.now();
+    persistLocalDraftFromUI();
+    updateLocalDraftSnapshot({ unsynced: true });
     if (!historyStartLogged) {
       insertChecklistHistory('Checklist: início de preenchimento', {
         template_id: currentTemplate?.id || null,
