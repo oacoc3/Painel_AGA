@@ -78,6 +78,10 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   .pessoal-grid {
     grid-template-columns: 1fr;
   }
+  .dashboard-main-col > .tempo-card,
+  .dashboard-main-col > .availability-prod-card {
+    flex: 0 0 auto;
+  }
 }
 .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 
@@ -98,6 +102,25 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   gap: 12px;
   min-height: 0;
 }
+.dashboard-main-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.dashboard-main-col > .card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.dashboard-main-col > .tempo-card {
+  flex: 4 1 0%;
+}
+.dashboard-main-col > .availability-prod-card {
+  flex: 1 1 0%;
+  min-height: 140px;
+}
 .dashboard-col > .chart-card {
   flex: 1;
 }
@@ -111,6 +134,86 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 
 .entry-chart-card .bar-chart-bars {
   min-height: 150px;
+}
+.combo-chart {
+  flex: 1;
+  min-height: 0;
+}
+.combo-chart svg {
+  width: 100%;
+  height: 100%;
+}
+.combo-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+.combo-chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+.combo-chart-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.combo-chart-swatch-doc {
+  color: #1f4b99;
+}
+.combo-chart-swatch-notif {
+  color: #c05621;
+}
+.combo-chart-swatch-line {
+  position: relative;
+  width: 16px;
+  height: 2px;
+  background: #047857;
+}
+.combo-chart-swatch-line::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #047857;
+  transform: translateY(-50%);
+}
+.combo-chart-message {
+  margin-top: 8px;
+  font-size: 0.85rem;
+}
+.combo-chart svg .combo-axis {
+  stroke: rgba(31, 41, 55, 0.25);
+  stroke-width: 1;
+}
+.combo-chart svg .combo-bar-doc {
+  fill: #1f4b99;
+}
+.combo-chart svg .combo-bar-notif {
+  fill: #c05621;
+}
+.combo-chart svg .combo-line {
+  fill: none;
+  stroke: #047857;
+  stroke-width: 2;
+}
+.combo-chart svg .combo-point {
+  fill: #047857;
+}
+.combo-chart svg .combo-tick-text {
+  fill: rgba(31, 41, 55, 0.7);
+  font-size: 10px;
+}
+.combo-chart svg .combo-week-label {
+  fill: rgba(31, 41, 55, 0.85);
+  font-size: 11px;
 }
 /* ===== PATCH aplicado no bloco de métricas ===== */
 .metrics-card .metrics-grid {
@@ -233,12 +336,14 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   flex-direction: column;
   gap: 12px;
   min-height: 0;
+  height: 100%;
 }
 .pessoal-grid-col > .card {
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-height: 0;
+  flex: 1;
 }
 .pessoal-grid > .card {
   display: flex;
