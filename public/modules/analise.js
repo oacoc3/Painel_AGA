@@ -423,7 +423,7 @@ window.Modules.analise = (() => {
     const sb = getSupabaseClient();
     const { data, error } = await sb
       .from('checklist_templates')
-      .select('id,name,title,type,items,version,approved_by,approved_at')
+      .select('id,name,type,items,version,approved_by,approved_at')
       .eq('id', id)
       .maybeSingle();
     if (error) {
