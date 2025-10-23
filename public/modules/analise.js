@@ -24,18 +24,86 @@ window.Modules.analise = (() => {
   function deriveProcessTypeFromTemplate(templateSummaryOrFull) {
     if (!templateSummaryOrFull) return null;
     const title = String(templateSummaryOrFull.title || templateSummaryOrFull.name || '').trim();
-    for (const [ck, processType] of PROCESS_TYPE_BY_CHECKLIST.entries()) {
-      if (title.startsWith(ck) || (templateSummaryOrFull.type === ck)) {
-        return processType;
-      }
+    if (title && PROCESS_TYPE_BY_CHECKLIST.has(title)) {
+      return PROCESS_TYPE_BY_CHECKLIST.get(title);
     }
-    return null;
+    const t = (templateSummaryOrFull.type || '').toString().trim();
+    return t || null;
   }
 
-  const el = id => document.getElementById(id);
-  const getSupabaseClient = () => (window.sb || window.supabaseClient || window.supabase || null)?.from ? window.sb : (window.sb || null);
+  // === Lock/session heartbeats (injetado) ===
+  let lockHeartbeatTimer = null;
+  let sessionHeartbeatTimer = null;
+  const LOCK_TTL_SECONDS = 30 * 60;
+  const LOCK_RENEW_EVERY_MS = 5 * 60 * 1000;
+  const SESSION_HEARTBEAT_MS = 2 * 60 * 1000;
+  let approvedListRetryCount = 0;
+  const APPROVED_LIST_MAX_RETRIES = 10;
+  const APPROVED_LIST_RETRY_DELAY_MS = 500;
 
-  function setReadOnly(readonly) {
+  async function acquireLock() {
+    const sb = getSupabaseClient();
+    if (!currentProcessId || !currentTemplate || !sb) return false;
+    try {
+      const { data, error } = await sb.rpc('rpc_acquire_checklist_lock', {
+        p_process_id: currentProcessId,
+        p_template_id: currentTemplate.id,
+        p_ttl_seconds: LOCK_TTL_SECONDS
+      });
+      if (error) throw error;
+      if (data?.status === 'held_by_other') {
+        tornarSomenteLeitura(true);
+        Utils.setMsg('adMsg', 'Checklist em edição por outro analista. Aguarde a liberação.', true);
+        return false;
+      }
+      tornarSomenteLeitura(false);
+      return true;
+    } catch (e) {
+      console.error('[analise] acquireLock falhou:', e);
+      return false;
+    }
+  }
+
+  function startLockHeartbeat() {
+    if (lockHeartbeatTimer) return;
+    lockHeartbeatTimer = setInterval(async () => {
+      try {
+        const sb = getSupabaseClient();
+        if (!sb) return;
+        await sb.rpc('rpc_renew_checklist_lock', {
+          p_process_id: currentProcessId,
+          p_template_id: currentTemplate.id,
+          p_ttl_seconds: LOCK_TTL_SECONDS
+        });
+      } catch (_) {}
+    }, LOCK_RENEW_EVERY_MS);
+  }
+
+  async function releaseLock() {
+    const sb = getSupabaseClient();
+    if (!sb) return;
+    try {
+      await sb.rpc('rpc_release_checklist_lock', {
+        p_process_id: currentProcessId,
+        p_template_id: currentTemplate.id
+      });
+    } catch (_) {}
+  }
+  function stopLockHeartbeat() { clearInterval(lockHeartbeatTimer); lockHeartbeatTimer = null; }
+
+  function startSessionHeartbeat() {
+    if (sessionHeartbeatTimer) return;
+    sessionHeartbeatTimer = setInterval(async () => {
+      try {
+        const sb = getSupabaseClient();
+        if (!sb) return;
+        await sb.auth.getSession();
+      } catch (_) {}
+    }, SESSION_HEARTBEAT_MS);
+  }
+  function stopSessionHeartbeat() { clearInterval(sessionHeartbeatTimer); sessionHeartbeatTimer = null; }
+
+  function tornarSomenteLeitura(readonly) {
     const btnFinal = document.getElementById('adBtnFinalizarChecklist');
     const btnLimpar = document.getElementById('btnLimparChecklist');
     if (btnFinal) btnFinal.disabled = !!readonly || !currentTemplate;
@@ -44,46 +112,165 @@ window.Modules.analise = (() => {
       .forEach(el => readonly ? el.setAttribute('disabled','disabled') : el.removeAttribute('disabled'));
   }
 
-  const SESSION_EXPIRED_MESSAGE = 'Sessão expirada. As respostas recentes foram salvas localmente e serão sincronizadas ao reabrir a checklist. Faça login novamente.';
+  const SESSION_EXPIRED_MESSAGE = 'Sessão expirada. As respostas recentes foram salvas localmente e serão sincronizadas quando você fizer login novamente e aguarde o salvamento automático antes de finalizar.';
+  const LOCAL_RESTORE_MESSAGE = 'As respostas salvas anteriormente foram restauradas desta máquina. Faça login novamente e aguarde o salvamento automático antes de finalizar.';
+
+  const CLIPBOARD_ICON = window.Modules?.processos?.CLIPBOARD_ICON
+    || '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" class="icon-clipboard"><rect x="6" y="5" width="12" height="15" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 5V4a2 2 0 0 1 2-2h2a 2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="m10 11 2 2 3.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>';
+
+  const Utils = window.Modules?.utils || window.Utils || {};
+
+  function getSupabaseClient() {
+    return (typeof window.sb !== 'undefined' ? window.sb : null)
+      || (typeof window.supabaseClient !== 'undefined' ? window.supabaseClient : null)
+      || (window.supabase && window.supabase._client)
+      || null;
+  }
+
+  const el = id => document.getElementById(id);
+  const $$ = s => Array.from(document.querySelectorAll(s));
+
+  function nowISO() {
+    const d = new Date();
+    return d.toISOString();
+  }
+
+  function nupSanitize(v) {
+    const digits = (v || '').replace(/\D+/g, '').slice(0, 12);
+    let formatted = digits.slice(0, 6);
+    if (digits.length > 6) formatted += '/' + digits.slice(6, 10);
+    if (digits.length > 10) formatted += '-' + digits.slice(10, 12);
+    return formatted;
+  }
+
+  function setInputValue(id, v) {
+    const i = el(id);
+    if (i) i.value = v ?? '';
+  }
+
+  function readInputValue(id) {
+    const i = el(id);
+    return i ? i.value : '';
+  }
+
+  function getSessionUser() {
+    const sb = getSupabaseClient();
+    return sb?.auth?.getSession().then(({ data }) => data?.session?.user || null);
+  }
+
+  function updateLocalDraftSnapshot(patch) {
+    try {
+      const key = `${LOCAL_STORAGE_PREFIX}${currentProcessId || 'null'}:${currentTemplate?.id || 'null'}`;
+      const prev = JSON.parse(localStorage.getItem(key) || '{}');
+      const next = { ...(prev || {}), ...(patch || {}), __localUpdatedAt: nowISO() };
+      localStorage.setItem(key, JSON.stringify(next));
+      memoryDraftBackups.set(key, next);
+    } catch (_) {}
+  }
+
+  function readLocalDraftSnapshot() {
+    try {
+      const key = `${LOCAL_STORAGE_PREFIX}${currentProcessId || 'null'}:${currentTemplate?.id || 'null'}`;
+      const cached = memoryDraftBackups.get(key);
+      if (cached) return cached;
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) { return null; }
+  }
+
+  function storeLocalDraftSnapshot(obj) {
+    try {
+      const key = `${LOCAL_STORAGE_PREFIX}${currentProcessId || 'null'}:${currentTemplate?.id || 'null'}`;
+      localStorage.setItem(key, JSON.stringify(obj || {}));
+      memoryDraftBackups.set(key, obj || {});
+    } catch (_) {}
+  }
+
+  function clearLocalDraftSnapshot() {
+    try {
+      const key = `${LOCAL_STORAGE_PREFIX}${currentProcessId || 'null'}:${currentTemplate?.id || 'null'}`;
+      localStorage.removeItem(key);
+      memoryDraftBackups.delete(key);
+    } catch (_) {}
+  }
 
   function notifySessionExpiredOnce() {
     if (sessionExpiredWarningShown) return;
     sessionExpiredWarningShown = true;
     Utils.setMsg('adMsg', SESSION_EXPIRED_MESSAGE, true);
-    try { showSessionExpiredBanner(); } catch(_) {}
   }
 
-  function showSessionExpiredBanner() {
-    if (sessionExpiredMsgOnScreen) return;
-    const container = document.querySelector('#adChecklistCard .card-title, #adChecklistCard h2')?.parentElement || document.getElementById('adChecklistCard');
-    if (!container) return;
-    const div = document.createElement('div');
-    div.className = 'msg warn';
-    div.textContent = SESSION_EXPIRED_MESSAGE;
-    container.insertBefore(div, container.firstChild);
-    sessionExpiredMsgOnScreen = true;
+  function notifyLocalBackupRestore() {
+    if (localBackupRestoreNotified) return;
+    localBackupRestoreNotified = true;
+    if (!sessionExpiredMsgOnScreen) {
+      Utils.setMsg('adMsg', LOCAL_RESTORE_MESSAGE, true);
+      sessionExpiredMsgOnScreen = true;
+    }
   }
 
-  function readInputValue(id) {
-    const i = document.getElementById(id);
-    return i ? i.value : '';
+  function resetLocalBackupRestoreNotice() {
+    localBackupRestoreNotified = false;
+    sessionExpiredMsgOnScreen = false;
+    Utils.setMsg('adMsg', '');
   }
 
-  // --- NUP helpers (mantém máscara no input e envia já no formato 000000/0000-00) ---
-  const NUP_REGEX = /^[0-9]{6}\/[0-9]{4}-[0-9]{2}$/;
-
-  // Formata progressivamente para exibição no input (sem travar a digitação)
-  function nupFormatDisplay(v) {
-    const d = String(v || '').replace(/\D/g, '').slice(0, 12);
-    if (d.length <= 6) return d;
-    if (d.length <= 10) return `${d.slice(0,6)}/${d.slice(6)}`;
-    return `${d.slice(0,6)}/${d.slice(6,10)}-${d.slice(10,12)}`;
+  function guardDocumentalWrite() {
+    if (typeof window.Modules?.safety?.guardDocumentalWrite === 'function') {
+      return window.Modules.safety.guardDocumentalWrite();
+    }
+    return true;
   }
 
-  // Valida e retorna o NUP **estritamente** no padrão exigido, ou null se incompleto
-  function nupFormatStrict(v) {
-    const f = nupFormatDisplay(v);
-    return NUP_REGEX.test(f) ? f : null;
+  function EXTRA_NC_CODE() { return 'NC_EXTRA'; }
+
+  async function loadTemplateById(templateId) {
+    if (!templateId) return null;
+    try {
+      const sb = getSupabaseClient();
+      if (!sb) throw new Error('Cliente Supabase indisponível.');
+      const { data, error } = await sb
+        .from('checklist_templates')
+        .select('id,name,type,version,items')
+        .eq('id', templateId)
+        .not('approved_at', 'is', null)
+        .single();
+      if (error) throw error;
+      return {
+        ...data,
+        items: Array.isArray(data?.items) ? data.items : []
+      };
+    } catch (err) {
+      console.error('Falha ao carregar checklist aprovada.', err);
+      Utils.setMsg('adMsg', 'Falha ao carregar checklist aprovada.', true);
+      return null;
+    }
+  }
+
+  function getChecklistValidationState() {
+    const items = $$('#ckContainer .ck-item[data-code]');
+    if (!items.length) return { ready: false, reason: 'Checklist não carregada.' };
+
+    for (const wrap of items) {
+      const val = wrap.dataset.value;
+      if (!val) {
+        return { ready: false, reason: 'Selecione uma opção para todos os itens da checklist.' };
+      }
+      if (val === 'Não conforme' || val === 'Não aplicável') {
+        const obsField = wrap.querySelector('textarea');
+        if (!obsField || !obsField.value.trim()) {
+          return { ready: false, reason: 'Informe uma observação para itens marcados como “Não conforme” ou “Não aplicável”.' };
+        }
+      }
+    }
+    const extraFlag = el('adNCExtra');
+    if (extraFlag?.checked) {
+      const extraObs = el('adOutrasObs');
+      if (!extraObs || !extraObs.value.trim()) {
+        return { ready: false, reason: 'Descreva a “Não conformidade não abarcada” em “Outras observações do(a) Analista”.' };
+      }
+    }
+    return { ready: true };
   }
 
   function updateSaveState() {
@@ -103,187 +290,392 @@ window.Modules.analise = (() => {
     if (btnLimpar) btnLimpar.disabled = !currentTemplate;
   }
 
-  function getChecklistValidationState() {
-    // Mantido: validação simplificada só para tooltip do botão
-    return { ready: !!currentTemplate, reason: currentTemplate ? '' : 'Selecione uma checklist aprovada.' };
-  }
-
   function clearChecklist() {
+    stopAutosave();
+    const box = el('ckContainer');
+    box.innerHTML = '';
     currentTemplate = null;
     currentDraftId = null;
-    const box = el('ckContainer');
-    if (box) box.innerHTML = '';
     updateSaveState();
   }
 
-  function renderChecklistTo(box, template, answers = {}, readonly = false) {
-    if (!box || !template) return;
-    const items = Array.isArray(template.items) ? template.items : [];
+  function renderChecklist(template) {
+    currentTemplate = template;
+    currentDraftId = null;
+
+    const box = el('ckContainer');
+    box.innerHTML = '';
+    if (!template) {
+      box.innerHTML = '<div class="msg">Nenhuma checklist aprovada encontrada para este tipo.</div>';
+      return;
+    }
+
     const frag = document.createDocumentFragment();
 
-    const header = document.createElement('div');
-    header.className = 'muted';
-    const labelType = String(template.type || template.title || '').trim() || 'Checklist';
-    header.textContent = `${labelType} • v${template.version || 1}`;
-    frag.appendChild(header);
+    const title = document.createElement('h3');
+    title.className = 'ck-template-title';
+    title.textContent = template.name || 'Checklist';
+    frag.appendChild(title);
 
-    items.forEach((it, idx) => {
-      const row = document.createElement('div');
-      row.className = 'ck-row';
+    const warning = document.createElement('div');
+    warning.className = 'ck-warning';
+    warning.innerHTML = '<strong>Atenção!</strong> Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, haverá o pertinente registro no campo "Outras observações do(a) Analista".';
+    frag.appendChild(warning);
 
-      const label = document.createElement('label');
-      label.textContent = it?.label || `Item ${idx+1}`;
-      row.appendChild(label);
+    (template.items || []).forEach(cat => {
+      const catSection = document.createElement('section');
+      catSection.className = 'ck-category';
 
-      const input = document.createElement(it?.type === 'text' ? 'textarea' : 'input');
-      input.name = it?.name || `item_${idx}`;
-      if (it?.type !== 'text') input.type = it?.type || 'text';
-      input.value = answers[input.name] ?? '';
-      if (readonly) input.setAttribute('disabled','disabled');
+      if (cat.categoria) {
+        const h = document.createElement('h4');
+        h.className = 'ck-category-title';
+        h.textContent = cat.categoria || '';
+        catSection.appendChild(h);
+      }
 
-      // Debounce simples por campo
-      let tId = null;
-      input.addEventListener('input', () => {
-        if (tId) clearTimeout(tId);
-        tId = setTimeout(() => {
-          persistLocalDraftFromUI();
-          notifyEdited();
-        }, 350);
-      });
+      (cat.itens || []).forEach(item => {
+        const wrap = document.createElement('div');
+        wrap.className = 'ck-item';
+        wrap.dataset.code = item.code || '';
 
-      row.appendChild(input);
-      frag.appendChild(row);
-    });
+        const header = document.createElement('div');
+        header.className = 'ck-item-header';
+        header.innerHTML = `${item.code ? `<strong>${item.code}</strong> — ` : ''}${item.requisito || ''}`;
+        wrap.appendChild(header);
 
-    box.innerHTML = '';
-    box.appendChild(frag);
-  }
+        const grid = document.createElement('div');
+        grid.className = 'ck-item-grid';
 
-  function getAnswersFromUI() {
-    const out = {};
-    document.querySelectorAll('#ckContainer input[name], #ckContainer textarea[name], #ckContainer select[name]')
-      .forEach(el => { out[el.name] = el.value; });
-    return out;
-  }
+        const optionsCol = document.createElement('div');
+        optionsCol.className = 'ck-item-options';
+        const optionsList = document.createElement('div');
+        optionsList.className = 'ck-options-list';
 
-  function persistLocalDraftFromUI() {
-    if (!currentTemplate || !currentProcessId) return;
-    const key = `${LOCAL_STORAGE_PREFIX}${currentProcessId}:${currentTemplate.id}`;
-    const draft = {
-      template_id: currentTemplate.id,
-      process_id: currentProcessId,
-      answers: getAnswersFromUI(),
-      extra_obs: el('adChecklistObs')?.value || '',
-      updated_at: new Date().toISOString()
-    };
-    try {
-      localStorage.setItem(key, JSON.stringify(draft));
-      memoryDraftBackups.set(key, draft); // cópia em memória, caso o storage esteja indisponível
-    } catch(_) {}
-  }
+        ['Conforme', 'Não conforme', 'Não aplicável'].forEach(v => {
+          const optLabel = document.createElement('label');
+          optLabel.className = 'ck-option';
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.value = v;
+          input.addEventListener('change', () => { markEdited(); 
+            wrap.dataset.value = input.checked ? v : '';
+            if (v === 'Não conforme') wrap.classList.toggle('ck-has-nc', input.checked);
+            wrap.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+              if (chk !== input) chk.checked = false;
+            });
+            updateSaveState();
+            scheduleDraftSave();
+          });
 
-  function tryRestoreLocalBackupAgainst(loadedDraft) {
-    if (localBackupRestoreNotified) return;
-    if (!currentTemplate || !currentProcessId) return;
-    const key = `${LOCAL_STORAGE_PREFIX}${currentProcessId}:${currentTemplate.id}`;
-    let localDraft = null;
-    try { localDraft = localStorage.getItem(key); } catch(_) {}
-    if (!localDraft && memoryDraftBackups.has(key)) {
-      localDraft = JSON.stringify(memoryDraftBackups.get(key));
-    }
-    if (!localDraft) return;
+          const labelText = document.createElement('span');
+          labelText.textContent = v;
 
-    try {
-      const parsed = JSON.parse(localDraft);
-      const localAt = new Date(parsed?.updated_at || 0).getTime();
-      const remoteAt = new Date(loadedDraft?.updated_at || 0).getTime();
-      if (localAt > remoteAt) {
-        // aplica local na UI
-        const answers = parsed?.answers || {};
-        Object.entries(answers).forEach(([name, val]) => {
-          const el = document.querySelector(`#ckContainer [name="${CSS.escape(name)}"]`);
-          if (el) el.value = val;
+          optLabel.appendChild(input);
+          optLabel.appendChild(labelText);
+          optionsList.appendChild(optLabel);
         });
-        const obs = parsed?.extra_obs || '';
-        if (el('adChecklistObs')) el('adChecklistObs').value = obs;
-        if (!localBackupRestoreNotified) {
-          Utils.setMsg('adMsg', 'Rascunho local mais recente restaurado na tela.', false);
-          localBackupRestoreNotified = true;
+
+        optionsCol.appendChild(optionsList);
+        grid.appendChild(optionsCol);
+
+        // ====== Detalhes/observações ======
+        const detailsCol = document.createElement('div');
+        detailsCol.className = 'ck-item-details';
+
+        const obsBox = document.createElement('label');
+        obsBox.className = 'ck-detail-card ck-observacao';
+        const obsTitle = document.createElement('span');
+        obsTitle.className = 'ck-detail-card-title';
+        obsTitle.textContent = 'Observações';
+        const obs = document.createElement('textarea');
+        obs.rows = 3;
+        obs.placeholder = 'Observações';
+        obs.addEventListener('input', () => { markEdited(); 
+          updateSaveState();
+          scheduleDraftSave();
+        });
+
+        obsBox.appendChild(obsTitle);
+        obsBox.appendChild(obs);
+        detailsCol.appendChild(obsBox);
+
+        if (item.texto_sugerido) {
+          const suggestionBox = document.createElement('div');
+          suggestionBox.className = 'ck-detail-card ck-suggestion';
+
+          const suggestionTitle = document.createElement('span');
+          suggestionTitle.className = 'ck-detail-card-title';
+          suggestionTitle.textContent = 'Texto(s) sugerido(s) para não conformidade / não aplicação:';
+
+          const suggestionText = document.createElement('div');
+          suggestionText.className = 'ck-suggestion-text';
+          suggestionText.textContent = item.texto_sugerido || '';
+
+          suggestionBox.appendChild(suggestionTitle);
+          suggestionBox.appendChild(suggestionText);
+          detailsCol.appendChild(suggestionBox);
         }
-      }
-    } catch(_) {}
-  }
 
-  function bindAD() {
-    const btn = el('btnLimparAD');
-    if (!btn) return;
-    btn.addEventListener('click', () => {
-      el('adNUP') && (el('adNUP').value = '');
-      el('adNome') && (el('adNome').value = '');
-      Utils.setMsg('adMsg','');
-      clearChecklist();
+        grid.appendChild(detailsCol);
+        // ====== FIM ======
+
+        wrap.appendChild(grid);
+        catSection.appendChild(wrap);
+      });
+
+      frag.appendChild(catSection);
     });
+
+    const extraFlag = document.createElement('label');
+    extraFlag.className = 'ck-extra-flag';
+    const extraInput = document.createElement('input');
+    extraInput.type = 'checkbox';
+    extraInput.id = 'adNCExtra';
+    extraInput.addEventListener('change', () => {
+      updateSaveState();
+      scheduleDraftSave();
+    });
+    extraFlag.appendChild(extraInput);
+    extraFlag.appendChild(document.createTextNode(' Foi identificada não conformidade não abarcada pelos itens anteriores (vide outras observações do(a) Analista)'));
+    frag.appendChild(extraFlag);
+
+    const extraObs = document.createElement('label');
+    extraObs.className = 'ck-detail-card';
+    const extraObsTitle = document.createElement('span');
+    extraObsTitle.className = 'ck-detail-card-title';
+    extraObsTitle.textContent = 'Outras observações do(a) Analista';
+    const extraObsText = document.createElement('textarea');
+    extraObsText.id = 'adOutrasObs';
+    extraObsText.rows = 4;
+    extraObsText.placeholder = 'Descreva aqui quaisquer não conformidades adicionais, se houver.';
+    extraObsText.addEventListener('input', () => { markEdited(); 
+      updateSaveState();
+      scheduleDraftSave();
+    });
+    extraObs.appendChild(extraObsTitle);
+    extraObs.appendChild(extraObsText);
+    frag.appendChild(extraObs);
+
+    box.appendChild(frag);
+    updateSaveState();
   }
 
-  function bind() {
-    const btnLimparAD = el('btnLimparAD');
-    const btnLimpar = el('btnLimparChecklist');
-    const btnFinalizar = el('adBtnFinalizarChecklist');
-    const inputNUP = el('adNUP');
+  async function saveChecklistDraft() {
+    if (!currentProcessId || !currentTemplate) return;
+    const items = $$('#ckContainer .ck-item[data-code]');
+    if (!items.length) return;
 
-    if (btnLimparAD) {
-      btnLimparAD.addEventListener('click', () => {
-        if (el('adNUP')) el('adNUP').value = '';
-        if (el('adNome')) el('adNome').value = '';
-        Utils.setMsg('adMsg','');
-        clearChecklist();
+    // Coleta respostas da UI (mantém comportamento atual)
+    const answers = items.map(wrap => {
+      const code = wrap.dataset.code;
+      const value = wrap.dataset.value || '';
+      const obsField = wrap.querySelector('textarea');
+      const obs = obsField ? obsField.value.trim() : '';
+      return { code, value: value || null, obs: obs || null };
+    });
+
+    const extraNcField = el('adNCExtra');
+    if (extraNcField) {
+       answers.push({ code: EXTRA_NC_CODE(), value: extraNcField.checked ? 'Sim' : 'Não', obs: null });
+    }
+
+    const extraField = el('adOutrasObs');
+    const extraValue = extraField ? extraField.value.trim() : '';
+
+    try {
+      const sb = getSupabaseClient();
+      if (!sb) throw new Error('Cliente Supabase indisponível.');
+      const { data, error } = await sb.rpc('rpc_upsert_checklist_draft', {
+        p_process_id: currentProcessId,
+        p_template_id: currentTemplate.id,
+        p_answers: answers,
+        p_extra_obs: extraValue || null
       });
+      if (error) throw error;
+      currentDraftId = data || currentDraftId || null;
+      updateLocalDraftSnapshot({ unsynced: false, lastError: null });
+    } catch (e) {
+      console.error('[analise] falha ao salvar rascunho via RPC:', e);
+      updateLocalDraftSnapshot({ unsynced: true, lastError: e.message || String(e) });
     }
+  }
 
-    if (btnLimpar) {
-      btnLimpar.addEventListener('click', () => {
-        clearChecklist();
-        Utils.setMsg('adMsg','Checklist limpa.');
+  function applyDraftToUI(draft) {
+    if (!draft) {
+      resetLocalBackupRestoreNotice();
+      return;
+    }
+    if (draft.__fromLocalBackup && draft.__unsynced) {
+      notifyLocalBackupRestore();
+    } else {
+      resetLocalBackupRestoreNotice();
+    }
+    const answers = Array.isArray(draft.answers) ? draft.answers : [];
+    const map = new Map();
+    answers.forEach(ans => {
+      if (!ans || !ans.code) return;
+      map.set(ans.code, ans);
+    });
+
+    $$('#ckContainer .ck-item[data-code]').forEach(wrap => {
+      const code = wrap.dataset.code;
+      const ans = map.get(code) || {};
+      const value = ans.value || '';
+      wrap.dataset.value = value || '';
+      wrap.classList.toggle('ck-has-nc', value === 'Não conforme');
+      wrap.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+        chk.checked = !!value && chk.value === value;
       });
+      const obsField = wrap.querySelector('textarea');
+      if (obsField) obsField.value = ans.obs || '';
+    });
+
+    const extraFlagField = el('adNCExtra');
+    if (extraFlagField) {
+      const extraAns = answers.find(a => a?.code === EXTRA_NC_CODE());
+      extraFlagField.checked = (extraAns?.value || '') === 'Sim';
     }
 
-    if (btnFinalizar) {
-      btnFinalizar.addEventListener('click', finalizeChecklist);
+    const extraObsField = el('adOutrasObs');
+    if (extraObsField) {
+      extraObsField.value = draft.extra_obs || '';
     }
 
-    if (inputNUP) {
-      // Mantém a MÁSCARA no campo durante a digitação
-      inputNUP.addEventListener('input', (ev) => {
-        const caretEnd = ev.target.selectionEnd;
-        ev.target.value = nupFormatDisplay(ev.target.value);
-        // ajuste simples de caret (opcional, não essencial)
-        try { ev.target.setSelectionRange(ev.target.value.length, ev.target.value.length); } catch(_) {}
-      });
-    }
+    updateSaveState();
+  }
 
-    // Salvar local ao trocar de aba/janela
-    window.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') {
-        try { persistLocalDraftFromUI(); } catch(_) {}
+  async function abrirChecklistPDF(id, existingWindow = null) {
+    const win = existingWindow || window.open('', '_blank');
+    if (win) win.opener = null;
+    try {
+      const sb = getSupabaseClient();
+      if (!sb) throw new Error('Cliente Supabase indisponível.');
+      const { data, error } = await sb
+        .from('checklist_responses')
+        .select('answers,extra_obs,started_at,filled_at,filled_by:profiles(name),processes(nup),checklist_templates(name,type,version,items)')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+
+      const render = window.Modules?.checklists?.pdf?.renderChecklistPDF
+        || window.Modules?.checklistPDF?.renderChecklistPDF;
+      if (typeof render !== 'function') {
+        throw new Error('Utilitário de PDF indisponível.');
       }
-    }, { passive: true });
 
-    // Quando perde foco, pelo menos persistimos localmente
-    window.addEventListener('blur', () => {
-      try { persistLocalDraftFromUI(); } catch(_) {}
-    }, { passive: true });
+      const url = render(data, { mode: 'final' });
+      if (win) win.location.href = url;
+    } catch (err) {
+      if (win) win.close();
+      alert(err.message || String(err));
+    }
   }
 
-  window.addEventListener('beforeunload', () => {
-    try { persistLocalDraftFromUI(); } catch(_) {}
-    try { navigator.sendBeacon && navigator.sendBeacon('/noop','1'); } catch(_) {}
-    releaseLock();
-    stopLockHeartbeat();
-    stopSessionHeartbeat();
-  }, { capture: true });
+  // ====== SALVAR COM DEBOUNCE ======
+  let saveTimer = null;
+  const SAVE_DEBOUNCE_MS = 800;
+  function scheduleDraftSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveChecklistDraft, SAVE_DEBOUNCE_MS);
+  }
 
-  // ==== Ações para o card "Checklists aprovadas" ====
+  // >>> Estado da checklist: tenta carregar rascunho; senão consulta a última finalizada
+  async function loadChecklistProgress(processId, templateId) {
+    if (!processId || !templateId) {
+      return { draft: null, finalized: null };
+    }
+    try {
+      const sb = getSupabaseClient();
+      if (!sb) throw new Error('Cliente Supabase indisponível.');
 
+      const { data: draft, error: draftError } = await sb
+        .from('checklist_drafts')
+        .select('*')
+        .eq('process_id', processId)
+        .eq('template_id', templateId)
+        .maybeSingle();
+      if (draftError) throw draftError;
+      if (draft) {
+        return { draft, finalized: null };
+      }
+
+      const { data: finalized, error: finalizedError } = await sb
+        .from('checklist_responses')
+        .select('id, filled_at, filled_by, profiles:filled_by(name)')
+        .eq('process_id', processId)
+        .eq('template_id', templateId)
+        .eq('status', 'final')
+        .order('filled_at', { ascending: false, nullsLast: false })
+        .limit(1)
+        .maybeSingle();
+      if (finalizedError) throw finalizedError;
+      return { draft: null, finalized: finalized || null };
+    } catch (err) {
+      console.error('Falha ao carregar rascunho.', err);
+      return { draft: null, finalized: null };
+    }
+  }
+  // <<< Estado da checklist
+
+  async function evaluateChecklistResult(draft) {
+    const answers = Array.isArray(draft?.answers) ? draft.answers : [];
+    const hasNonConformity = answers.some(a => a?.value === 'Não conforme');
+    return { hasNonConformity, summary: hasNonConformity ? 'Com não conformidade' : 'Sem não conformidade' };
+  }
+
+  async function finalizarChecklist() {
+    if (!guardDocumentalWrite()) return;
+    if (!currentProcessId || !currentTemplate) return;
+
+    const state = getChecklistValidationState();
+    if (!state.ready) {
+      Utils.setMsg('adMsg', state.reason || 'Checklist incompleta.', true);
+      return;
+    }
+
+    Utils.setMsg('adMsg', 'Finalizando checklist...');
+    const pdfWindow = window.open('about:blank', '_blank', 'noopener');
+
+    const items = $$('#ckContainer .ck-item[data-code]');
+    const answers = items.map(wrap => {
+      const code = wrap.dataset.code;
+      const value = wrap.dataset.value || '';
+      const obsField = wrap.querySelector('textarea');
+      const obs = obsField ? obsField.value.trim() : '';
+      return { code, value: value || null, obs: obs || null };
+    });
+
+    const extraField = el('adOutrasObs');
+    const extraValue = extraField ? extraField.value.trim() : '';
+
+    try {
+      const sb = getSupabaseClient();
+      if (!sb) throw new Error('Cliente Supabase indisponível.');
+      await acquireLock().catch(() => {});
+      const { data, error } = await sb.rpc('rpc_finalize_checklist', {
+        p_process_id: currentProcessId,
+        p_template_id: currentTemplate.id,
+        p_answers: answers,
+        p_extra_obs: extraValue || null
+      });
+      if (error) throw error;
+
+      await abrirChecklistPDF(data, pdfWindow);
+      Utils.setMsg('adMsg', '');
+      clearLocalDraftSnapshot();
+      await releaseLock();
+      stopLockHeartbeat();
+    } catch (err) {
+      if (pdfWindow) pdfWindow.close();
+      Utils.setMsg('adMsg', err.message || 'Falha ao finalizar checklist.', true);
+    }
+  }
+
+  async function loadIndicador() {
+    // (mantido conforme seu arquivo; se não houver, ignora)
+  }
+
+  // === PATCH: ações da checklist aprovada (Abrir + PDF) ===
   function createApprovedChecklistActions(row) {
     const container = document.createElement('div');
     container.className = 'actions';
@@ -319,16 +711,26 @@ window.Modules.analise = (() => {
       const template = await loadTemplateById(templateId);
       if (!template) throw new Error('Checklist aprovada não encontrada.');
 
-      const rendered = window.ChecklistPDF?.renderChecklistTemplate;
-      if (typeof rendered !== 'function') throw new Error('Gerador de PDF não disponível.');
+      const render = window.Modules?.checklists?.pdf?.renderChecklistPDF
+        || window.Modules?.checklistPDF?.renderChecklistPDF;
+      if (typeof render !== 'function') {
+        throw new Error('Utilitário de PDF indisponível.');
+      }
 
-      const approvedAt = template?.approved_at ? Utils.fmtDateTime(template.approved_at) : '';
-      const approvedBy = templateSummary?.approved_by_display || template?.approved_by || '';
+      const approvedAt = templateSummary?.approved_at
+        ? Utils.fmtDateTime(templateSummary.approved_at)
+        : '';
+      const approvedBy = templateSummary?.approved_by_display
+        || templateSummary?.approved_by
+        || '';
 
-      const { url } = await rendered({
-        title: template?.title || template?.name || 'Checklist',
-        version: template?.version || 1,
-        items: Array.isArray(template?.items) ? template.items : [],
+      const response = {
+        checklist_templates: template
+      };
+
+      // Chamada conforme patch enviado (assinatura a 2 argumentos)
+      const url = render(response, {
+        mode: 'approved',
         approvedAt: approvedAt || '—',
         approvedBy: approvedBy || '—'
       });
@@ -362,8 +764,7 @@ window.Modules.analise = (() => {
       const { data, error } = await sb
         .from('checklist_templates')
         .select('id,name,type,version, approved_by, approved_at')
-        // <<< AJUSTE: em vez de .not('approved_at','is',null)
-        .gte('approved_at', '1970-01-01T00:00:00Z')
+        .not('approved_at', 'is', null)
         .order('approved_at', { ascending: false });
 
       if (error) throw error;
@@ -382,7 +783,7 @@ window.Modules.analise = (() => {
         return;
       }
 
-      // Resolver “Aprovada por” com lookup em profiles
+      // ==== PATCH anterior (mantido): resolver "Aprovada por" com lookup em profiles ====
       const approverIds = Array.from(new Set(
         latestRows
           .map(row => row?.approved_by)
@@ -413,6 +814,7 @@ window.Modules.analise = (() => {
         const displayName = profile?.name || profile?.email || row?.approved_by || '—';
         return { ...row, approved_by_display: displayName };
       });
+      // ==== FIM DO PATCH ====
 
       Utils.renderTable(box, [
         { key: 'type', label: 'Tipo' },
@@ -430,34 +832,19 @@ window.Modules.analise = (() => {
         { label: 'Ações', align: 'center', render: r => createApprovedChecklistActions(r) }
       ], tableRows);
     } catch (err) {
-      console.error('[Análise] Erro ao carregar checklists aprovadas:', err);
-      const box = el('adApprovedList');
-      if (box) box.innerHTML = `<div class="msg error">${Utils.escapeHtml(err?.message || 'Falha ao carregar as checklists aprovadas.')}</div>`;
+      console.error('Falha ao listar checklists aprovadas.', err);
+      el('adApprovedList').innerHTML = '<div class="msg error">Falha ao carregar as checklists aprovadas.</div>';
     }
-  }
-
-  async function loadTemplateById(id) {
-    const sb = getSupabaseClient();
-    const { data, error } = await sb
-      .from('checklist_templates')
-      .select('id,name,type,items,version,approved_by,approved_at')
-      .eq('id', id)
-      .maybeSingle();
-    if (error) {
-      console.error('Erro ao carregar template:', error);
-      return null;
-    }
-    return data || null;
   }
 
   async function openChecklistFromApproved(templateSummary) {
     clearChecklist();
 
     // Se ainda não houver processo aberto para este NUP, cria/obtém
-    const nupValue = readInputValue('adNUP').trim();
-    const nup = nupFormatStrict(nupValue);
+    let nup = readInputValue('adNUP').trim();
+    nup = nupSanitize(nup);
     if (!nup) {
-      return Utils.setMsg('adMsg', 'Informe o NUP completo no formato 000000/0000-00.', true);
+      return Utils.setMsg('adMsg', 'Informe um NUP válido.', true);
     }
     const u = await getSessionUser();
     if (!u) {
@@ -468,21 +855,19 @@ window.Modules.analise = (() => {
     const sb = getSupabaseClient();
     if (!sb) {
       console.error('Cliente Supabase indisponível ao abrir checklist aprovada.');
-      return Utils.setMsg('adMsg', 'Não foi possível abrir a checklist.', true);
+      return Utils.setMsg('adMsg', 'Não foi possível conectar ao banco de dados.', true);
     }
 
-    // Tenta achar processo existente
-    let pData = null;
-    try {
-      const { data, error } = await sb
-        .from('processes')
-        .select('id,type')
-        .eq('nup', nup)  // já no formato exigido
-        .maybeSingle();
-      if (error) throw error;
-      pData = data || null;
-    } catch (err) {
-      console.warn('Falha ao buscar processo por NUP:', err);
+    // Abre ou cria o processo e carrega o template aprovado
+    let { data: pData, error: pErr } = await sb
+      .from('processes')
+      .select('id')
+      .eq('nup', nup)
+      .maybeSingle();
+
+    if (pErr) {
+      console.error('Erro ao consultar processo por NUP:', pErr);
+      return Utils.setMsg('adMsg', 'Falha ao consultar NUP.', true);
     }
 
     if (!pData) {
@@ -528,56 +913,136 @@ window.Modules.analise = (() => {
       currentProcessId = pData.id;
     }
 
-    // Carrega template completo para render
-    const fullTemplate = await loadTemplateById(templateSummary.id);
-    if (!fullTemplate) {
-      return Utils.setMsg('adMsg', 'Checklist não encontrada.', true);
+    const template = await loadTemplateById(templateSummary.id);
+    if (!template) {
+      return Utils.setMsg('adMsg', 'Checklist selecionada não encontrada ou não aprovada.', true);
     }
+    template.name = template.name || templateSummary.name || '';
 
-    currentTemplate = fullTemplate;
-    const box = el('ckContainer');
-    renderChecklistTo(box, currentTemplate, {}, false);
-    updateSaveState();
+    renderChecklist(template);
+    // Acquire exclusive lock e iniciar heartbeats
+    const gotLock = await acquireLock();
+    startSessionHeartbeat();
+    startAutosave();
+    if (gotLock) startLockHeartbeat();
 
-    // Tenta carregar rascunho do servidor
     let loadedDraft = null;
-    try {
-      const { data, error } = await sb
-        .from('checklist_drafts')
-        .select('id, answers, extra_obs, updated_at, created_at, filled_by, filled_by_name')
-        .eq('process_id', currentProcessId)
-        .eq('template_id', currentTemplate.id)
-        .maybeSingle();
-      if (!error) loadedDraft = data || null;
-    } catch (err) {
-      console.warn('Falha ao buscar rascunho:', err);
-    }
-
-    let infoMsg = 'Checklist em branco pronta para preenchimento.';
-    if (loadedDraft) {
-      // aplica na UI
-      const answers = loadedDraft?.answers || {};
-      Object.entries(answers).forEach(([name, val]) => {
-        const el = document.querySelector(`#ckContainer [name="${CSS.escape(name)}"]`);
-        if (el) el.value = val;
-      });
-      if (el('adChecklistObs')) el('adChecklistObs').value = loadedDraft.extra_obs || '';
-      infoMsg = 'Rascunho recuperado do servidor.';
-      if (loadedDraft?.filled_by || loadedDraft?.filled_by_name) {
-        const parts = [];
-        const filledBy = loadedDraft?.filled_by_name || loadedDraft?.filled_by || '';
-        const updatedAt = loadedDraft?.updated_at ? Utils.fmtDateTime(loadedDraft.updated_at) : null;
-        if (updatedAt) parts.push(`Última edição em ${updatedAt}.`);
-        if (filledBy) parts.push(`Responsável: ${filledBy}.`);
-        parts.push('Ao prosseguir, você preencherá uma nova checklist em branco.');
-        infoMsg = parts.join(' ');
+    let infoMsg = '';
+    if (template && currentProcessId) {
+      const { draft, finalized } = await loadChecklistProgress(currentProcessId, template.id);
+      loadedDraft = draft || null;
+      if (draft) {
+        currentDraftId = draft.id || null;
+        applyDraftToUI(draft);
+        infoMsg = 'Checklist em andamento carregada.';
+      } else {
+        applyDraftToUI(null);
+        if (finalized) {
+          const filledAt = finalized.filled_at ? Utils.fmtDateTime(finalized.filled_at) : '';
+          const filledBy = finalized.profiles?.name || finalized.filled_by || '';
+          const parts = ['Uma checklist para este processo já foi finalizada.'];
+          if (filledAt) parts.push(`Finalizada em ${filledAt}.`);
+          if (filledBy) parts.push(`Responsável: ${filledBy}.`);
+          parts.push('Ao prosseguir, você preencherá uma nova checklist em branco.');
+          infoMsg = parts.join(' ');
+        }
       }
     }
     tryRestoreLocalBackupAgainst(loadedDraft);
     Utils.setMsg('adMsg', infoMsg);
   }
 
-  // === Histórico + autosave robusto (mantido do seu código atual) ===
+  function bind() {
+    const btnLimparAD = el('btnLimparAD');
+    const btnLimpar = el('btnLimparChecklist');
+    const btnFinalizar = el('adBtnFinalizarChecklist');
+    const inputNup = el('adNUP');
+
+    if (btnLimparAD) {
+      btnLimparAD.addEventListener('click', ev => {
+        ev.preventDefault();
+        setInputValue('adNUP', '');
+        clearChecklist();
+        Utils.setMsg('adMsg', '');
+      });
+    }
+
+    if (inputNup) {
+      inputNup.addEventListener('input', ev => {
+        const v = nupSanitize(ev.target.value);
+        ev.target.value = v;
+      });
+    }
+
+    if (btnLimpar) {
+      btnLimpar.addEventListener('click', ev => {
+        ev.preventDefault();
+        if (!currentTemplate) return;
+        if (!confirm('Limpar respostas desta checklist?')) return;
+        renderChecklist(currentTemplate);
+        Utils.setMsg('adMsg', 'Checklist limpa. As respostas serão salvas automaticamente.');
+      });
+    }
+
+    if (btnFinalizar) {
+      btnFinalizar.addEventListener('click', ev => {
+        ev.preventDefault();
+        if (!currentTemplate) return;
+        if (!guardDocumentalWrite()) return;
+        const state = getChecklistValidationState();
+        if (!state.ready) {
+          const msg = state.reason || 'Checklist incompleta. Finalize apenas após preencher todos os itens obrigatórios.';
+          Utils.setMsg('adMsg', msg, true);
+          window.alert(msg);
+          return;
+        }
+        if (window.confirm('Deseja finalizar esta checklist? As respostas atuais serão salvas e a versão final será emitida.')) {
+          finalizarChecklist();
+        }
+      });
+    }
+
+    // Libera trava ao fechar/atualizar a página
+    
+    // Instala ganchos de ciclo de vida uma única vez
+    if (!lifecycleHooksInstalled) {
+      lifecycleHooksInstalled = true;
+
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible' && currentProcessId && currentTemplate) {
+          try { await acquireLock(); } catch (_) {}
+          try { await saveChecklistDraft(); } catch (_) {}
+        }
+      });
+
+      window.addEventListener('online', async () => {
+        if (currentProcessId && currentTemplate) {
+          try { await acquireLock(); } catch (_) {}
+          try { await saveChecklistDraft(); } catch (_) {}
+        }
+      }, { passive: true });
+    }
+
+window.addEventListener('beforeunload', () => {
+      try { navigator.sendBeacon && navigator.sendBeacon('/noop','1'); } catch(_) {}
+      releaseLock();
+      stopLockHeartbeat();
+      stopSessionHeartbeat();
+      stopAutosave();
+    }, { capture: true });
+  }
+
+  function init() { bind(); }
+  async function load() {
+    clearChecklist();
+    await Promise.all([
+      loadIndicador(),
+      loadApprovedChecklists()
+    ]);
+  }
+
+
+  // >>> Autosave robusto + histórico (injetado)
   let historyStartLogged = false;
   let lastEditAt = 0;
   let autosaveTimer = null;
@@ -590,130 +1055,79 @@ window.Modules.analise = (() => {
   async function insertChecklistHistory(action, details = {}) {
     try {
       const sb = getSupabaseClient();
+      if (!sb || !currentProcessId || !action) return;
       const u = await getSessionUser();
-      if (!sb || !u || !currentProcessId) return;
-
+      if (!u?.id) return;
       await sb.from('history').insert({
         process_id: currentProcessId,
         action,
         details,
         user_id: u.id,
-        user_name: u.user_metadata?.full_name || u.email || u.id
+        user_name: (u.user_metadata && (u.user_metadata.full_name || u.user_metadata.name)) || u.email || null
       });
-    } catch (err) {
-      console.warn('[Histórico] falha ao registrar:', err);
+    } catch (e) {
+      console.error('[analise] falha ao registrar histórico:', e);
     }
   }
 
-  function notifyEdited() {
+  function markEdited() {
     lastEditAt = Date.now();
+    if (!historyStartLogged) {
+      insertChecklistHistory('Checklist: início de preenchimento', {
+        template_id: currentTemplate?.id || null,
+        template_name: currentTemplate?.name || currentTemplate?.title || null
+      });
+      historyStartLogged = true;
+    }
   }
 
   function startAutosave() {
     if (autosaveTimer) return;
     autosaveTimer = setInterval(async () => {
-      const since = Date.now() - lastEditAt;
-      if (since <= INACTIVITY_MIN_MS || (currentTemplate && currentProcessId)) {
-        await autosaveDraft();
+      const since = Date.now() - (lastEditAt || 0);
+      // Salva sempre que houve edição recente OU se houver rascunho marcado como "unsynced" no backup local
+      const backupKey = `${LOCAL_STORAGE_PREFIX}${currentProcessId || 'null'}:${currentTemplate?.id || 'null'}`;
+      let unsynced = false;
+      try {
+        const obj = JSON.parse(localStorage.getItem(backupKey) || '{}');
+        unsynced = !!obj.unsynced || !!obj.__unsynced;
+      } catch (_) {}
+      if (since <= INACTIVITY_MIN_MS || unsynced) {
+        try { await acquireLock(); } catch (_) {}
+        try { await saveChecklistDraft(); } catch (_) {}
       }
     }, AUTOSAVE_EVERY_MS);
   }
+  function stopAutosave() { clearInterval(autosaveTimer); autosaveTimer = null; }
 
-  async function autosaveDraft() {
+  function tryRestoreLocalBackupAgainst(draftRow) {
     try {
-      const sb = getSupabaseClient();
-      const u = await getSessionUser();
-      if (!sb || !u || !currentTemplate || !currentProcessId) return;
+      const key = `${LOCAL_STORAGE_PREFIX}${currentProcessId || 'null'}:${currentTemplate?.id || 'null'}`;
+      const local = JSON.parse(localStorage.getItem(key) || '{}');
+      if (!local || !local.__localUpdatedAt) return false;
 
-      const payload = {
-        p_answers: getAnswersFromUI(),
-        p_extra_obs: el('adChecklistObs')?.value || '',
-        p_process_id: currentProcessId,
-        p_template_id: currentTemplate.id
-      };
+      const localAt = Date.parse(local.__localUpdatedAt) || 0;
+      const remoteAt = Date.parse(draftRow?.updated_at || draftRow?.filled_at || '') || 0;
 
-      const { data, error } = await sb.rpc('rpc_upsert_checklist_draft', payload);
-      if (error) {
-        console.warn('[Autosave] falha:', error);
-        // salva local pra não perder nada
-        persistLocalDraftFromUI();
-        return;
+      if (localAt > remoteAt) {
+        const draftLike = {
+          answers: Array.isArray(local.answers) ? local.answers : [],
+          extra_obs: local.extra_obs || ''
+        };
+        draftLike.__fromLocalBackup = true;
+        draftLike.__unsynced = !!local.unsynced || !!local.__unsynced;
+        applyDraftToUI(draftLike);
+        updateLocalDraftSnapshot({ unsynced: true });
+        saveChecklistDraft().catch(() => {});
+        return true;
       }
-      currentDraftId = data?.id || currentDraftId;
-      if (!historyStartLogged) {
-        historyStartLogged = true;
-      }
-    } catch (err) {
-      console.warn('[Autosave] erro inesperado:', err);
-      persistLocalDraftFromUI();
+    } catch (e) {
+      console.warn('[analise] falha ao comparar/aplicar backup local', e);
     }
+    return false;
   }
+  // <<< Autosave robusto + histórico
 
-  async function finalizeChecklist() {
-    try {
-      const sb = getSupabaseClient();
-      const u = await getSessionUser();
-      if (!sb || !u || !currentTemplate || !currentProcessId) {
-        notifySessionExpiredOnce();
-        return;
-      }
 
-      // garante última captura do que está na UI
-      await autosaveDraft();
-
-      const payload = {
-        p_process_id: currentProcessId,
-        p_template_id: currentTemplate.id
-      };
-      const { data, error } = await sb.rpc('rpc_finalize_checklist', payload);
-      if (error) {
-        console.error('[Finalizar] falha:', error);
-        return Utils.setMsg('adMsg', error.message || 'Falha ao finalizar checklist.', true);
-      }
-
-      await insertChecklistHistory('Checklist: finalizada', {
-        template_id: currentTemplate.id,
-        draft_id: currentDraftId || null
-      });
-
-      Utils.setMsg('adMsg', 'Checklist finalizada com sucesso.');
-      clearChecklist();
-    } catch (err) {
-      console.error('[Finalizar] erro inesperado:', err);
-      Utils.setMsg('adMsg', 'Ocorreu um erro ao finalizar a checklist.', true);
-    }
-  }
-
-  // Heartbeats/locks (mantidos)
-  function startSessionHeartbeat() {/* ... mantido ... */}
-  function stopSessionHeartbeat() {/* ... mantido ... */}
-  function releaseLock() {/* ... mantido ... */}
-  function stopLockHeartbeat() {/* ... mantido ... */}
-
-  // Retentativas para a lista de aprovadas
-  let approvedListRetryCount = 0;
-  const APPROVED_LIST_MAX_RETRIES = 3;
-  const APPROVED_LIST_RETRY_DELAY_MS = 1200;
-
-  async function loadIndicador() {/* ... mantido ... */}
-
-  async function getSessionUser() {
-    try {
-      const { data: { user } } = await window.sb.auth.getUser();
-      return user || null;
-    } catch(_) { return null; }
-  }
-
-  function bindForm() { bindAD(); bind(); startAutosave(); }
-
-  async function init() { bindForm(); }
-  async function load() {
-    clearChecklist();
-    await Promise.all([
-      loadIndicador(),
-      loadApprovedChecklists()
-    ]);
-  }
-
-  return { init, load, openChecklistFromApproved, openApprovedChecklistPDF };
+  return { init, load, syncDraftBackup: () => {/* mantido */} };
 })();
