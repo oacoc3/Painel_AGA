@@ -2,7 +2,7 @@
 -- Consolidado AGA — Migração única (idempotente)
 -- Conteúdo: schema.sql (+patch user_unavailabilities UPDATE),
 --           06c_allow_multiple_finals.sql,
---           07_checklist_locks_and_rpcs.sql (harmonizado),
+--           07_checklist_locks_and_rpcs.sql (harmonizado, c/ patch de finalize),
 --           adhel_airfields_from_sbre.sql
 -- Seguro para reexecução em banco já existente.
 -- ============================================================
@@ -56,7 +56,7 @@ BEGIN
     END IF;
   END IF;
 
-----------------------------------------------------------------
+  ----------------------------------------------------------------
   -- 2.1) Enum process_status: garantir novo status KML/KMZ
   ----------------------------------------------------------------
   PERFORM 1
@@ -707,7 +707,7 @@ BEGIN
     $pol$;
   END IF;
 
-  -- >>>> PATCH SOLICITADO: permitir UPDATE por si mesmo ou Admin <<<<
+  -- >>> PATCH: permitir UPDATE por si mesmo ou Admin <<<
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
     WHERE schemaname='public' AND tablename='user_unavailabilities' AND policyname='user_unavailabilities_update_self_or_admin'
@@ -784,7 +784,7 @@ BEGIN
 END;
 $mig$;
 
--- 2) Garantir exclusividade de DRAFT (um por processo+template)
+-- 2) Garantir exclusividade de DRAFT (um por processo+template) — legado
 DO $mig$
 BEGIN
   IF NOT EXISTS (
@@ -869,9 +869,6 @@ WHERE r.status = 'final';
 
 /* ====================================================== */
 /*  BLOCO 3 — 07_checklist_locks_and_rpcs.sql (harmon.)   */
-/*    Nota: “harmonizado” apenas no CREATE IF NOT EXISTS  */
-/*    de public.checklist_responses, para alinhar com     */
-/*    índices/views do BLOCO 2 (status, filled_at etc.).  */
 /* ====================================================== */
 
 -- Extensão para UUID (se necessário)
@@ -1016,7 +1013,6 @@ END;
 $$;
 
 -- >>> Harmonização: criar checklist_responses (apenas se não existir)
---     com colunas compatíveis aos índices/views do BLOCO 2.
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.tables
@@ -1028,7 +1024,7 @@ DO $$ BEGIN
       template_id  uuid NOT NULL,
       answers      jsonb NOT NULL,
       extra_obs    text,
-      status       text NOT NULL DEFAULT 'final', -- valores esperados: 'draft' | 'final'
+      status       text NOT NULL DEFAULT 'final', -- 'draft' | 'final' (legado)
       started_at   timestamptz,
       filled_by    uuid,
       filled_at    timestamptz,
@@ -1076,12 +1072,13 @@ BEGIN
 END;
 $$;
 
--- RPC: finalizar checklist (insere como 'final')
+-- RPC: finalizar checklist (insere como 'final') — PATCH aplicado
 CREATE OR REPLACE FUNCTION public.rpc_finalize_checklist(
   p_answers jsonb,
   p_extra_obs text,
   p_process_id uuid,
-  p_template_id uuid
+  p_template_id uuid,
+  p_draft_id uuid DEFAULT NULL
 )
 RETURNS uuid
 LANGUAGE plpgsql
@@ -1090,14 +1087,54 @@ AS $$
 DECLARE
   v_id uuid;
   v_user_id uuid;
+  v_started_at timestamptz;
+  v_history_id bigint;
+  v_effective_draft_id uuid;
 BEGIN
   SELECT auth.uid() INTO v_user_id;
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'auth required';
   END IF;
 
-  INSERT INTO public.checklist_responses (process_id, template_id, answers, extra_obs, status, filled_by, filled_at, updated_at)
-  VALUES (p_process_id, p_template_id, COALESCE(p_answers,'{}'::jsonb), p_extra_obs, 'final', v_user_id, now(), now())
+  v_effective_draft_id := p_draft_id;
+
+  IF v_effective_draft_id IS NULL THEN
+    SELECT id INTO v_effective_draft_id
+    FROM public.checklist_drafts
+    WHERE process_id = p_process_id
+      AND template_id = p_template_id
+    ORDER BY updated_at DESC
+    LIMIT 1;
+  END IF;
+
+  IF v_effective_draft_id IS NOT NULL THEN
+    SELECT h.created_at, h.id
+      INTO v_started_at, v_history_id
+    FROM public.history h
+    WHERE h.process_id = p_process_id
+      AND h.details->>'template_id' = p_template_id::text
+      AND h.details->>'event' = 'start'
+      AND h.details->>'draft_id' = v_effective_draft_id::text
+    ORDER BY h.created_at DESC
+    LIMIT 1;
+  END IF;
+
+  IF v_started_at IS NULL THEN
+    SELECT h.created_at, h.id
+      INTO v_started_at, v_history_id
+    FROM public.history h
+    WHERE h.process_id = p_process_id
+      AND h.details->>'template_id' = p_template_id::text
+      AND h.details->>'event' = 'start'
+      AND NOT (h.details ? 'response_id')
+    ORDER BY h.created_at DESC
+    LIMIT 1;
+  END IF;
+
+  v_started_at := COALESCE(v_started_at, now());
+
+  INSERT INTO public.checklist_responses (process_id, template_id, answers, extra_obs, status, started_at, filled_by, filled_at, updated_at)
+  VALUES (p_process_id, p_template_id, COALESCE(p_answers,'{}'::jsonb), p_extra_obs, 'final', v_started_at, v_user_id, now(), now())
   RETURNING id INTO v_id;
 
   -- Limpa rascunho e lock do usuário
@@ -1106,6 +1143,16 @@ BEGIN
 
   DELETE FROM public.checklist_locks
    WHERE process_id = p_process_id AND template_id = p_template_id AND holder_user_id = v_user_id;
+
+  IF v_history_id IS NOT NULL THEN
+    BEGIN
+      UPDATE public.history
+         SET details = COALESCE(details, '{}'::jsonb) || jsonb_build_object('response_id', v_id)
+       WHERE id = v_history_id;
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+  END IF;
 
   RETURN v_id;
 END;
@@ -1121,7 +1168,7 @@ GRANT EXECUTE ON FUNCTION public.rpc_acquire_checklist_lock(uuid,uuid,integer) T
 GRANT EXECUTE ON FUNCTION public.rpc_renew_checklist_lock(uuid,uuid,integer)   TO authenticated;
 GRANT EXECUTE ON FUNCTION public.rpc_release_checklist_lock(uuid,uuid)         TO authenticated;
 GRANT EXECUTE ON FUNCTION public.rpc_upsert_checklist_draft(jsonb,text,uuid,uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.rpc_finalize_checklist(jsonb,text,uuid,uuid)     TO authenticated;
+GRANT EXECUTE ON FUNCTION public.rpc_finalize_checklist(jsonb,text,uuid,uuid,uuid) TO authenticated;
 
 
 /* ====================================================== */
@@ -1158,4 +1205,3 @@ BEGIN
   END IF;
 END
 $mig$;
-
