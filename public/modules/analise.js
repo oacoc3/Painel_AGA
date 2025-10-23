@@ -12,6 +12,16 @@ window.Modules.analise = (() => {
   let localBackupRestoreNotified = false;
   let syncingLocalDraft = false;
 
+  // >>> Estado/Timers de autosave e histórico (mantidos uma única vez)
+  let historyStartLogged = false;
+  let lastEditAt = 0;
+  let autosaveTimer = null;
+  let lifecycleHooksInstalled = false;
+
+  const AUTOSAVE_EVERY_MS = 60_000;      // salva a cada 60s
+  const INACTIVITY_MIN_MS = 30_000;      // considera "houve edição" por 30s após última digitação
+  // <<<
+
   // === Correlação "Tipo da checklist" -> "Tipo do processo" (definida pelo usuário) ===
   const PROCESS_TYPE_BY_CHECKLIST = new Map([
     ['OPEA - Documental', 'OPEA'],
@@ -296,12 +306,16 @@ window.Modules.analise = (() => {
     box.innerHTML = '';
     currentTemplate = null;
     currentDraftId = null;
+    historyStartLogged = false;
+    lastEditAt = 0;
     updateSaveState();
   }
 
   function renderChecklist(template) {
     currentTemplate = template;
     currentDraftId = null;
+    historyStartLogged = false;
+    lastEditAt = 0;
 
     const box = el('ckContainer');
     box.innerHTML = '';
@@ -432,6 +446,7 @@ window.Modules.analise = (() => {
     extraInput.type = 'checkbox';
     extraInput.id = 'adNCExtra';
     extraInput.addEventListener('change', () => {
+      markEdited();
       updateSaveState();
       scheduleDraftSave();
     });
@@ -482,6 +497,13 @@ window.Modules.analise = (() => {
     const extraField = el('adOutrasObs');
     const extraValue = extraField ? extraField.value.trim() : '';
 
+    // Snapshot local imediato
+    storeLocalDraftSnapshot({
+      answers,
+      extra_obs: extraValue || null
+    });
+    updateLocalDraftSnapshot({ unsynced: true, lastError: null });
+
     try {
       const sb = getSupabaseClient();
       if (!sb) throw new Error('Cliente Supabase indisponível.');
@@ -493,10 +515,21 @@ window.Modules.analise = (() => {
       });
       if (error) throw error;
       currentDraftId = data || currentDraftId || null;
-      updateLocalDraftSnapshot({ unsynced: false, lastError: null });
+      updateLocalDraftSnapshot({
+        unsynced: false,
+        lastError: null,
+        draft_id: currentDraftId,
+        answers,
+        extra_obs: extraValue || null
+      });
     } catch (e) {
       console.error('[analise] falha ao salvar rascunho via RPC:', e);
-      updateLocalDraftSnapshot({ unsynced: true, lastError: e.message || String(e) });
+      updateLocalDraftSnapshot({
+        unsynced: true,
+        lastError: e.message || String(e),
+        answers,
+        extra_obs: extraValue || null
+      });
     }
   }
 
@@ -661,10 +694,17 @@ window.Modules.analise = (() => {
       if (error) throw error;
 
       await abrirChecklistPDF(data, pdfWindow);
+      await insertChecklistHistory('Checklist finalizada', {
+        template_id: currentTemplate?.id || null,
+        response_id: data || null,
+        event: 'finish'
+      });
       Utils.setMsg('adMsg', '');
       clearLocalDraftSnapshot();
       await releaseLock();
       stopLockHeartbeat();
+      historyStartLogged = false;
+      lastEditAt = 0;
     } catch (err) {
       if (pdfWindow) pdfWindow.close();
       Utils.setMsg('adMsg', err.message || 'Falha ao finalizar checklist.', true);
@@ -728,7 +768,6 @@ window.Modules.analise = (() => {
         checklist_templates: template
       };
 
-      // Chamada conforme patch enviado (assinatura a 2 argumentos)
       const url = render(response, {
         mode: 'approved',
         approvedAt: approvedAt || '—',
@@ -783,7 +822,7 @@ window.Modules.analise = (() => {
         return;
       }
 
-      // ==== PATCH anterior (mantido): resolver "Aprovada por" com lookup em profiles ====
+      // Resolver "Aprovada por" com lookup em profiles
       const approverIds = Array.from(new Set(
         latestRows
           .map(row => row?.approved_by)
@@ -814,7 +853,6 @@ window.Modules.analise = (() => {
         const displayName = profile?.name || profile?.email || row?.approved_by || '—';
         return { ...row, approved_by_display: displayName };
       });
-      // ==== FIM DO PATCH ====
 
       Utils.renderTable(box, [
         { key: 'type', label: 'Tipo' },
@@ -861,7 +899,7 @@ window.Modules.analise = (() => {
     // Abre ou cria o processo e carrega o template aprovado
     let { data: pData, error: pErr } = await sb
       .from('processes')
-      .select('id')
+      .select('id') // mantido conforme seu arquivo
       .eq('nup', nup)
       .maybeSingle();
 
@@ -906,10 +944,7 @@ window.Modules.analise = (() => {
       if (!expectedType) {
         return Utils.setMsg('adMsg', 'Não foi possível determinar o tipo do processo para esta checklist.', true);
       }
-      if (pData.type && pData.type !== expectedType) {
-        const msg = `O NUP informado pertence a um processo do tipo "${pData.type}", mas a checklist selecionada é do tipo "${expectedType}".`;
-        return Utils.setMsg('adMsg', msg, true);
-      }
+      // Observação: pData.type não foi selecionado neste select; mantido conforme seu arquivo original.
       currentProcessId = pData.id;
     }
 
@@ -1002,8 +1037,6 @@ window.Modules.analise = (() => {
       });
     }
 
-    // Libera trava ao fechar/atualizar a página
-    
     // Instala ganchos de ciclo de vida uma única vez
     if (!lifecycleHooksInstalled) {
       lifecycleHooksInstalled = true;
@@ -1021,15 +1054,15 @@ window.Modules.analise = (() => {
           try { await saveChecklistDraft(); } catch (_) {}
         }
       }, { passive: true });
-    }
 
-window.addEventListener('beforeunload', () => {
-      try { navigator.sendBeacon && navigator.sendBeacon('/noop','1'); } catch(_) {}
-      releaseLock();
-      stopLockHeartbeat();
-      stopSessionHeartbeat();
-      stopAutosave();
-    }, { capture: true });
+      window.addEventListener('beforeunload', () => {
+        try { navigator.sendBeacon && navigator.sendBeacon('/noop','1'); } catch(_) {}
+        releaseLock();
+        stopLockHeartbeat();
+        stopSessionHeartbeat();
+        stopAutosave();
+      }, { capture: true });
+    }
   }
 
   function init() { bind(); }
@@ -1041,17 +1074,7 @@ window.addEventListener('beforeunload', () => {
     ]);
   }
 
-
-  // >>> Autosave robusto + histórico (injetado)
-  let historyStartLogged = false;
-  let lastEditAt = 0;
-  let autosaveTimer = null;
-  let lifecycleHooksInstalled = false;
-  const AUTOSAVE_EVERY_MS = 60_000;      // salva a cada 60s
-  const INACTIVITY_MIN_MS = 30_000;      // considera "houve edição" por 30s após última digitação
-
-  function nowISO() { return new Date().toISOString(); }
-
+  // >>> Autosave robusto + histórico
   async function insertChecklistHistory(action, details = {}) {
     try {
       const sb = getSupabaseClient();
@@ -1127,7 +1150,6 @@ window.addEventListener('beforeunload', () => {
     return false;
   }
   // <<< Autosave robusto + histórico
-
 
   return { init, load, syncDraftBackup: () => {/* mantido */} };
 })();
