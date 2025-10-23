@@ -496,7 +496,7 @@ BEGIN
   END IF;
 
   ----------------------------------------------------------------
-  -- 10) history (tabela, índices, RLS/policies)
+  -- 10) history (tabela, índices, RLS/policies)  [AJUSTADO p/ UUID]
   ----------------------------------------------------------------
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.tables
@@ -505,7 +505,7 @@ BEGIN
     EXECUTE $sql$
       CREATE TABLE public.history (
         id          bigserial PRIMARY KEY,
-        process_id  bigint NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
+        process_id  uuid NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
         action      text   NOT NULL,
         details     jsonb  NULL,
         user_id     uuid   NOT NULL,
@@ -541,6 +541,61 @@ BEGIN
   ) THEN
     EXECUTE 'ALTER TABLE public.history ADD COLUMN user_name text';
   END IF;
+
+  -- >>> MIGRAÇÃO: se a coluna process_id não for uuid, converter com segurança
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema='public'
+      AND table_name='history'
+      AND column_name='process_id'
+      AND udt_name <> 'uuid'
+  ) THEN
+    -- solta FK (se existir)
+    BEGIN
+      EXECUTE 'ALTER TABLE public.history DROP CONSTRAINT IF EXISTS history_process_id_fkey';
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+
+    -- permite nulos durante a conversão
+    BEGIN
+      EXECUTE 'ALTER TABLE public.history ALTER COLUMN process_id DROP NOT NULL';
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+
+    -- conversão protegida (mantém NULL se não for formato UUID)
+    EXECUTE $sql$
+      ALTER TABLE public.history
+      ALTER COLUMN process_id TYPE uuid
+      USING (
+        CASE
+          WHEN process_id IS NULL THEN NULL
+          WHEN process_id::text ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+            THEN process_id::text::uuid
+          ELSE NULL
+        END
+      )
+    $sql$;
+
+    -- se nenhum NULL sobrou, restaura NOT NULL
+    PERFORM 1
+      FROM public.history
+     WHERE process_id IS NULL
+     LIMIT 1;
+    IF NOT FOUND THEN
+      EXECUTE 'ALTER TABLE public.history ALTER COLUMN process_id SET NOT NULL';
+    END IF;
+
+    -- recria FK
+    BEGIN
+      EXECUTE 'ALTER TABLE public.history ADD CONSTRAINT history_process_id_fkey FOREIGN KEY (process_id) REFERENCES public.processes(id) ON DELETE CASCADE';
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+  END IF;
+  -- <<< FIM MIGRAÇÃO UUID
 
   IF NOT EXISTS (
     SELECT 1 FROM pg_indexes
@@ -1205,4 +1260,3 @@ BEGIN
   END IF;
 END
 $mig$;
-
