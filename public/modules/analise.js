@@ -21,6 +21,10 @@ window.Modules.analise = (() => {
   const INACTIVITY_MIN_MS = 30_000;      // considera "houve edição" por 30s após última digitação
   // <<<
 
+  // Histórico do início das checklists por rascunho (evita duplicar chamadas)
+  const startHistoryRecordedKeys = new Set();
+  const startHistoryPending = new Map();
+
   // === Correlação "Tipo da checklist" -> "Tipo do processo" (definida pelo usuário) ===
   const PROCESS_TYPE_BY_CHECKLIST = new Map([
     ['OPEA - Documental', 'OPEA'],
@@ -512,6 +516,7 @@ window.Modules.analise = (() => {
       });
       if (error) throw error;
       currentDraftId = data || currentDraftId || null;
+      await ensureChecklistStartHistory(currentDraftId);
       updateLocalDraftSnapshot({
         unsynced: false,
         lastError: null,
@@ -701,7 +706,8 @@ window.Modules.analise = (() => {
         p_process_id: currentProcessId,
         p_template_id: currentTemplate.id,
         p_answers: answers,
-        p_extra_obs: extraValue || null
+        p_extra_obs: extraValue || null,
+        p_draft_id: currentDraftId || null
       });
       if (error) throw error;
 
@@ -709,10 +715,12 @@ window.Modules.analise = (() => {
       await insertChecklistHistory('Checklist finalizada', {
         template_id: currentTemplate?.id || null,
         response_id: data || null,
+        draft_id: currentDraftId || null,
         event: 'finish'
       });
       Utils.setMsg('adMsg', '');
       clearLocalDraftSnapshot();
+      currentDraftId = null;
       await releaseLock();
       stopLockHeartbeat();
       lastEditAt = 0;
@@ -1088,6 +1096,52 @@ window.Modules.analise = (() => {
       loadIndicador(),
       loadApprovedChecklists()
     ]);
+  }
+
+  function getStartHistoryKey(draftId) {
+    if (!draftId) return null;
+    const processKey = currentProcessId || 'null';
+    const templateKey = currentTemplate?.id || 'null';
+    return `${processKey}:${templateKey}:${draftId}`;
+  }
+
+  async function ensureChecklistStartHistory(draftId) {
+    if (!draftId || !currentProcessId || !currentTemplate) return;
+    const key = getStartHistoryKey(draftId);
+    if (!key || startHistoryRecordedKeys.has(key)) return;
+    if (startHistoryPending.has(key)) return startHistoryPending.get(key);
+
+    const sb = getSupabaseClient();
+    if (!sb) return;
+
+    const promise = (async () => {
+      try {
+        const { data, error } = await sb
+          .from('history')
+          .select('id')
+          .eq('process_id', currentProcessId)
+          .eq('details->>template_id', currentTemplate.id)
+          .eq('details->>event', 'start')
+          .eq('details->>draft_id', draftId)
+          .limit(1);
+        if (error) throw error;
+        if (!Array.isArray(data) || data.length === 0) {
+          await insertChecklistHistory('Checklist: início de preenchimento', {
+            template_id: currentTemplate.id,
+            draft_id: draftId,
+            event: 'start'
+          });
+        }
+        startHistoryRecordedKeys.add(key);
+      } catch (err) {
+        console.warn('[analise] falha ao registrar histórico de início da checklist:', err);
+      } finally {
+        startHistoryPending.delete(key);
+      }
+    })();
+
+    startHistoryPending.set(key, promise);
+    return promise;
   }
 
   // >>> Autosave robusto + histórico
