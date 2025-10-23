@@ -596,7 +596,19 @@ window.Modules.analise = (() => {
         throw new Error('Utilitário de PDF indisponível.');
       }
 
-      const url = render(data, { mode: 'final' });
+      // >>> Patch: repassa metadados ao PDF final
+      const startedAt = data.started_at ? Utils.fmtDateTime(data.started_at) : '—';
+      const finishedAt = data.filled_at ? Utils.fmtDateTime(data.filled_at) : '—';
+      const responsible = data.profiles?.name || data.filled_by || '—';
+
+      const url = render(data, {
+        mode: 'final',
+        startedAt: startedAt || '—',
+        finishedAt: finishedAt || '—',
+        responsible: responsible || '—'
+      });
+      // <<< Patch
+
       if (win) win.location.href = url;
     } catch (err) {
       if (win) win.close();
@@ -963,6 +975,7 @@ window.Modules.analise = (() => {
 
     let loadedDraft = null;
     let infoMsg = '';
+    let skipLocalRestore = false; // >>> Patch
     if (template && currentProcessId) {
       const { draft, finalized } = await loadChecklistProgress(currentProcessId, template.id);
       loadedDraft = draft || null;
@@ -980,10 +993,14 @@ window.Modules.analise = (() => {
           if (filledBy) parts.push(`Responsável: ${filledBy}.`);
           parts.push('Ao prosseguir, você preencherá uma nova checklist em branco.');
           infoMsg = parts.join(' ');
+          // >>> Patch: evita restaurar rascunho local antigo quando já há finalizada
+          skipLocalRestore = true;
+          clearLocalDraftSnapshot();
+          // <<< Patch
         }
       }
     }
-    tryRestoreLocalBackupAgainst(loadedDraft);
+    tryRestoreLocalBackupAgainst(loadedDraft, { skip: skipLocalRestore }); // >>> Patch
     Utils.setMsg('adMsg', infoMsg);
   }
 
@@ -1123,7 +1140,8 @@ window.Modules.analise = (() => {
   }
   function stopAutosave() { clearInterval(autosaveTimer); autosaveTimer = null; }
 
-  function tryRestoreLocalBackupAgainst(draftRow) {
+  function tryRestoreLocalBackupAgainst(draftRow, options = {}) {
+    if (options?.skip) return false; // >>> Patch
     try {
       const key = `${LOCAL_STORAGE_PREFIX}${currentProcessId || 'null'}:${currentTemplate?.id || 'null'}`;
       const local = JSON.parse(localStorage.getItem(key) || '{}');
