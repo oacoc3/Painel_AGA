@@ -1111,7 +1111,7 @@ BEGIN
     SELECT h.created_at, h.id
       INTO v_started_at, v_history_id
     FROM public.history h
-    WHERE h.process_id = p_process_id
+    WHERE h.process_id::text = p_process_id::text
       AND h.details->>'template_id' = p_template_id::text
       AND h.details->>'event' = 'start'
       AND h.details->>'draft_id' = v_effective_draft_id::text
@@ -1123,7 +1123,7 @@ BEGIN
     SELECT h.created_at, h.id
       INTO v_started_at, v_history_id
     FROM public.history h
-    WHERE h.process_id = p_process_id
+    WHERE h.process_id::text = p_process_id::text
       AND h.details->>'template_id' = p_template_id::text
       AND h.details->>'event' = 'start'
       AND NOT (h.details ? 'response_id')
@@ -1205,3 +1205,4 @@ BEGIN
   END IF;
 END
 $mig$;
+
