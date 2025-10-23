@@ -1088,7 +1088,7 @@ DECLARE
   v_id uuid;
   v_user_id uuid;
   v_started_at timestamptz;
-  v_history_id bigint;
+  v_history_id public.history.id%TYPE;
   v_effective_draft_id uuid;
 BEGIN
   SELECT auth.uid() INTO v_user_id;
@@ -1205,4 +1205,6 @@ BEGIN
   END IF;
 END
 $mig$;
+
+
 
