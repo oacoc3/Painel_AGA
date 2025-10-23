@@ -13,7 +13,6 @@ window.Modules.analise = (() => {
   let syncingLocalDraft = false;
 
   // >>> Estado/Timers de autosave e histórico (mantidos uma única vez)
-  let historyStartLogged = false;
   let lastEditAt = 0;
   let autosaveTimer = null;
   let lifecycleHooksInstalled = false;
@@ -306,7 +305,6 @@ window.Modules.analise = (() => {
     box.innerHTML = '';
     currentTemplate = null;
     currentDraftId = null;
-    historyStartLogged = false;
     lastEditAt = 0;
     updateSaveState();
   }
@@ -314,7 +312,6 @@ window.Modules.analise = (() => {
   function renderChecklist(template) {
     currentTemplate = template;
     currentDraftId = null;
-    historyStartLogged = false;
     lastEditAt = 0;
 
     const box = el('ckContainer');
@@ -585,7 +582,7 @@ window.Modules.analise = (() => {
       if (!sb) throw new Error('Cliente Supabase indisponível.');
       const { data, error } = await sb
         .from('checklist_responses')
-        .select('answers,extra_obs,started_at,filled_at,filled_by:profiles(name),processes(nup),checklist_templates(name,type,version,items)')
+        .select('answers,extra_obs,started_at,filled_at,filled_by,profiles:filled_by(name),processes(nup),checklist_templates(name,type,version,items)')
         .eq('id', id)
         .single();
       if (error) throw error;
@@ -599,7 +596,10 @@ window.Modules.analise = (() => {
       // >>> Patch: repassa metadados ao PDF final
       const startedAt = data.started_at ? Utils.fmtDateTime(data.started_at) : '—';
       const finishedAt = data.filled_at ? Utils.fmtDateTime(data.filled_at) : '—';
-      const responsible = data.profiles?.name || data.filled_by || '—';
+      const responsibleProfile = Array.isArray(data.profiles)
+        ? data.profiles[0]
+        : data.profiles;
+      const responsible = responsibleProfile?.name || data.filled_by || '—';
 
       const url = render(data, {
         mode: 'final',
@@ -715,7 +715,6 @@ window.Modules.analise = (() => {
       clearLocalDraftSnapshot();
       await releaseLock();
       stopLockHeartbeat();
-      historyStartLogged = false;
       lastEditAt = 0;
     } catch (err) {
       if (pdfWindow) pdfWindow.close();
@@ -1112,13 +1111,6 @@ window.Modules.analise = (() => {
 
   function markEdited() {
     lastEditAt = Date.now();
-    if (!historyStartLogged) {
-      insertChecklistHistory('Checklist: início de preenchimento', {
-        template_id: currentTemplate?.id || null,
-        template_name: currentTemplate?.name || currentTemplate?.title || null
-      });
-      historyStartLogged = true;
-    }
   }
 
   function startAutosave() {
