@@ -69,8 +69,21 @@ window.Modules.analise = (() => {
     return i ? i.value : '';
   }
 
-  function nupSanitize(v) {
-    return (v || '').replace(/\D/g,'').slice(0,12);
+  // --- NUP helpers (mantém máscara no input e envia já no formato 000000/0000-00) ---
+  const NUP_REGEX = /^[0-9]{6}\/[0-9]{4}-[0-9]{2}$/;
+
+  // Formata progressivamente para exibição no input (sem travar a digitação)
+  function nupFormatDisplay(v) {
+    const d = String(v || '').replace(/\D/g, '').slice(0, 12);
+    if (d.length <= 6) return d;
+    if (d.length <= 10) return `${d.slice(0,6)}/${d.slice(6)}`;
+    return `${d.slice(0,6)}/${d.slice(6,10)}-${d.slice(10,12)}`;
+  }
+
+  // Valida e retorna o NUP **estritamente** no padrão exigido, ou null se incompleto
+  function nupFormatStrict(v) {
+    const f = nupFormatDisplay(v);
+    return NUP_REGEX.test(f) ? f : null;
   }
 
   function updateSaveState() {
@@ -239,8 +252,12 @@ window.Modules.analise = (() => {
     }
 
     if (inputNUP) {
-      inputNUP.addEventListener('input', () => {
-        inputNUP.value = nupSanitize(inputNUP.value);
+      // Mantém a MÁSCARA no campo durante a digitação
+      inputNUP.addEventListener('input', (ev) => {
+        const caretEnd = ev.target.selectionEnd;
+        ev.target.value = nupFormatDisplay(ev.target.value);
+        // ajuste simples de caret (opcional, não essencial)
+        try { ev.target.setSelectionRange(ev.target.value.length, ev.target.value.length); } catch(_) {}
       });
     }
 
@@ -437,10 +454,10 @@ window.Modules.analise = (() => {
     clearChecklist();
 
     // Se ainda não houver processo aberto para este NUP, cria/obtém
-    let nup = readInputValue('adNUP').trim();
-    nup = nupSanitize(nup);
+    const nupValue = readInputValue('adNUP').trim();
+    const nup = nupFormatStrict(nupValue);
     if (!nup) {
-      return Utils.setMsg('adMsg', 'Informe um NUP válido.', true);
+      return Utils.setMsg('adMsg', 'Informe o NUP completo no formato 000000/0000-00.', true);
     }
     const u = await getSessionUser();
     if (!u) {
@@ -460,7 +477,7 @@ window.Modules.analise = (() => {
       const { data, error } = await sb
         .from('processes')
         .select('id,type')
-        .eq('nup', nup)
+        .eq('nup', nup)  // já no formato exigido
         .maybeSingle();
       if (error) throw error;
       pData = data || null;
