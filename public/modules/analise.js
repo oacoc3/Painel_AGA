@@ -341,7 +341,7 @@ window.Modules.analise = (() => {
     // PATCH: títulos de categoria colapsáveis e contêiner de itens
     (template.items || []).forEach((cat, idx) => {
       const catSection = document.createElement('section');
-      catSection.className = 'ck-category';
+      catSection.className = 'ck-category is-collapsed';
 
       const toggle = document.createElement('button');
       toggle.type = 'button';
@@ -354,7 +354,7 @@ window.Modules.analise = (() => {
       chevron.setAttribute('aria-hidden', 'true');
       toggle.appendChild(titleSpan);
       toggle.appendChild(chevron);
-      toggle.setAttribute('aria-expanded', 'true');
+      toggle.setAttribute('aria-expanded', 'false');
       toggle.addEventListener('click', () => {
         const collapsed = catSection.classList.toggle('is-collapsed');
         toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
