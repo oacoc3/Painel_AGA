@@ -269,10 +269,11 @@ window.Modules.analise = (() => {
       if (!val) {
         return { ready: false, reason: 'Selecione uma opção para todos os itens da checklist.' };
       }
-      if (val === 'Não conforme' || val === 'Não aplicável') {
+      // PATCH: observação obrigatória apenas para "Não conforme" (remove "Não aplicável")
+      if (val === 'Não conforme') {
         const obsField = wrap.querySelector('textarea');
         if (!obsField || !obsField.value.trim()) {
-          return { ready: false, reason: 'Informe uma observação para itens marcados como “Não conforme” ou “Não aplicável”.' };
+          return { ready: false, reason: 'Informe uma observação para itens marcados como “Não conforme”.' };
         }
       }
     }
@@ -337,16 +338,34 @@ window.Modules.analise = (() => {
     warning.innerHTML = '<strong>Atenção!</strong> Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, haverá o pertinente registro no campo "Outras observações do(a) Analista".';
     frag.appendChild(warning);
 
-    (template.items || []).forEach(cat => {
+    // PATCH: títulos de categoria colapsáveis e contêiner de itens
+    (template.items || []).forEach((cat, idx) => {
       const catSection = document.createElement('section');
       catSection.className = 'ck-category';
 
-      if (cat.categoria) {
-        const h = document.createElement('h4');
-        h.className = 'ck-category-title';
-        h.textContent = cat.categoria || '';
-        catSection.appendChild(h);
-      }
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'ck-category-title';
+      const titleText = (cat.categoria || '').trim() || `Categoria ${idx + 1}`;
+      const titleSpan = document.createElement('span');
+      titleSpan.textContent = titleText;
+      const chevron = document.createElement('span');
+      chevron.className = 'ck-category-chevron';
+      chevron.setAttribute('aria-hidden', 'true');
+      toggle.appendChild(titleSpan);
+      toggle.appendChild(chevron);
+      toggle.setAttribute('aria-expanded', 'true');
+      toggle.addEventListener('click', () => {
+        const collapsed = catSection.classList.toggle('is-collapsed');
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      });
+      catSection.appendChild(toggle);
+
+      const itemsWrap = document.createElement('div');
+      itemsWrap.className = 'ck-category-items';
+      const itemsWrapId = `ckCategoryItems${idx}`;
+      itemsWrap.id = itemsWrapId;
+      toggle.setAttribute('aria-controls', itemsWrapId);
 
       (cat.itens || []).forEach(item => {
         const wrap = document.createElement('div');
@@ -435,9 +454,10 @@ window.Modules.analise = (() => {
         // ====== FIM ======
 
         wrap.appendChild(grid);
-        catSection.appendChild(wrap);
+        itemsWrap.appendChild(wrap);
       });
 
+      catSection.appendChild(itemsWrap);
       frag.appendChild(catSection);
     });
 
@@ -741,7 +761,8 @@ window.Modules.analise = (() => {
 
     const btnOpen = document.createElement('button');
     btnOpen.type = 'button';
-    btnOpen.textContent = 'Abrir';
+    // PATCH: muda rótulo para "Preencher"
+    btnOpen.textContent = 'Preencher';
     btnOpen.addEventListener('click', async (ev) => {
       ev.preventDefault();
       await openChecklistFromApproved(row);
