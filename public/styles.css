@@ -325,7 +325,7 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .admin-col > .card:first-child { min-height: 0; }
 .admin-col > .card:first-child > form { min-height: 0; }
 
-/* ====== HUNK 1 aplicado: analysis-grid com coluna fixa/clamp ====== */
+/* === PATCH aplicado: novo layout de analysis-grid === */
 .analysis-grid {
   display: grid;
   grid-template-columns: clamp(200px, 22vw, 280px) minmax(0, 1fr);
@@ -333,6 +333,65 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
   height: 100%;
 }
 .analysis-grid > * { min-height: 0; }
+
+.analysis-col > .card { overflow-y: auto; }
+.analysis-col > .card .card-section { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+
+#adApprovedList { display: flex; flex-direction: column; gap: 10px; }
+
+.approved-checklist-card {
+  border: 1px solid rgba(31, 41, 55, 0.12);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.approved-checklist-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+
+.approved-checklist-type {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.approved-checklist-version {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.approved-checklist-name {
+  width: 100%;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.approved-checklist-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.approved-checklist-actions button {
+  flex: 1 1 auto;
+}
+
+.approved-checklist-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
 
 /* (patch) grade de “pessoal” */
 .pessoal-grid {
@@ -644,21 +703,6 @@ button.danger { border-color: #e3c1c1; background: #ffecec; color: #900; }
 .table th { font-family: var(--mono); font-weight: 600; }
 .table td .actions { display: flex; gap: 6px; }
 
-/* ====== HUNK 2 aplicado: tabela fixa de aprovadas ====== */
-#adApprovedList table {
-  table-layout: fixed;
-  width: 100%;
-}
-#adApprovedList th,
-#adApprovedList td {
-  white-space: normal;
-  word-break: break-word;
-}
-#adApprovedList .actions {
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
 #listaUsers table,
 #listaCk table {
   table-layout: auto;
@@ -925,8 +969,18 @@ footer { padding: 8px 12px; background: #faf9f7; }
 }
 
 .ck-category + .ck-category { margin-top: 20px; }
-.ck-category-title {
+
+/* === PATCH aplicado: novos controles de categoria e estado N/A === */
+.ck-category-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
   margin: 0 0 12px;
+}
+
+.ck-category-title {
+  margin: 0;
   padding: 6px 12px;
   border-radius: 4px;
   border: none; /* === PATCH (hunk 2): remove borda padrão */
@@ -943,46 +997,35 @@ footer { padding: 8px 12px; background: #faf9f7; }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  /* ====== HUNK 3 aplicado: largura responsiva ====== */
-  flex: 1 1 auto;
-  min-width: 0;
+  width: 100%;
   text-align: left;
   cursor: pointer;
 }
-/* ====== HUNK 3 adição: header + opção N/A ====== */
-.ck-category-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 0 0 12px;
-}
-.ck-category-header .ck-category-title {
-  margin-bottom: 0;
-}
-.ck-category-na {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.ck-category-na input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-}
-.ck-category-na input[type="checkbox"]:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
-}
-
 .ck-category-title:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 .ck-category-title > span:first-child { flex: 1; }
+
+.ck-category-na-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.ck-category-na-toggle input { margin: 0; }
+.ck-category.is-na .ck-category-title {
+  border-left-color: rgba(75, 111, 145, 0.5);
+  background: rgba(75, 111, 145, 0.18);
+  color: var(--ink);
+}
+.ck-category.is-na .ck-category-na-toggle {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .ck-category-chevron {
   display: inline-flex;
   align-items: center;
