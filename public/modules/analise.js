@@ -314,26 +314,22 @@ window.Modules.analise = (() => {
     updateSaveState();
   }
 
-  // =========================
-  // PATCH: NA de categoria
-  // =========================
-  function syncAllCategoryNAStates() {
-    $$('#ckContainer .ck-category').forEach(section => {
-      const checkbox = section.querySelector('.ck-category-na-checkbox');
-      if (!checkbox) return;
-      const items = Array.from(section.querySelectorAll('.ck-item[data-code]'));
-      if (!items.length) {
-        checkbox.checked = false;
-        checkbox.indeterminate = false;
-        return;
-      }
-      const values = items.map(item => item.dataset.value || '');
-      const allNA = values.length > 0 && values.every(v => v === 'Não aplicável');
-      const someNA = values.some(v => v === 'Não aplicável');
-      checkbox.checked = allNA;
-      checkbox.indeterminate = !allNA && someNA;
+  // >>> Funções auxiliares do patch
+  function setChecklistItemValue(wrap, value) {
+    if (!wrap) return;
+    const val = value || '';
+    wrap.dataset.value = val;
+    wrap.classList.toggle('ck-has-nc', val === 'Não conforme');
+    wrap.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+      chk.checked = !!val && chk.value === val;
     });
   }
+
+  function getCategoryItems(section) {
+    if (!section) return [];
+    return Array.from(section.querySelectorAll('.ck-category-items .ck-item[data-code]'));
+  }
+  // <<<
 
   function renderChecklist(template) {
     currentTemplate = template;
@@ -359,13 +355,13 @@ window.Modules.analise = (() => {
     warning.innerHTML = '<strong>Atenção!</strong> Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, haverá o pertinente registro no campo "Outras observações do(a) Analista".';
     frag.appendChild(warning);
 
-    // PATCH: títulos de categoria colapsáveis + NA de categoria
+    // PATCH: títulos de categoria colapsáveis, controles e contêiner de itens
     (template.items || []).forEach((cat, idx) => {
       const catSection = document.createElement('section');
       catSection.className = 'ck-category is-collapsed';
 
-      const categoryHeader = document.createElement('div');
-      categoryHeader.className = 'ck-category-header';
+      const controls = document.createElement('div');
+      controls.className = 'ck-category-controls';
 
       const toggle = document.createElement('button');
       toggle.type = 'button';
@@ -379,64 +375,48 @@ window.Modules.analise = (() => {
       toggle.appendChild(titleSpan);
       toggle.appendChild(chevron);
       toggle.setAttribute('aria-expanded', 'false');
+      toggle.addEventListener('click', () => {
+        const collapsed = catSection.classList.toggle('is-collapsed');
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      });
+      controls.appendChild(toggle);
+
+      const naLabel = document.createElement('label');
+      naLabel.className = 'ck-category-na-toggle';
+      const naCheckbox = document.createElement('input');
+      naCheckbox.type = 'checkbox';
+      naCheckbox.addEventListener('change', () => {
+        const isNa = naCheckbox.checked;
+        catSection.classList.toggle('is-na', isNa);
+        markEdited();
+        getCategoryItems(catSection).forEach(wrap => {
+          if (isNa) {
+            if (!('prevCategoryValue' in wrap.dataset)) {
+              wrap.dataset.prevCategoryValue = wrap.dataset.value || '';
+            }
+            setChecklistItemValue(wrap, 'Não aplicável');
+          } else {
+            const prev = ('prevCategoryValue' in wrap.dataset)
+              ? wrap.dataset.prevCategoryValue
+              : '';
+            setChecklistItemValue(wrap, prev);
+            delete wrap.dataset.prevCategoryValue;
+          }
+        });
+        updateSaveState();
+        scheduleDraftSave();
+      });
+      naLabel.appendChild(naCheckbox);
+      naLabel.appendChild(document.createTextNode('Categoria não aplicável'));
+      controls.appendChild(naLabel);
+
+      catSection.appendChild(controls);
 
       const itemsWrap = document.createElement('div');
       itemsWrap.className = 'ck-category-items';
       const itemsWrapId = `ckCategoryItems${idx}`;
       itemsWrap.id = itemsWrapId;
       toggle.setAttribute('aria-controls', itemsWrapId);
-
-      toggle.addEventListener('click', () => {
-        const collapsed = catSection.classList.toggle('is-collapsed');
-        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      });
-
-      // Checkbox "Categoria não aplicável"
-      const naLabel = document.createElement('label');
-      naLabel.className = 'ck-category-na';
-      const naCheckbox = document.createElement('input');
-      naCheckbox.type = 'checkbox';
-      naCheckbox.className = 'ck-category-na-checkbox';
-      naLabel.appendChild(naCheckbox);
-      naLabel.appendChild(document.createTextNode('Categoria não aplicável'));
-
-      categoryHeader.appendChild(toggle);
-      categoryHeader.appendChild(naLabel);
-      catSection.appendChild(categoryHeader);
-
-      const updateCategoryNAState = () => {
-        const items = Array.from(itemsWrap.querySelectorAll('.ck-item[data-code]'));
-        if (!items.length) {
-          naCheckbox.checked = false;
-          naCheckbox.indeterminate = false;
-          return;
-        }
-        const values = items.map(item => item.dataset.value || '');
-        const allNA = values.length > 0 && values.every(v => v === 'Não aplicável');
-        const someNA = values.some(v => v === 'Não aplicável');
-        naCheckbox.checked = allNA;
-        naCheckbox.indeterminate = !allNA && someNA;
-      };
-
-      const applyCategoryNAState = (checked) => {
-        const items = Array.from(itemsWrap.querySelectorAll('.ck-item[data-code]'));
-        items.forEach(item => {
-          item.dataset.value = checked ? 'Não aplicável' : '';
-          item.classList.remove('ck-has-nc');
-          item.querySelectorAll('input[type="checkbox"]').forEach(chk => {
-            const isNAOption = chk.value === 'Não aplicável';
-            chk.checked = checked && isNAOption;
-          });
-        });
-        updateCategoryNAState();
-        markEdited();
-        updateSaveState();
-        scheduleDraftSave();
-      };
-
-      naCheckbox.addEventListener('change', () => {
-        applyCategoryNAState(naCheckbox.checked);
-      });
 
       (cat.itens || []).forEach(item => {
         const wrap = document.createElement('div');
@@ -463,30 +443,29 @@ window.Modules.analise = (() => {
           input.type = 'checkbox';
           input.value = v;
           input.addEventListener('change', () => {
-            const isChecked = input.checked;
-            const options = Array.from(wrap.querySelectorAll('input[type="checkbox"]'));
-            if (isChecked) {
-              options.forEach(chk => {
-                if (chk !== input) chk.checked = false;
-              });
-              wrap.dataset.value = v;
-            } else {
-              const anotherChecked = options.some(chk => chk !== input && chk.checked);
-              if (!anotherChecked) {
-                wrap.dataset.value = '';
-              }
+            const shouldDisableCategoryNa = naCheckbox
+              && naCheckbox.checked
+              && ((v !== 'Não aplicável' && input.checked)
+                || (v === 'Não aplicável' && !input.checked));
+
+            if (shouldDisableCategoryNa) {
+              naCheckbox.checked = false;
+              naCheckbox.dispatchEvent(new Event('change'));
             }
-            if (v === 'Não conforme') {
-              wrap.classList.toggle('ck-has-nc', isChecked);
-            } else if (isChecked) {
-              wrap.classList.remove('ck-has-nc');
-            } else if (!options.some(chk => chk.value === 'Não conforme' && chk.checked)) {
-              wrap.classList.remove('ck-has-nc');
-            }
+
             markEdited();
+            if (input.checked) {
+              setChecklistItemValue(wrap, v);
+            } else if ((wrap.dataset.value || '') === v) {
+              setChecklistItemValue(wrap, '');
+            }
+
+            if (!naCheckbox || !naCheckbox.checked) {
+              delete wrap.dataset.prevCategoryValue;
+            }
+
             updateSaveState();
             scheduleDraftSave();
-            updateCategoryNAState();
           });
 
           const labelText = document.createElement('span');
@@ -547,9 +526,6 @@ window.Modules.analise = (() => {
 
       catSection.appendChild(itemsWrap);
       frag.appendChild(catSection);
-
-      // Sincroniza estado NA após montar itens da categoria
-      updateCategoryNAState();
     });
 
     const extraFlag = document.createElement('label');
@@ -584,8 +560,6 @@ window.Modules.analise = (() => {
     frag.appendChild(extraObs);
 
     box.appendChild(frag);
-    // Sincroniza todos os checkboxes NA de categoria depois de renderizar
-    syncAllCategoryNAStates();
     updateSaveState();
   }
 
@@ -669,13 +643,27 @@ window.Modules.analise = (() => {
       const code = wrap.dataset.code;
       const ans = map.get(code) || {};
       const value = ans.value || '';
-      wrap.dataset.value = value || '';
-      wrap.classList.toggle('ck-has-nc', value === 'Não conforme');
-      wrap.querySelectorAll('input[type="checkbox"]').forEach(chk => {
-        chk.checked = !!value && chk.value === value;
-      });
+      setChecklistItemValue(wrap, value || '');
       const obsField = wrap.querySelector('textarea');
       if (obsField) obsField.value = ans.obs || '';
+    });
+
+    // Atualiza estado "Categoria não aplicável" baseado nos itens
+    $$('#ckContainer .ck-category').forEach(catSection => {
+      const naCheckbox = catSection.querySelector('.ck-category-na-toggle input[type="checkbox"]');
+      if (!naCheckbox) return;
+      const items = getCategoryItems(catSection);
+      if (!items.length) {
+        naCheckbox.checked = false;
+        catSection.classList.remove('is-na');
+        return;
+      }
+      const allNa = items.every(wrap => (wrap.dataset.value || '') === 'Não aplicável');
+      naCheckbox.checked = allNa;
+      catSection.classList.toggle('is-na', allNa);
+      if (!allNa) {
+        items.forEach(wrap => { delete wrap.dataset.prevCategoryValue; });
+      }
     });
 
     const extraFlagField = el('adNCExtra');
@@ -689,8 +677,6 @@ window.Modules.analise = (() => {
       extraObsField.value = draft.extra_obs || '';
     }
 
-    // Mantém o estado visual coerente para NA de categoria
-    syncAllCategoryNAStates();
     updateSaveState();
   }
 
@@ -852,7 +838,7 @@ window.Modules.analise = (() => {
   // === PATCH: ações da checklist aprovada (Abrir + PDF) ===
   function createApprovedChecklistActions(row) {
     const container = document.createElement('div');
-    container.className = 'actions';
+    container.className = 'actions approved-checklist-actions';
 
     const btnOpen = document.createElement('button');
     btnOpen.type = 'button';
@@ -875,6 +861,54 @@ window.Modules.analise = (() => {
 
     return container;
   }
+
+  // >>> Novo: card para checklist aprovada
+  function renderApprovedChecklistCard(row) {
+    const card = document.createElement('article');
+    card.className = 'approved-checklist-card';
+
+    const header = document.createElement('div');
+    header.className = 'approved-checklist-header';
+
+    const typeEl = document.createElement('span');
+    typeEl.className = 'approved-checklist-type';
+    typeEl.textContent = row?.type || '—';
+    header.appendChild(typeEl);
+
+    const versionEl = document.createElement('span');
+    versionEl.className = 'approved-checklist-version';
+    versionEl.textContent = row?.version ? `Versão ${row.version}` : 'Versão —';
+    header.appendChild(versionEl);
+
+    card.appendChild(header);
+
+    const nameText = (row?.name || '').trim();
+    if (nameText) {
+      const nameEl = document.createElement('div');
+      nameEl.className = 'approved-checklist-name';
+      nameEl.textContent = nameText;
+      card.appendChild(nameEl);
+    }
+
+    card.appendChild(createApprovedChecklistActions(row));
+
+    const meta = document.createElement('div');
+    meta.className = 'approved-checklist-meta';
+    const approverText = row?.approved_by_display || row?.approved_by || '—';
+    const approverEl = document.createElement('span');
+    approverEl.textContent = `Aprovada por ${approverText}`;
+    meta.appendChild(approverEl);
+
+    const approvedAtText = row?.approved_at ? Utils.fmtDateTime(row.approved_at) : '';
+    const approvedAtEl = document.createElement('span');
+    approvedAtEl.textContent = `Aprovada em ${approvedAtText || '—'}`;
+    meta.appendChild(approvedAtEl);
+
+    card.appendChild(meta);
+
+    return card;
+  }
+  // <<<
 
   async function openApprovedChecklistPDF(templateSummary) {
     const win = window.open('', '_blank');
@@ -989,21 +1023,16 @@ window.Modules.analise = (() => {
         return { ...row, approved_by_display: displayName };
       });
 
-      Utils.renderTable(box, [
-        { key: 'type', label: 'Tipo' },
-        { key: 'version', label: 'Versão', align: 'center' },
-        {
-          key: 'approved_by_display',
-          label: 'Aprovada por',
-          value: r => r.approved_by_display || r.approved_by || '—'
-        },
-        {
-          key: 'approved_at',
-          label: 'Aprovada em',
-          value: r => (r.approved_at ? Utils.fmtDateTime(r.approved_at) : '')
-        },
-        { label: 'Ações', align: 'center', render: r => createApprovedChecklistActions(r) }
-      ], tableRows);
+      // >>> Patch: substitui tabela por lista de cards
+      const list = document.createElement('div');
+      list.className = 'approved-checklist-list';
+      tableRows.forEach(row => {
+        list.appendChild(renderApprovedChecklistCard(row));
+      });
+
+      box.innerHTML = '';
+      box.appendChild(list);
+      // <<<
     } catch (err) {
       console.error('Falha ao listar checklists aprovadas.', err);
       el('adApprovedList').innerHTML = '<div class="msg error">Falha ao carregar as checklists aprovadas.</div>';
@@ -1074,7 +1103,7 @@ window.Modules.analise = (() => {
       const template = await loadTemplateById(templateSummary.id);
       if (!template) {
         return Utils.setMsg('adMsg', 'Checklist selecionada não foi encontrada.', true);
-      }
+        }
       const expectedType = deriveProcessTypeFromTemplate(template) || deriveProcessTypeFromTemplate(templateSummary);
       if (!expectedType) {
         return Utils.setMsg('adMsg', 'Não foi possível determinar o tipo do processo para esta checklist.', true);
