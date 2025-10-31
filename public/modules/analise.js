@@ -314,28 +314,26 @@ window.Modules.analise = (() => {
     updateSaveState();
   }
 
-  // >>> NOVO: sincroniza o estado "Categoria não aplicável" em todas as categorias
+  // =========================
+  // PATCH: NA de categoria
+  // =========================
   function syncAllCategoryNAStates() {
-    $$('#ckContainer .ck-category').forEach(cat => {
-      const toggle = cat.querySelector('.ck-category-na-toggle');
-      const itemsWrap = cat.querySelector('.ck-category-items');
-      if (!toggle || !itemsWrap) return;
-      const items = Array.from(itemsWrap.querySelectorAll('.ck-item'));
+    $$('#ckContainer .ck-category').forEach(section => {
+      const checkbox = section.querySelector('.ck-category-na-checkbox');
+      if (!checkbox) return;
+      const items = Array.from(section.querySelectorAll('.ck-item[data-code]'));
       if (!items.length) {
-        toggle.checked = false;
-        toggle.indeterminate = false;
-        toggle.disabled = true;
+        checkbox.checked = false;
+        checkbox.indeterminate = false;
         return;
       }
-      toggle.disabled = false;
-      const values = items.map(item => (item.dataset.value || '').trim());
+      const values = items.map(item => item.dataset.value || '');
       const allNA = values.length > 0 && values.every(v => v === 'Não aplicável');
-      const anyNA = values.some(v => v === 'Não aplicável');
-      toggle.checked = allNA;
-      toggle.indeterminate = !allNA && anyNA;
+      const someNA = values.some(v => v === 'Não aplicável');
+      checkbox.checked = allNA;
+      checkbox.indeterminate = !allNA && someNA;
     });
   }
-  // <<< NOVO
 
   function renderChecklist(template) {
     currentTemplate = template;
@@ -361,14 +359,13 @@ window.Modules.analise = (() => {
     warning.innerHTML = '<strong>Atenção!</strong> Os itens apresentados nesta checklist compõem uma relação não exaustiva de verificações a serem realizadas. Ao serem detectadas não conformidade não abarcadas pelos itens a seguir, haverá o pertinente registro no campo "Outras observações do(a) Analista".';
     frag.appendChild(warning);
 
-    // PATCH: títulos de categoria colapsáveis e contêiner de itens
+    // PATCH: títulos de categoria colapsáveis + NA de categoria
     (template.items || []).forEach((cat, idx) => {
       const catSection = document.createElement('section');
       catSection.className = 'ck-category is-collapsed';
 
-      // >>> NOVO header com título e toggle de NA da categoria
-      const header = document.createElement('div');
-      header.className = 'ck-category-header';
+      const categoryHeader = document.createElement('div');
+      categoryHeader.className = 'ck-category-header';
 
       const toggle = document.createElement('button');
       toggle.type = 'button';
@@ -382,26 +379,6 @@ window.Modules.analise = (() => {
       toggle.appendChild(titleSpan);
       toggle.appendChild(chevron);
       toggle.setAttribute('aria-expanded', 'false');
-      toggle.addEventListener('click', () => {
-        const collapsed = catSection.classList.toggle('is-collapsed');
-        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      });
-      header.appendChild(toggle);
-
-      const catToggleWrap = document.createElement('label');
-      catToggleWrap.className = 'ck-category-na';
-      const catToggle = document.createElement('input');
-      catToggle.type = 'checkbox';
-      catToggle.className = 'ck-category-na-toggle';
-      catToggle.setAttribute('aria-label', `Marcar categoria "${titleText}" como não aplicável`);
-      const catToggleText = document.createElement('span');
-      catToggleText.textContent = 'Categoria não aplicável';
-      catToggleWrap.appendChild(catToggle);
-      catToggleWrap.appendChild(catToggleText);
-      header.appendChild(catToggleWrap);
-
-      catSection.appendChild(header);
-      // <<< NOVO
 
       const itemsWrap = document.createElement('div');
       itemsWrap.className = 'ck-category-items';
@@ -409,52 +386,57 @@ window.Modules.analise = (() => {
       itemsWrap.id = itemsWrapId;
       toggle.setAttribute('aria-controls', itemsWrapId);
 
-      // >>> NOVO: função para manter o estado do toggle da categoria
-      const syncCategoryNAState = () => {
-        const items = Array.from(itemsWrap.querySelectorAll('.ck-item'));
+      toggle.addEventListener('click', () => {
+        const collapsed = catSection.classList.toggle('is-collapsed');
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      });
+
+      // Checkbox "Categoria não aplicável"
+      const naLabel = document.createElement('label');
+      naLabel.className = 'ck-category-na';
+      const naCheckbox = document.createElement('input');
+      naCheckbox.type = 'checkbox';
+      naCheckbox.className = 'ck-category-na-checkbox';
+      naLabel.appendChild(naCheckbox);
+      naLabel.appendChild(document.createTextNode('Categoria não aplicável'));
+
+      categoryHeader.appendChild(toggle);
+      categoryHeader.appendChild(naLabel);
+      catSection.appendChild(categoryHeader);
+
+      const updateCategoryNAState = () => {
+        const items = Array.from(itemsWrap.querySelectorAll('.ck-item[data-code]'));
         if (!items.length) {
-          catToggle.checked = false;
-          catToggle.indeterminate = false;
-          catToggle.disabled = true;
+          naCheckbox.checked = false;
+          naCheckbox.indeterminate = false;
           return;
         }
-        catToggle.disabled = false;
-        const values = items.map(item => (item.dataset.value || '').trim());
+        const values = items.map(item => item.dataset.value || '');
         const allNA = values.length > 0 && values.every(v => v === 'Não aplicável');
-        const anyNA = values.some(v => v === 'Não aplicável');
-        catToggle.checked = allNA;
-        catToggle.indeterminate = !allNA && anyNA;
+        const someNA = values.some(v => v === 'Não aplicável');
+        naCheckbox.checked = allNA;
+        naCheckbox.indeterminate = !allNA && someNA;
       };
 
-      catToggle.addEventListener('change', () => {
-        const items = Array.from(itemsWrap.querySelectorAll('.ck-item'));
-        if (!items.length) {
-          catToggle.checked = false;
-          catToggle.indeterminate = false;
-          return;
-        }
-        catToggle.indeterminate = false;
+      const applyCategoryNAState = (checked) => {
+        const items = Array.from(itemsWrap.querySelectorAll('.ck-item[data-code]'));
         items.forEach(item => {
-          const checkboxes = Array.from(item.querySelectorAll('input[type="checkbox"]'));
-          if (catToggle.checked) {
-            const target = checkboxes.find(chk => chk.value === 'Não aplicável');
-            if (!target) return;
-            if (!target.checked || (item.dataset.value || '') !== 'Não aplicável') {
-              target.checked = true;
-              target.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-          } else {
-            checkboxes.forEach(chk => {
-              if (chk.checked) {
-                chk.checked = false;
-                chk.dispatchEvent(new Event('change', { bubbles: true }));
-              }
-            });
-          }
+          item.dataset.value = checked ? 'Não aplicável' : '';
+          item.classList.remove('ck-has-nc');
+          item.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+            const isNAOption = chk.value === 'Não aplicável';
+            chk.checked = checked && isNAOption;
+          });
         });
-        syncCategoryNAState();
+        updateCategoryNAState();
+        markEdited();
+        updateSaveState();
+        scheduleDraftSave();
+      };
+
+      naCheckbox.addEventListener('change', () => {
+        applyCategoryNAState(naCheckbox.checked);
       });
-      // <<< NOVO
 
       (cat.itens || []).forEach(item => {
         const wrap = document.createElement('div');
@@ -481,15 +463,30 @@ window.Modules.analise = (() => {
           input.type = 'checkbox';
           input.value = v;
           input.addEventListener('change', () => {
+            const isChecked = input.checked;
+            const options = Array.from(wrap.querySelectorAll('input[type="checkbox"]'));
+            if (isChecked) {
+              options.forEach(chk => {
+                if (chk !== input) chk.checked = false;
+              });
+              wrap.dataset.value = v;
+            } else {
+              const anotherChecked = options.some(chk => chk !== input && chk.checked);
+              if (!anotherChecked) {
+                wrap.dataset.value = '';
+              }
+            }
+            if (v === 'Não conforme') {
+              wrap.classList.toggle('ck-has-nc', isChecked);
+            } else if (isChecked) {
+              wrap.classList.remove('ck-has-nc');
+            } else if (!options.some(chk => chk.value === 'Não conforme' && chk.checked)) {
+              wrap.classList.remove('ck-has-nc');
+            }
             markEdited();
-            wrap.dataset.value = input.checked ? v : '';
-            wrap.querySelectorAll('input[type="checkbox"]').forEach(chk => {
-              if (chk !== input) chk.checked = false;
-            });
-            wrap.classList.toggle('ck-has-nc', wrap.dataset.value === 'Não conforme');
             updateSaveState();
             scheduleDraftSave();
-            syncCategoryNAState();
+            updateCategoryNAState();
           });
 
           const labelText = document.createElement('span');
@@ -515,7 +512,7 @@ window.Modules.analise = (() => {
         const obs = document.createElement('textarea');
         obs.rows = 3;
         obs.placeholder = 'Observações';
-        obs.addEventListener('input', () => { markEdited(); 
+        obs.addEventListener('input', () => { markEdited();
           updateSaveState();
           scheduleDraftSave();
         });
@@ -549,10 +546,10 @@ window.Modules.analise = (() => {
       });
 
       catSection.appendChild(itemsWrap);
-      // >>> NOVO: sincroniza o estado do toggle após renderizar os itens
-      syncCategoryNAState();
-      // <<< NOVO
       frag.appendChild(catSection);
+
+      // Sincroniza estado NA após montar itens da categoria
+      updateCategoryNAState();
     });
 
     const extraFlag = document.createElement('label');
@@ -578,7 +575,7 @@ window.Modules.analise = (() => {
     extraObsText.id = 'adOutrasObs';
     extraObsText.rows = 4;
     extraObsText.placeholder = 'Descreva aqui quaisquer não conformidades adicionais, se houver.';
-    extraObsText.addEventListener('input', () => { markEdited(); 
+    extraObsText.addEventListener('input', () => { markEdited();
       updateSaveState();
       scheduleDraftSave();
     });
@@ -587,9 +584,8 @@ window.Modules.analise = (() => {
     frag.appendChild(extraObs);
 
     box.appendChild(frag);
-    // >>> NOVO: garante consistência de todos os toggles de categoria
+    // Sincroniza todos os checkboxes NA de categoria depois de renderizar
     syncAllCategoryNAStates();
-    // <<< NOVO
     updateSaveState();
   }
 
@@ -693,9 +689,8 @@ window.Modules.analise = (() => {
       extraObsField.value = draft.extra_obs || '';
     }
 
-    // >>> NOVO: mantém toggles de categoria coerentes com as respostas
+    // Mantém o estado visual coerente para NA de categoria
     syncAllCategoryNAStates();
-    // <<< NOVO
     updateSaveState();
   }
 
