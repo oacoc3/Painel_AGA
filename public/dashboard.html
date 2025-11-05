@@ -51,10 +51,6 @@
       <section id="viewDashboard" class="view">
         <div class="grid">
           <div class="dashboard-main-col">
-            <div class="card tempo-card">
-              <h2>Tempo médio por etapa</h2>
-              <div id="velocimetros" class="velocimetros"></div>
-            </div>
             <div class="card chart-card availability-prod-card">
               <div class="card-title">
                 <h2>Disp. de pessoal x produção sem falhas</h2>
@@ -74,76 +70,6 @@
                 </div>
               </div>
               <div id="personnelComparisonChart" class="combo-chart">
-                <p class="muted chart-placeholder">Carregando…</p>
-              </div>
-            </div>
-          </div>
-          <div class="dashboard-col">
-            <div class="card chart-card entry-chart-card">
-              <div class="card-title">
-                <h2>Novos processos</h2>
-                <div class="card-title-meta">
-                  <label class="card-select">
-                    <select id="entryYearSelect" disabled></select>
-                  </label>
-                  <div class="chart-total" aria-live="polite">
-                    <span>Total no ano</span>
-                    <strong id="entryYearTotal">—</strong>
-                  </div>
-                </div>
-              </div>
-              <div id="entryChart" class="bar-chart">
-                <p class="muted chart-placeholder">Carregando…</p>
-              </div>
-            </div>
-            <div class="card metrics-card">
-              <h2>Atividades</h2>
-              <div class="metrics-grid">
-
-                <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Notificações</span>
-                  </span>
-                  <strong class="metric-value" id="dashboardMetricNotifications">—</strong>
-                </div>
-                <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Processos</span>
-                    <span class="metric-label-line">JJAer</span>
-                  </span>
-                  <strong class="metric-value" id="dashboardMetricSigadaerJjaer">—</strong>
-                </div>
-                <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Processos</span>
-                    <span class="metric-label-line">AGU</span>
-                  </span>
-                  <strong class="metric-value" id="dashboardMetricSigadaerAgu">—</strong>
-                </div>
-                <div class="metric">
-                  <span class="metric-label">
-                    <span class="metric-label-line">Interações com</span>
-                    <span class="metric-label-line">Prefeituras</span>
-                  </span>
-                  <strong class="metric-value" id="dashboardMetricSigadaerPref">—</strong>
-                </div>
-              </div>
-            </div>
-            <div class="card chart-card">
-              <div class="card-title">
-                <h2>Distribuição horária do esforço de trabalho</h2>
-                <div class="card-title-meta">
-                  <label class="card-select">
-                    <select id="hourlyEngagementViewSelect">
-                      <option value="monThu">Segunda à quinta</option>
-                      <option value="friday">Sexta</option>
-                      <option value="weekend">Sábados e domingos</option>
-                    </select>
-                  </label>
-                  <span class="muted">SysAGA e SIGADAER</span>
-                </div>
-              </div>
-              <div id="hourlyEngagementChart" class="bar-chart hourly-engagement-chart">
                 <p class="muted chart-placeholder">Carregando…</p>
               </div>
             </div>

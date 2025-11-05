@@ -852,7 +852,8 @@ window.Modules.analise = (() => {
 
     const btnPdf = document.createElement('button');
     btnPdf.type = 'button';
-    btnPdf.textContent = 'PDF';
+    // PATCH aplicado: rótulo alterado de "PDF" para "Ver"
+    btnPdf.textContent = 'Ver';
     btnPdf.addEventListener('click', async (ev) => {
       ev.preventDefault();
       await openApprovedChecklistPDF(row);

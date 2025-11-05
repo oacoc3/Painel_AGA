@@ -1043,6 +1043,16 @@ footer { padding: 8px 12px; background: #faf9f7; }
 .ck-category.is-collapsed .ck-category-items { display: none; }
 .ck-category.is-collapsed .ck-category-chevron { transform: rotate(-90deg); }
 
+/* === PATCH solicitado: novos seletores para ações do item === */
+.ck-item-actions {
+  display: flex;
+  gap: 6px;
+}
+.ck-item-actions button {
+  padding: 4px 8px;
+  line-height: 1;
+}
+
 .ck-item {
   padding: 12px 0;
   border-top: 1px solid var(--line);
