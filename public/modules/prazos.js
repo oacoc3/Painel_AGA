@@ -19,11 +19,7 @@ window.Modules.prazos = (() => {
   }
 
   let pareceres = [];
-  let remocao = [];
-  let obras = [];
-  let sobrestamento = [];
   let monitor = [];
-  let doaga = [];
   let adhel = [];
 
   let flagMap = new Map();
@@ -42,32 +38,6 @@ window.Modules.prazos = (() => {
         obsLabel: 'Observação (se houver)'
       }
     },
-    remocao: {
-      label: 'Remoção/Rebaixamento',
-      elementId: 'prazoRemocao',
-      metaId: 'cardMetaRemocao',
-      supportsFlagging: true,
-      form: {
-        kind: 'datetime',
-        eventLabel: 'Data/hora do recebimento da informação de remoção/rebaixamento',
-        eventKey: 'data_hora_recebimento',
-        numberLabel: 'Número do SIGADAER (se houver)',
-        obsLabel: 'Observação (se houver)'
-      }
-    },
-    obras: {
-      label: 'Término de Obra',
-      elementId: 'prazoObra',
-      metaId: 'cardMetaObras',
-      supportsFlagging: true,
-      form: {
-        kind: 'date',
-        eventLabel: 'Data do término da obra',
-        eventKey: 'data_termino_obra',
-        numberLabel: 'Número do SIGADAER (se houver)',
-        obsLabel: 'Observação (se houver)'
-      }
-    },
     monitor: {
       label: 'Leitura/Expedição',
       elementId: 'prazoMonit',
@@ -81,12 +51,6 @@ window.Modules.prazos = (() => {
         obsLabel: 'Observação (se houver)'
       }
     },
-    sobrestamento: {
-      label: 'Sobrestamento',
-      elementId: 'prazoSobrestamento',
-      metaId: 'cardMetaSobrestamento',
-      supportsFlagging: false
-    },
     adhel: {
       label: 'Revogar plano',
       elementId: 'prazoADHEL',
@@ -99,12 +63,6 @@ window.Modules.prazos = (() => {
         numberLabel: 'Número do SIGADAER (se houver)',
         obsLabel: 'Observação (se houver)'
       }
-    },
-    doaga: {
-      label: 'Prazo DO-AGA',
-      elementId: 'prazoDOAGA',
-      metaId: 'cardMetaDoaga',
-      supportsFlagging: false
     }
   };
 
@@ -115,42 +73,10 @@ window.Modules.prazos = (() => {
     { key: 'days_remaining', label: '', value: r => U.daysBetween(new Date(), r.due_date) }
   ];
 
-  const REMOCAO_COLUMNS = () => [
-    { key: 'nup', label: 'NUP', render: row => renderNupCell('remocao', row) },
-    { key: 'due_date', label: 'Prazo', value: r => U.fmtDate(r.due_date) },
-    { key: 'days_remaining', label: '', value: r => U.daysBetween(new Date(), r.due_date) }
-  ];
-
-  const OBRAS_COLUMNS = () => [
-    { key: 'nup', label: 'NUP', render: row => renderNupCell('obras', row) },
-    {
-      key: 'due_date',
-      label: 'Prazo',
-      render: r => {
-        const prazo = U.fmtDate(r.due_date);
-        if (!r.em_atraso) return `<div>${prazo}</div>`;
-        return `<div>${prazo}</div><div class="text-danger">ADICIONAL</div>`;
-      }
-    },
-    { key: 'days_remaining', label: '', value: r => U.daysBetween(new Date(), r.due_date) }
-  ];
-
-  const SOBRESTAMENTO_COLUMNS = () => [
-    { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? U.fmtDate(r.due_date) : 'Sobrestado') },
-    { key: 'days_remaining', label: '', value: r => (r.due_date ? U.daysBetween(new Date(), r.due_date) : '') }
-  ];
-
   const MONITOR_COLUMNS = () => [
     { key: 'nup', label: 'NUP', render: row => renderNupCell('monitor', row) },
     { key: 'type', label: 'Tipo', value: r => r.type || '' },
     { key: 'number', label: 'Número', render: r => (r.number ? String(r.number).padStart(6, '0') : '') }
-  ];
-
-  const DOAGA_COLUMNS = () => [
-    { key: 'nup', label: 'NUP', value: r => r.nup },
-    { key: 'due_date', label: 'Prazo', value: r => (r.due_date ? U.fmtDate(r.due_date) : 'Sobrestado') },
-    { key: 'days_remaining', label: '', value: r => (r.due_date ? U.daysBetween(new Date(), r.due_date) : '') }
   ];
 
   const ADHEL_COLUMNS = () => [
@@ -176,13 +102,6 @@ window.Modules.prazos = (() => {
         baseParts.push(row.origin || '');
         baseParts.push(row.type || '');
         baseParts.push(String(row.requested_at || row.start_count || row.due_date || row.deadline_days || ''));
-        break;
-      case 'remocao':
-        baseParts.push(String(row.read_at || row.start_count || row.due_date || ''));
-        break;
-      case 'obras':
-        baseParts.push(String(row.requested_at || row.start_count || row.due_date || ''));
-        baseParts.push(row.em_atraso ? 'atraso' : 'normal');
         break;
       case 'monitor':
         baseParts.push(row.type || '');
@@ -264,12 +183,6 @@ window.Modules.prazos = (() => {
     switch (cardKey) {
       case 'pareceres':
         return [row.type_label || row.type || '', prazo ? `Prazo ${prazo}` : null]
-          .filter(Boolean)
-          .join(' • ');
-      case 'remocao':
-        return [prazo ? `Prazo ${prazo}` : null].filter(Boolean).join('');
-      case 'obras':
-        return [prazo ? `Prazo ${prazo}` : null, row.em_atraso ? 'Adicional' : null]
           .filter(Boolean)
           .join(' • ');
       case 'monitor':
@@ -631,7 +544,7 @@ window.Modules.prazos = (() => {
         observacao_administrador: obsValue
       }, user);
     } catch (err) {
-      // Rollback removal to manter destaque até histórico ser registrado.
+      // Rollback removal para manter destaque até histórico ser registrado.
       await sb.from('deadline_flags').insert({
         process_id: flag.process_id,
         card: flag.card,
@@ -649,35 +562,15 @@ window.Modules.prazos = (() => {
   }
 
   function getPareceresRows() { return pareceres; }
-  function getRemocaoRows() { return remocao; }
-  function getObraRows() { return obras; }
-  function getSobrestamentoRows() { return sobrestamento; }
   function getMonitorRows() { return monitor; }
-  function getDoagaRows() { return doaga; }
   function getAdhelRows() { return adhel; }
 
   function renderPareceres() {
     renderTableForCard('pareceres', 'prazoParec', PARECERES_COLUMNS(), getPareceresRows());
   }
 
-  function renderRemocao() {
-    renderTableForCard('remocao', 'prazoRemocao', REMOCAO_COLUMNS(), getRemocaoRows());
-  }
-
-  function renderObra() {
-    renderTableForCard('obras', 'prazoObra', OBRAS_COLUMNS(), getObraRows());
-  }
-
-  function renderSobrestamento() {
-    renderTableForCard('sobrestamento', 'prazoSobrestamento', SOBRESTAMENTO_COLUMNS(), getSobrestamentoRows());
-  }
-
   function renderMonitor() {
     renderTableForCard('monitor', 'prazoMonit', MONITOR_COLUMNS(), getMonitorRows());
-  }
-
-  function renderDOAGA() {
-    renderTableForCard('doaga', 'prazoDOAGA', DOAGA_COLUMNS(), getDoagaRows());
   }
 
   function renderADHEL() {
@@ -686,11 +579,7 @@ window.Modules.prazos = (() => {
 
   function renderAll() {
     renderPareceres();
-    renderRemocao();
-    renderObra();
-    renderSobrestamento();
     renderMonitor();
-    renderDOAGA();
     renderADHEL();
   }
 
@@ -729,51 +618,6 @@ window.Modules.prazos = (() => {
     }
   }
 
-  async function loadRemocao() {
-    try {
-      const { data, error } = await sb
-        .from('v_prazo_remocao_rebaixamento')
-        .select('process_id,nup,read_at,start_count,due_date,days_remaining');
-      if (error) throw error;
-      remocao = (Array.isArray(data) ? data : [])
-        .map(row => applyRowMeta('remocao', row))
-        .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-    } catch (err) {
-      console.error('Falha ao carregar remoção/rebaixamento', err);
-      remocao = [];
-    }
-  }
-
-  async function loadObra() {
-    try {
-      const { data, error } = await sb
-        .from('v_prazo_termino_obra')
-        .select('process_id,nup,requested_at,start_count,due_date,days_remaining,em_atraso');
-      if (error) throw error;
-      obras = (Array.isArray(data) ? data : [])
-        .map(row => applyRowMeta('obras', row))
-        .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-    } catch (err) {
-      console.error('Falha ao carregar término de obra', err);
-      obras = [];
-    }
-  }
-
-  async function loadSobrestamento() {
-    try {
-      const { data, error } = await sb
-        .from('v_prazo_sobrestamento')
-        .select('process_id,nup,due_date,days_remaining');
-      if (error) throw error;
-      sobrestamento = (Array.isArray(data) ? data : [])
-        .map(row => applyRowMeta('sobrestamento', row))
-        .sort((a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31'));
-    } catch (err) {
-      console.error('Falha ao carregar sobrestamento', err);
-      sobrestamento = [];
-    }
-  }
-
   async function loadMonitor() {
     try {
       const { data, error } = await sb
@@ -785,21 +629,6 @@ window.Modules.prazos = (() => {
     } catch (err) {
       console.error('Falha ao carregar monitoramento de leitura/expedição', err);
       monitor = [];
-    }
-  }
-
-  async function loadDOAGA() {
-    try {
-      const { data, error } = await sb
-        .from('v_prazo_do_aga')
-        .select('process_id,nup,due_date,days_remaining');
-      if (error) throw error;
-      doaga = (Array.isArray(data) ? data : [])
-        .map(row => applyRowMeta('doaga', row))
-        .sort((a, b) => new Date(a.due_date || '9999-12-31') - new Date(b.due_date || '9999-12-31'));
-    } catch (err) {
-      console.error('Falha ao carregar prazo DO-AGA', err);
-      doaga = [];
     }
   }
 
@@ -840,11 +669,7 @@ window.Modules.prazos = (() => {
   async function load() {
     await Promise.all([
       loadPareceres(),
-      loadRemocao(),
-      loadObra(),
-      loadSobrestamento(),
       loadMonitor(),
-      loadDOAGA(),
       loadADHEL()
     ]);
     await loadFlags();
