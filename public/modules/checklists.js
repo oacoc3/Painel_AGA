@@ -72,23 +72,38 @@ window.Modules.checklists = (() => {
     resize();
   }
 
-  function addItem(container, catEl, item = {}) {
+  // >>> ALTERADO PELO PATCH: suporte a inserir item "abaixo" do atual
+  function addItem(container, catEl, item = {}, options = {}) {
     const row = document.createElement('div');
     row.className = 'ck-item';
     row.innerHTML = `
       <input class="item-code" placeholder="Código" value="${item.code || ''}" required>
       <textarea class="item-req" placeholder="Requisito" rows="2" required></textarea>
       <textarea class="item-txt" placeholder="Texto(s) sugerido(s) (não conformidade / não aplicação)" rows="3"></textarea>
-      <button type="button" class="del-item">×</button>
+      <div class="ck-item-actions">
+        <button type="button" class="insert-item" title="Adicionar item abaixo">+</button>
+        <button type="button" class="del-item" title="Excluir item">×</button>
+      </div>
     `;
     const req = row.querySelector('.item-req');
     const txt = row.querySelector('.item-txt');
     req.value = item.requisito || item.text || '';
     txt.value = item.texto_sugerido || '';
-    row.querySelector('.del-item').addEventListener('click', () => row.remove());
-    catEl.querySelector('.ck-items').appendChild(row);
+
+    row.querySelector('.del-item')?.addEventListener('click', () => row.remove());
+    row.querySelector('.insert-item')?.addEventListener('click', () => {
+      addItem(container, catEl, {}, { insertAfter: row });
+    });
+
+    const itemsContainer = catEl.querySelector('.ck-items');
+    if (options.insertAfter && itemsContainer?.contains(options.insertAfter)) {
+      itemsContainer.insertBefore(row, options.insertAfter.nextSibling);
+    } else {
+      itemsContainer?.appendChild(row);
+    }
     [req, txt].forEach(setupAutoResize);
   }
+  // <<< FIM DO PATCH
 
   function addCategory(container, cat = {}) {
     const box = document.createElement('div');
