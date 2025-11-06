@@ -1008,17 +1008,11 @@ window.Modules.processos = (() => {
       const ids = rows.map(r => r.id);
 
       // Busca presença nas tabelas relacionadas apenas para os IDs da página atual
-      const [op, nt, sg, ob, ck] = await Promise.all([
-        sb.from('internal_opinions').select('process_id').in('process_id', ids),
-        sb.from('notifications').select('process_id').in('process_id', ids),
+      const [sg, ck] = await Promise.all([
         sb.from('sigadaer').select('process_id').in('process_id', ids),
-        sb.from('process_observations').select('process_id').in('process_id', ids),
         sb.from('checklist_responses').select('process_id').in('process_id', ids)
       ]);
-      const opSet = new Set((op.data || []).map(o => o.process_id));
-      const ntSet = new Set((nt.data || []).map(o => o.process_id));
       const sgSet = new Set((sg.data || []).map(o => o.process_id));
-      const obSet = new Set((ob.data || []).map(o => o.process_id));
       const ckSet = new Set((ck.data || []).map(o => o.process_id));
 
       if (currentProcId) {
@@ -1030,8 +1024,7 @@ window.Modules.processos = (() => {
       const thead = document.createElement('thead');
       thead.innerHTML = `
         <tr>
-          <th></th><th>NUP</th><th>Tipo</th><th>1ª Entrada</th>
-          <th>Status</th><th>Obra</th><th></th><th></th><th></th><th></th><th></th>
+          <th></th><th>NUP</th><th>Status</th><th></th><th></th>
         </tr>`;
       table.appendChild(thead);
 
@@ -1040,36 +1033,17 @@ window.Modules.processos = (() => {
         const tr = document.createElement('tr');
         const isCurrent = String(r.id) === String(currentProcId);
         if (isCurrent) tr.classList.add('selected');
-        const hasOp = opSet.has(r.id);
-        const hasNt = ntSet.has(r.id);
         const hasSg = sgSet.has(r.id);
-        const hasOb = obSet.has(r.id);
-        const entradaTxt = U.fmtDate(r.first_entry_date);
-        const entradaBtn = isCurrent ? `<button type="button" class="editBtn editEntrada">Editar 1ª Entrada</button>` : '';
-        const entradaCell = `${entradaTxt}${entradaBtn ? '<br>' + entradaBtn : ''}`;
         const stTxt = `${r.status || ''}${r.status_since ? '<br><small>' + U.fmtDateTime(r.status_since) + '</small>' : ''}`;
         const stBtn = isCurrent ? `<button type="button" class="editBtn editStatus">Editar Status</button>` : '';
         const stCell = `${stTxt}${isCurrent ? '<br>' + stBtn : ''}`;
-        const obTxt = r.obra_concluida ? 'Concluída' : (r.obra_termino_date ? U.fmtDate(r.obra_termino_date) : '');
-        const obBtn = isCurrent ? `<button type="button" class="editBtn toggleObra">Editar Obra</button>` : '';
-        const obCell = `${obTxt}${isCurrent ? '<br>' + obBtn : ''}`;
         const hasChecklist = ckSet.has(r.id);
         const ckBtn = `<button type="button" class="docIcon ckBtn ${hasChecklist ? 'on' : 'off'}" title="Checklists" aria-label="Checklists">${CLIPBOARD_ICON}</button>`;
-        const opBtn = `<button type="button" class="docIcon opBtn ${hasOp ? 'on' : 'off'}">P</button>`;
-        const ntBtn = `<button type="button" class="docIcon ntBtn ${hasNt ? 'on' : 'off'}">N</button>`;
         const sgBtn = `<button type="button" class="docIcon sgBtn ${hasSg ? 'on' : 'off'}">S</button>`;
-        const obsBtn = `<button type="button" class="docIcon obsIcon obsBtn ${hasOb ? 'on' : 'off'}">OBS</button>`;
-        const displayType = normalizeProcessTypeLabel(r.type);
         tr.innerHTML = `
           <td class="align-center"><div class="historyWrap"><button type="button" class="historyBtn" aria-label="Histórico">👁️</button>${ckBtn}</div></td>
           <td>${r.nup || ''}</td>
-          <td>${displayType || ''}</td>
-          <td>${entradaCell}</td>
           <td>${stCell}</td>
-          <td>${obCell}</td>
-          <td class="align-center">${obsBtn}</td>
-          <td class="align-center">${opBtn}</td>
-          <td class="align-center">${ntBtn}</td>
           <td class="align-center">${sgBtn}</td>
           <td class="align-right"><button type="button" class="deleteBtn">Excluir</button></td>
         `;
@@ -1100,21 +1074,10 @@ window.Modules.processos = (() => {
         }
         if (ev.target.closest('.historyBtn')) return showHistoryPopup(row.id);
         if (ev.target.closest('.ckBtn')) return showChecklistPopup(row.id);
-        if (ev.target.closest('.opBtn')) return showOpiniaoPopup(row.id);
-        if (ev.target.closest('.ntBtn')) return showNotifPopup(row.id);
         if (ev.target.closest('.sgBtn')) return showSigPopup(row.id);
-        if (ev.target.closest('.obsBtn')) return showObsPopup(row.id);
-        if (ev.target.closest('.editEntrada')) {
-          if (!guardProcessWrite('procMsg')) return;
-          return showEntradaEditPopup(row.id, row.first_entry_date);
-        }
         if (ev.target.closest('.editStatus')) {
           if (!guardProcessWrite('procMsg')) return;
           return showStatusEditPopup(row.id, row.status, row.status_since);
-        }
-        if (ev.target.closest('.toggleObra')) {
-          if (!guardProcessWrite('procMsg')) return;
-          return showObraEditPopup(row.id, row.obra_termino_date, row.obra_concluida);
         }
         selectProcess(row);
       });
