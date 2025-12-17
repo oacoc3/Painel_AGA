@@ -16,13 +16,9 @@ window.Modules.admin = (() => {
     unavailability_created: 'Indisponibilidade cadastrada'
   };
   const AUDIT_MODULE_LABELS = {
-    dashboard: 'Início',
     processos: 'Processos',
-    prazos: 'Prazos',
     modelos: 'Modelos',
     analise: 'Checklists',
-    adhel: 'AD/HEL',
-    pessoal: 'Pessoal',
     admin: 'Administração',
     login: 'Login'
   };
