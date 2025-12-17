@@ -3,17 +3,20 @@
 // Mantém o visual e os módulos existentes; apenas substitui o roteamento da SPA.
 
 (() => {
+  const DEFAULT_ROUTE = 'processos';
   const ROUTE_TO_PAGE = {
     login: 'index.html',
-    dashboard: 'dashboard.html',
     processos: 'processos.html',
-    prazos: 'prazos.html',
     modelos: 'modelos.html',
     analise: 'analise.html',
-    adhel: 'adhel.html',
-    pessoal: 'pessoal.html',
     admin: 'admin.html'
   };
+  const DEFAULT_PAGE = ROUTE_TO_PAGE[DEFAULT_ROUTE];
+
+  function normalizeRoute(name) {
+    if (name === 'login') return 'login';
+    return ROUTE_TO_PAGE[name] ? name : DEFAULT_ROUTE;
+  }
 
   // ---- Início: suporte a auditoria de sessão/uso ----
   const AUDIT_SESSION_KEY = 'auditSessionId';
@@ -59,7 +62,8 @@
     route: (() => {
       const file = location.pathname.split('/').pop() || 'index.html';
       const name = file.replace('.html', '');
-      return (name === '' || name === 'index') ? 'login' : name;
+      if (name === '' || name === 'index') return 'login';
+      return normalizeRoute(name);
     })(),
     // ---- Estado de auditoria ----
     audit: {
@@ -391,7 +395,7 @@
       const btn = ev.target.closest('button[data-route]');
       if (!btn) return;
       const r = btn.dataset.route;
-      const page = ROUTE_TO_PAGE[r] || 'dashboard.html';
+      const page = ROUTE_TO_PAGE[r] || DEFAULT_PAGE;
       window.location.href = page;
     });
 
@@ -509,11 +513,11 @@
     document.getElementById('topNav')?.classList.toggle('hidden', onLogin);
     document.getElementById('userBox')?.classList.toggle('hidden', onLogin);
     if (onLogin) {
-      window.location.replace('dashboard.html');
+      window.location.replace(DEFAULT_PAGE);
       return false;
     }
-    if (state.route === 'admin' && !ADMIN_ROLES.has(state.profile?.role)) {
-      window.location.replace('dashboard.html');
+    if (state.route === 'admin' && state.profile?.role !== 'Administrador') {
+      window.location.replace(DEFAULT_PAGE);
       return false;
     }
     setActiveNav();
@@ -527,15 +531,11 @@
       return;
     }
     Object.values(window.Modules || {}).forEach(m => m.init?.());
-    const isAdmin = ADMIN_ROLES.has(state.profile?.role || window.APP_PROFILE?.role);
+    const isAdmin = (state.profile?.role || window.APP_PROFILE?.role) === 'Administrador';
     switch (state.route) {
-      case 'dashboard':  window.Modules.dashboard?.load?.(); break;
       case 'processos':  window.Modules.processos?.load?.(); break;
-      case 'prazos':     window.Modules.prazos?.load?.(); break;
       case 'modelos':    window.Modules.modelos?.load?.(); break;
       case 'analise':    window.Modules.analise?.load?.(); break;
-      case 'adhel':      window.Modules.adhel?.load?.(); break;
-      case 'pessoal':    window.Modules.pessoal?.load?.(); break;
       case 'admin':      if (isAdmin) { window.Modules.admin?.load?.(); window.Modules.checklists?.load?.(); } break;
     }
 
@@ -547,6 +547,12 @@
 
   async function init() {
     renderFooterVersion();
+    const desiredPage = ROUTE_TO_PAGE[state.route] || DEFAULT_PAGE;
+    const currentPage = location.pathname.split('/').pop() || 'index.html';
+    if (desiredPage && desiredPage !== currentPage) {
+      window.location.replace(desiredPage);
+      return;
+    }
     bindNav();
     const ok = await ensureAuthAndUI();
     if (!ok) return;
