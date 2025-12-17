@@ -347,10 +347,17 @@ window.Modules.checklists = (() => {
           .eq('id', selected.id);
         if (error) return Utils.setMsg('ckMsg', error.message, true);
       } else {
-        const max = Math.max(0, ...templates
-          .filter(t => t.type === type)
-          .map(t => t.version || 0));
-        const version = max + 1;
+        // Busca a última versão diretamente na base para evitar conflitos de chave única
+        // em casos de cache desatualizado ou alterações concorrentes.
+        const { data: lastVersionRows, error: lastVersionError } = await sb.from('checklist_templates')
+          .select('version')
+          .eq('name', name)
+          .order('version', { ascending: false })
+          .limit(1);
+        if (lastVersionError) return Utils.setMsg('ckMsg', lastVersionError.message, true);
+
+        const lastVersion = lastVersionRows?.[0]?.version || 0;
+        const version = lastVersion + 1;
         const payload = {
           name,
           type: dbType,
