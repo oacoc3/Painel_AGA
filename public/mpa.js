@@ -419,6 +419,8 @@
     }
   }
 
+  const ADMIN_ROLES = new Set(['Administrador', 'CH OACO']);
+
   async function loadProfile() {
     const u = await getUser();
     if (!u) {
@@ -440,7 +442,7 @@
     state.profile = data;
     window.APP_PROFILE = data;
     renderHeaderStamp();
-    const isAdmin = data.role === 'Administrador';
+    const isAdmin = ADMIN_ROLES.has(data.role);
     const a = document.getElementById('btnAdmin'); if (a) a.classList.toggle('hidden', !isAdmin);
     return data;
   }
@@ -510,7 +512,7 @@
       window.location.replace('dashboard.html');
       return false;
     }
-    if (state.route === 'admin' && state.profile?.role !== 'Administrador') {
+    if (state.route === 'admin' && !ADMIN_ROLES.has(state.profile?.role)) {
       window.location.replace('dashboard.html');
       return false;
     }
@@ -525,7 +527,7 @@
       return;
     }
     Object.values(window.Modules || {}).forEach(m => m.init?.());
-    const isAdmin = (state.profile?.role || window.APP_PROFILE?.role) === 'Administrador';
+    const isAdmin = ADMIN_ROLES.has(state.profile?.role || window.APP_PROFILE?.role);
     switch (state.route) {
       case 'dashboard':  window.Modules.dashboard?.load?.(); break;
       case 'processos':  window.Modules.processos?.load?.(); break;
