@@ -1,93 +1,10 @@
 // public/modules/admin.js
 window.Modules = window.Modules || {};
 window.Modules.admin = (() => {
-  // Paginação local (RPC admin_list_profiles não aceita range)
+  // Paginação local (RPC = Remote Procedure Call; admin_list_profiles não aceita range)
   let ADMIN_PAGE = 1;
   const ADMIN_PAGE_SIZE = 50;
   let ADMIN_CACHE = [];
-
-  // --- (NOVO) Auditoria ---
-  const AUDIT_LOG_LIMIT = 200;
-  let AUDIT_LOG_CACHE = [];
-  const AUDIT_EVENT_LABELS = {
-    login: 'Login',
-    logout: 'Logout',
-    module_access: 'Acesso ao módulo',
-    unavailability_created: 'Indisponibilidade cadastrada'
-  };
-  const AUDIT_MODULE_LABELS = {
-    processos: 'Processos',
-    modelos: 'Modelos',
-    analise: 'Checklists',
-    admin: 'Administração',
-    login: 'Login'
-  };
-
-  const AUDIT_USERS = new Map();
-
-  const normalizeAuditUserKey = (value) => (
-    typeof value === 'string'
-      ? value.trim().toLowerCase()
-      : ''
-  );
-
-  function registerAuditUser(source) {
-    if (!source) return;
-    const id = source.id || source.profile_id || null;
-    if (!id) return;
-    const existing = AUDIT_USERS.get(id) || {};
-    const name = source.name || existing.name || '';
-    const email = source.email || existing.email || '';
-    const role = source.role || existing.role || '';
-    const deletedAt = source.deleted_at || source.profile_deleted_at || existing.deleted_at || null;
-    AUDIT_USERS.set(id, { id, name, email, role, deleted_at: deletedAt });
-  }
-
-  function registerAuditUsers(list = []) {
-    list.forEach(item => registerAuditUser(item));
-  }
-
-  function populateAuditUserFilter({ preserveSelection } = {}) {
-    const select = el('auditFilterUser');
-    if (!select) return;
-    const currentValue = preserveSelection ? select.value : '';
-    select.innerHTML = '';
-
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = 'Todos os usuários';
-    select.appendChild(defaultOption);
-
-    const entries = Array.from(AUDIT_USERS.values()).sort((a, b) => {
-      const aKey = normalizeAuditUserKey(a.name || a.email || a.id || '');
-      const bKey = normalizeAuditUserKey(b.name || b.email || b.id || '');
-      return aKey.localeCompare(bKey, 'pt-BR');
-    });
-
-    const validIds = new Set();
-    entries.forEach(user => {
-      const option = document.createElement('option');
-      option.value = user.id;
-      const parts = [];
-      if (user.name) parts.push(user.name);
-      if (user.email) parts.push(user.email);
-      let label = parts.join(' — ') || user.id;
-      if (user.deleted_at) label += ' (inativo)';
-      option.textContent = label;
-      select.appendChild(option);
-      validIds.add(user.id);
-    });
-
-    if (currentValue && validIds.has(currentValue)) {
-      select.value = currentValue;
-    } else {
-      select.value = '';
-    }
-  }
-
-  function getAuditFilterUserId() {
-    return el('auditFilterUser')?.value || '';
-  }
 
   const el = id => document.getElementById(id);
 
@@ -120,7 +37,8 @@ window.Modules.admin = (() => {
   }
 
   async function loadUsers({ page = ADMIN_PAGE, pageSize = ADMIN_PAGE_SIZE } = {}) {
-    // Usa RPC com SECURITY DEFINER para listar perfis respeitando a autorização de Administrador
+    // Usa RPC com SECURITY DEFINER (função no banco com privilégios do dono)
+    // para listar perfis respeitando a autorização de Administrador
     const { data, error } = await sb.rpc('admin_list_profiles');
     if (error) return Utils.setMsg('adminMsg', error.message, true);
 
@@ -129,8 +47,7 @@ window.Modules.admin = (() => {
     const size = Math.max(1, Number(pageSize) || ADMIN_PAGE_SIZE);
     ADMIN_PAGE = p;
     ADMIN_CACHE = all;
-    registerAuditUsers(all);
-    populateAuditUserFilter({ preserveSelection: true });
+
     const pagesTotal = Math.max(1, Math.ceil(all.length / size));
     const from = (p - 1) * size;
     const to = from + size;
@@ -162,123 +79,6 @@ window.Modules.admin = (() => {
     ], slice);
 
     renderUsersPagination({ page: p, pagesTotal, count: all.length });
-  }
-
-  // --- (NOVO) Helpers de rótulos da auditoria ---
-  function getAuditModuleLabel(code) {
-    if (!code) return '—';
-    return AUDIT_MODULE_LABELS[code] || code;
-  }
-
-  function getAuditEventLabel(row) {
-    if (!row) return '—';
-    const base = AUDIT_EVENT_LABELS[row.event_type] || row.event_type || '—';
-    if (row.event_type === 'module_access') return base;
-    return base;
-  }
-
-  // --- (NOVO) Célula composta com dados do usuário na auditoria ---
-  function renderAuditUserCell(row) {
-    const wrap = document.createElement('div');
-    wrap.className = 'audit-user-cell';
-    const name = document.createElement('strong');
-    name.textContent = row.name || row.email || '—';
-    wrap.appendChild(name);
-    if (row.email) {
-      const email = document.createElement('div');
-      email.className = 'muted';
-      email.textContent = row.email;
-      wrap.appendChild(email);
-    }
-    if (row.role) {
-      const role = document.createElement('div');
-      role.className = 'muted';
-      role.textContent = row.role;
-      wrap.appendChild(role);
-    }
-    return wrap;
-  }
-
-  // --- (NOVO) Cabeçalhos e render da tabela de auditoria ---
-  const AUDIT_TABLE_HEADERS = [
-    { label: 'Usuário', render: renderAuditUserCell },
-    { key: 'event_label', label: 'Evento' },
-    { key: 'module_label', label: 'Módulo' },
-    {
-      key: 'created_at',
-      label: 'Horário',
-      value: row => Utils.fmtDateTime(row.created_at),
-      align: 'right'
-    }
-  ];
-
-  function renderAuditTable({ preserveMessage } = {}) {
-    const tableId = 'auditLogTable';
-    const msgId = 'auditLogMsg';
-    const selectedUserId = getAuditFilterUserId();
-
-    if (!AUDIT_LOG_CACHE.length) {
-      Utils.renderTable(tableId, AUDIT_TABLE_HEADERS, []);
-      if (!preserveMessage && selectedUserId) {
-        Utils.setMsg(msgId, 'Nenhum evento encontrado para o usuário selecionado.');
-      }
-      return;
-    }
-
-    const filtered = selectedUserId
-      ? AUDIT_LOG_CACHE.filter(row => String(row.profile_id || row.id || '') === selectedUserId)
-      : AUDIT_LOG_CACHE;
-
-    Utils.renderTable(tableId, AUDIT_TABLE_HEADERS, filtered);
-
-    if (preserveMessage) return;
-
-    if (selectedUserId && !filtered.length) {
-      Utils.setMsg(msgId, 'Nenhum evento encontrado para o usuário selecionado.');
-    } else {
-      Utils.setMsg(msgId, '');
-    }
-  }
-
-  // --- (NOVO) Carregamento de logs de auditoria ---
-  async function loadAuditLogs({ limit = AUDIT_LOG_LIMIT } = {}) {
-    const msgId = 'auditLogMsg';
-
-    Utils.setMsg(msgId, 'Carregando registros...');
-    try {
-      const { data, error } = await sb.rpc('admin_list_user_audit', { p_limit: limit });
-      if (error) {
-        Utils.setMsg(msgId, error.message || 'Falha ao carregar registros.', true);
-        AUDIT_LOG_CACHE = [];
-        renderAuditTable({ preserveMessage: true });
-        return;
-      }
-
-      const rows = Array.isArray(data) ? data.map(row => ({
-        ...row,
-        event_label: getAuditEventLabel(row),
-        module_label: getAuditModuleLabel(row.event_module)
-      })) : [];
-
-      AUDIT_LOG_CACHE = rows;
-      registerAuditUsers(rows);
-      populateAuditUserFilter({ preserveSelection: true });
-
-      if (!rows.length) {
-        Utils.setMsg(msgId, 'Nenhum evento registrado.');
-        renderAuditTable({ preserveMessage: true });
-        return;
-      }
-
-      Utils.setMsg(msgId, '');
-      renderAuditTable();
-    } catch (err) {
-      console.error('[admin] Falha ao carregar auditoria:', err);
-      Utils.setMsg(msgId, err?.message || 'Falha ao carregar registros.', true);
-      AUDIT_LOG_CACHE = [];
-      renderAuditTable({ preserveMessage: true });
-      populateAuditUserFilter({ preserveSelection: true });
-    }
   }
 
   function resetForm() {
@@ -349,25 +149,12 @@ window.Modules.admin = (() => {
     });
   }
 
-  // --- (NOVO) Bind de ações da auditoria ---
-  function bindAuditActions() {
-    el('auditFilterUser')?.addEventListener('change', () => {
-      renderAuditTable({ preserveMessage: !AUDIT_LOG_CACHE.length });
-    });
-    el('btnAuditRefresh')?.addEventListener('click', ev => {
-      ev.preventDefault();
-      loadAuditLogs();
-    });
-  }
-
   function init() {
     bindForm();
-    bindAuditActions();
   }
 
   async function load() {
     await loadUsers();
-    await loadAuditLogs({ limit: AUDIT_LOG_LIMIT });
   }
 
   return { init, load };
