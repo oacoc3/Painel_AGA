@@ -1008,11 +1008,9 @@ window.Modules.processos = (() => {
       const ids = rows.map(r => r.id);
 
       // Busca presença nas tabelas relacionadas apenas para os IDs da página atual
-      const [sg, ck] = await Promise.all([
-        sb.from('sigadaer').select('process_id').in('process_id', ids),
+      const [ck] = await Promise.all([
         sb.from('checklist_responses').select('process_id').in('process_id', ids)
       ]);
-      const sgSet = new Set((sg.data || []).map(o => o.process_id));
       const ckSet = new Set((ck.data || []).map(o => o.process_id));
 
       if (currentProcId) {
@@ -1024,7 +1022,7 @@ window.Modules.processos = (() => {
       const thead = document.createElement('thead');
       thead.innerHTML = `
         <tr>
-          <th></th><th>NUP</th><th>Status</th><th></th><th></th>
+          <th></th><th>NUP</th><th></th>
         </tr>`;
       table.appendChild(thead);
 
@@ -1033,18 +1031,11 @@ window.Modules.processos = (() => {
         const tr = document.createElement('tr');
         const isCurrent = String(r.id) === String(currentProcId);
         if (isCurrent) tr.classList.add('selected');
-        const hasSg = sgSet.has(r.id);
-        const stTxt = `${r.status || ''}${r.status_since ? '<br><small>' + U.fmtDateTime(r.status_since) + '</small>' : ''}`;
-        const stBtn = isCurrent ? `<button type="button" class="editBtn editStatus">Editar Status</button>` : '';
-        const stCell = `${stTxt}${isCurrent ? '<br>' + stBtn : ''}`;
         const hasChecklist = ckSet.has(r.id);
         const ckBtn = `<button type="button" class="docIcon ckBtn ${hasChecklist ? 'on' : 'off'}" title="Checklists" aria-label="Checklists">${CLIPBOARD_ICON}</button>`;
-        const sgBtn = `<button type="button" class="docIcon sgBtn ${hasSg ? 'on' : 'off'}">S</button>`;
         tr.innerHTML = `
           <td class="align-center"><div class="historyWrap"><button type="button" class="historyBtn" aria-label="Histórico">👁️</button>${ckBtn}</div></td>
           <td>${r.nup || ''}</td>
-          <td>${stCell}</td>
-          <td class="align-center">${sgBtn}</td>
           <td class="align-right"><button type="button" class="deleteBtn">Excluir</button></td>
         `;
         tbody.appendChild(tr);
@@ -1074,11 +1065,6 @@ window.Modules.processos = (() => {
         }
         if (ev.target.closest('.historyBtn')) return showHistoryPopup(row.id);
         if (ev.target.closest('.ckBtn')) return showChecklistPopup(row.id);
-        if (ev.target.closest('.sgBtn')) return showSigPopup(row.id);
-        if (ev.target.closest('.editStatus')) {
-          if (!guardProcessWrite('procMsg')) return;
-          return showStatusEditPopup(row.id, row.status, row.status_since);
-        }
         selectProcess(row);
       });
     } catch (err) {
