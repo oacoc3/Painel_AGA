@@ -286,66 +286,6 @@ window.Modules.checklists = (() => {
     renderList();
   }
 
-  async function saveChecklistTemplate() {
-    const catsContainer = getCatsContainer();
-    const form = getForm();
-    const items = collectItems(catsContainer);
-
-    // Normaliza e valida o tipo
-    const rawType = form.querySelector('#ckCat')?.value || '';
-    const type = canonicalizeChecklistType(rawType);
-    const dbType = TYPE_DB_VALUE_MAP[type] || type;
-    if (!type || !CANONICAL_TYPES.has(type) || !items.length) {
-      return Utils.setMsg('ckMsg', 'Preencha todos os campos.', true);
-    }
-
-    const sessionOk = await ensureSessionActive('ckMsg');
-    if (!sessionOk) return;
-    const u = await getUser();
-    if (!u) return Utils.setMsg('ckMsg', 'Sessão expirada.', true);
-
-    const name = selected?.name?.trim() || TYPE_LABEL_MAP[type] || type;
-    const isEditingApproved = !!selected?.approved_at;
-
-    if (selected && !isEditingApproved) {
-      const { error } = await sb.from('checklist_templates')
-        .update({ name, type: dbType, items })
-        .eq('id', selected.id);
-      if (error) return Utils.setMsg('ckMsg', error.message, true);
-    } else {
-      // Busca a última versão diretamente na base para evitar conflitos de chave única
-      // em casos de cache desatualizado ou alterações concorrentes.
-      const { data: lastVersionRows, error: lastVersionError } = await sb.from('checklist_templates')
-        .select('version')
-        .eq('name', name)
-        .order('version', { ascending: false })
-        .limit(1);
-      if (lastVersionError) return Utils.setMsg('ckMsg', lastVersionError.message, true);
-
-      const lastVersion = lastVersionRows?.[0]?.version || 0;
-      const version = lastVersion + 1;
-      const payload = {
-        name,
-        type: dbType,
-        items,
-        version,
-        created_by: u.id,
-        approved_by: null,
-        approved_at: null
-      };
-      const { error } = await sb.from('checklist_templates')
-        .insert(payload);
-      if (error) return Utils.setMsg('ckMsg', error.message, true);
-    }
-
-    Utils.setMsg('ckMsg', 'Salvo.');
-    selected = null;
-    highlightRow(null);
-    closeChecklistDialog();
-    updateActionButtons();
-    await loadTemplates();
-  }
-
   function bindForm() {
     const dlg = getDialog();
     const catsContainer = getCatsContainer();
@@ -380,22 +320,64 @@ window.Modules.checklists = (() => {
     renderCats(catsContainer);
     updateActionButtons();
 
-    form?.addEventListener('keydown', ev => {
-      const isSaveShortcut = (ev.ctrlKey || ev.metaKey) && ev.key?.toLowerCase() === 's';
-      if (isSaveShortcut) {
-        ev.preventDefault();
-        saveChecklistTemplate();
-      }
-    });
-
-    form?.addEventListener('submit', ev => {
-      ev.preventDefault();
-      saveChecklistTemplate();
-    });
-
     el('adminBtnSalvarChecklist').addEventListener('click', async ev => {
       ev.preventDefault();
-      await saveChecklistTemplate();
+      const form = getForm();
+      const items = collectItems(catsContainer);
+
+      // Normaliza e valida o tipo
+      const rawType = form.querySelector('#ckCat')?.value || '';
+      const type = canonicalizeChecklistType(rawType);
+      const dbType = TYPE_DB_VALUE_MAP[type] || type;
+      if (!type || !CANONICAL_TYPES.has(type) || !items.length) {
+        return Utils.setMsg('ckMsg', 'Preencha todos os campos.', true);
+      }
+
+      const sessionOk = await ensureSessionActive('ckMsg');
+      if (!sessionOk) return;
+      const u = await getUser();
+      if (!u) return Utils.setMsg('ckMsg', 'Sessão expirada.', true);
+
+      const name = selected?.name?.trim() || TYPE_LABEL_MAP[type] || type;
+      const isEditingApproved = !!selected?.approved_at;
+
+      if (selected && !isEditingApproved) {
+        const { error } = await sb.from('checklist_templates')
+          .update({ name, type: dbType, items })
+          .eq('id', selected.id);
+        if (error) return Utils.setMsg('ckMsg', error.message, true);
+      } else {
+        // Busca a última versão diretamente na base para evitar conflitos de chave única
+        // em casos de cache desatualizado ou alterações concorrentes.
+        const { data: lastVersionRows, error: lastVersionError } = await sb.from('checklist_templates')
+          .select('version')
+          .eq('name', name)
+          .order('version', { ascending: false })
+          .limit(1);
+        if (lastVersionError) return Utils.setMsg('ckMsg', lastVersionError.message, true);
+
+        const lastVersion = lastVersionRows?.[0]?.version || 0;
+        const version = lastVersion + 1;
+        const payload = {
+          name,
+          type: dbType,
+          items,
+          version,
+          created_by: u.id,
+          approved_by: null,
+          approved_at: null
+        };
+        const { error } = await sb.from('checklist_templates')
+          .insert(payload);
+        if (error) return Utils.setMsg('ckMsg', error.message, true);
+      }
+
+      Utils.setMsg('ckMsg', 'Salvo.');
+      selected = null;
+      highlightRow(null);
+      closeChecklistDialog();
+      updateActionButtons();
+      await loadTemplates();
     });
 
     el('btnExcluirChecklist').addEventListener('click', () => deleteSelectedChecklist('dialog'));
